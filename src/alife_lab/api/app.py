@@ -621,8 +621,11 @@ def create_app(
         run_id: str,
         since_tick: Annotated[int, Query(ge=-1)] = -1,
         max_points: Annotated[int, Query(ge=1, le=20_000)] = 2000,
+        until_tick: Annotated[int | None, Query(ge=0)] = None,
     ) -> dict[str, Any]:
-        return envelope(await run_in_threadpool(ctl().metrics, run_id, since_tick, max_points))
+        return envelope(
+            await run_in_threadpool(ctl().metrics, run_id, since_tick, max_points, until_tick)
+        )
 
     @app.get(f"{API}/experiments/{{run_id}}/events")
     async def events(

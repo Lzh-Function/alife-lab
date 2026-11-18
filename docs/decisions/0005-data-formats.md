@@ -1,6 +1,6 @@
 # ADR 0005 — Phase 1 data formats (metrics JSONL, NPZ checkpoints)
 
-- Status: accepted for Phase 1; Parquet/Zarr planned
+- Status: metrics part superseded by ADR 0014 (Parquet chunks); checkpoint part still valid
 - Date: 2026-11-18
 
 ## Decision

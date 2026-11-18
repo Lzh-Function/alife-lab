@@ -27,7 +27,9 @@ runs/<run_id>/
   execution_profile.json   ExecutionProfile
   environment.json         package versions, probe of the target
   checkpoints/eEEE_tTTTTTTTTTTTT.npz
-  metrics/history.jsonl    {"tick","epoch","values",["post_intervention"]}
+  metrics/tail_eEEE.jsonl  journal of rows not yet compacted ({tick, epoch, seq, values})
+  metrics/chunks/*.parquet immutable metric chunks (10 000 rows; ADR 0014)
+  metrics/history.jsonl    legacy Phase 1 format (still readable)
   logs/events.jsonl        mirror of DB events
   logs/worker_eEEE.jsonl   structured worker log
   artifacts/index.json     artifact + checkpoint index (atomically replaced)

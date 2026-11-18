@@ -34,6 +34,7 @@ from alife_lab.artifacts.store import (
 )
 from alife_lab.core.hashing import sha256_bytes
 from alife_lab.core.spec import ExecutionProfile, ExperimentSpec
+from alife_lab.storage.metrics_store import MetricsWriter
 from alife_lab.substrates import get_adapter
 
 MAX_STEP_PER_COMMAND = 10_000
@@ -94,7 +95,7 @@ class _Worker:
         self.steps_per_second = 0.0
         (self.run_dir / "metrics").mkdir(parents=True, exist_ok=True)
         (self.run_dir / "logs").mkdir(parents=True, exist_ok=True)
-        self.metrics_file = (self.run_dir / "metrics" / "history.jsonl").open("a", encoding="utf-8")
+        self.metrics = MetricsWriter(self.store, job.run_id, job.epoch)
         self.log_file = (self.run_dir / "logs" / f"worker_e{job.epoch:03d}.jsonl").open(
             "a", encoding="utf-8"
         )
@@ -154,13 +155,17 @@ class _Worker:
     def flush_metrics(self) -> None:
         if not self.metric_buffer:
             return
-        for row in self.metric_buffer:
-            self.metrics_file.write(json.dumps(row, sort_keys=True) + "\n")
-        self.metrics_file.flush()
         rows, self.metric_buffer = self.metric_buffer, []
+        self.metrics.append(rows)
         self.send(
             {"type": "metrics", "rows": rows, "steps_per_second": round(self.steps_per_second, 2)}
         )
+        self.compact_metrics(force=False)
+
+    def compact_metrics(self, force: bool) -> None:
+        receipt = self.metrics.compact(force=force)
+        if receipt is not None:
+            self.send({"type": "metrics_chunk", "receipt": receipt.to_json()})
 
     def send_preview(self) -> None:
         header, data = self.adapter.render(self.state)
@@ -174,7 +179,7 @@ class _Worker:
         if usage_mb >= self.limits.max_disk_mb:
             raise _Stop("disk_limit", f"run disk usage {usage_mb:.1f} MB >= limit")
         self.flush_metrics()
-        os.fsync(self.metrics_file.fileno())
+        self.metrics.sync()
         serialized = self.adapter.serialize_state(self.state)
         meta = {
             **serialized["meta"],
@@ -372,7 +377,13 @@ class _Worker:
                 last_heartbeat = now
 
     def close(self) -> None:
-        for handle in (self.metrics_file, self.log_file):
+        try:
+            self.compact_metrics(force=True)
+        except (OSError, ValueError, BrokenPipeError, EOFError) as exc:
+            self.log("warning", "final_metrics_compaction_failed", error=str(exc))
+        with contextlib.suppress(OSError, ValueError):
+            self.metrics.close()
+        for handle in (self.log_file,):
             try:
                 handle.flush()
                 os.fsync(handle.fileno())
@@ -398,6 +409,8 @@ def worker_main(job: WorkerJob, conn: Connection) -> None:
         assert worker is not None
         try:
             worker.flush_metrics()
+            # Final chunk must be reported before "finished" (later messages are ignored).
+            worker.compact_metrics(force=True)
             worker.send_preview()
         except Exception as exc:  # best effort before the final message
             worker.log("warning", "final_flush_failed", error=str(exc))

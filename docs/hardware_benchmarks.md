@@ -102,3 +102,9 @@ timeout (60 s) was shorter than replay verification (fixed in the script).
 | Replay verification | 10/15 segments exact (`partial`: 200k-tick budget), 361.5 s | 5/5 exact (`verified`, incl. RNG noise), 28.5 s |
 
 Disk growth: ~0.21 MB per 1000 Conway ticks (dominated by metrics JSONL).
+
+### Metric storage (Parquet chunks, 2026-11-18)
+See ADR 0014: 1 M rows — JSONL 113 MB vs Parquet 16.9 MB; downsampled read 2.10 s vs 0.14 s.
+Throughput re-measured with `scripts/measure_throughput.py` (8 s windows): 128² glider 5 719,
+128² random 5 161, 512² 499, 1024² 112 ticks/s (unchanged within noise). Resident memory with
+pyarrow loaded: worker ≈113 MB (was ≈53 MB), API process ≈103 MB (was ≈31.5 MB).

@@ -425,45 +425,25 @@ class Controller:
             out.append(item)
         return out
 
-    def metrics(self, run_id: str, since_tick: int = -1, max_points: int = 2000) -> dict[str, Any]:
+    def metrics(
+        self,
+        run_id: str,
+        since_tick: int = -1,
+        max_points: int = 2000,
+        until_tick: int | None = None,
+    ) -> dict[str, Any]:
         """Effective metric history: rows superseded by a later restore are excluded."""
+        from alife_lab.storage.metrics_store import read_metrics
+
         self._run_row(run_id)
         jobs = self.db.all(
             "SELECT epoch, start_tick FROM jobs WHERE run_id=? ORDER BY epoch", (run_id,)
         )
         start_ticks = [(int(j["epoch"]), int(j["start_tick"])) for j in jobs]
-        path = self.store.resolve(run_id, "metrics/history.jsonl")
-        by_tick: dict[int, dict[str, Any]] = {}
-        superseded = 0
-        if path.is_file():
-            with path.open("r", encoding="utf-8") as handle:
-                for line in handle:
-                    if not line.strip():
-                        continue
-                    try:
-                        row = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue  # a torn final line after a hard kill
-                    tick, epoch = int(row["tick"]), int(row["epoch"])
-                    later = [s for e, s in start_ticks if e > epoch]
-                    if later and tick > min(later):
-                        superseded += 1
-                        continue
-                    if tick > since_tick:
-                        by_tick[tick] = row
-        ticks = sorted(by_tick)
-        stride = max(1, -(-len(ticks) // max(1, max_points)))
-        sampled = ticks[::stride]
-        if ticks and sampled[-1] != ticks[-1]:
-            sampled.append(ticks[-1])
-        return {
-            "run_id": run_id,
-            "clock_unit": "tick",
-            "total_points": len(ticks),
-            "stride": stride,
-            "superseded_rows": superseded,
-            "rows": [by_tick[t] for t in sampled],
-        }
+        result = read_metrics(
+            self.store.run_dir(run_id), start_ticks, since_tick, until_tick, max_points
+        )
+        return {"run_id": run_id, "clock_unit": "tick", **result}
 
     def provenance(self, run_id: str) -> dict[str, Any]:
         self._run_row(run_id)
@@ -1529,6 +1509,18 @@ class Controller:
             )
         elif kind == "checkpoint":
             self._on_checkpoint(job, message)
+        elif kind == "metrics_chunk":
+            receipt = message["receipt"]
+            if self.store.verify(job.run_id, receipt["logical_path"], receipt["sha256"]):
+                self._record_artifact(receipt)
+                self._write_artifact_index(job.run_id)
+            else:
+                self._emit_event(
+                    job.run_id,
+                    "metrics_chunk_rejected",
+                    {"logical_path": receipt["logical_path"], "reason": "checksum mismatch"},
+                    severity="error",
+                )
         elif kind == "ack":
             self._on_ack(job, message)
         elif kind == "finished":

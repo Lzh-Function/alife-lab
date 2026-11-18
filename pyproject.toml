@@ -12,6 +12,7 @@ dependencies = [
     "numpy>=2.3",
     "pyyaml>=6.0.2",
     "psutil>=7.1",
+    "pyarrow>=21.0",
 ]
 
 [project.scripts]
@@ -65,3 +66,8 @@ python_version = "3.12"
 strict = true
 files = ["src/alife_lab"]
 plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+# pyarrow ships without type information.
+module = ["pyarrow", "pyarrow.*"]
+ignore_missing_imports = true
