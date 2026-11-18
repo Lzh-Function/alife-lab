@@ -158,3 +158,12 @@ button.small { padding: 0.05rem 0.4rem; font-size: 0.85em; }
 .state-finished_with_failures { background: #fde0e0; color: #8f1c22; }
 label.block { display: flex; flex-direction: column; gap: 0.2rem; margin-bottom: 0.5rem; }
 textarea { font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--border); border-radius: 5px; padding: 0.3rem; }
+.patch { border-collapse: collapse; margin: 0.3rem 0; }
+.patch td { width: 1.4rem; height: 1.4rem; text-align: center; font-size: 0.7rem; border: 1px solid var(--border); }
+.patch td.on { background: var(--cell-alive); color: #06221a; }
+.patch td.off { background: var(--cell-dead); color: var(--muted); }
+.patch td.out { background: repeating-linear-gradient(45deg, var(--border) 0 3px, transparent 3px 6px); }
+.patch td.center { outline: 2px solid #f5b400; outline-offset: -2px; }
+.contents { display: contents; }
+.matrix { border-collapse: collapse; margin-top: 0.4rem; }
+.matrix td { border: 1px solid var(--border); padding: 0.15rem 0.35rem; text-align: right; font-variant-numeric: tabular-nums; }

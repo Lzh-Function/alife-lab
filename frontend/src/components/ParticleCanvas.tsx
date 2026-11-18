@@ -42,7 +42,24 @@ export const ParticleCanvas = forwardRef<ParticleCanvasHandle, Props>(function P
     const styles = getComputedStyle(canvas);
     ctx.fillStyle = styles.getPropertyValue("--cell-dead").trim() || "#10141c";
     ctx.fillRect(0, 0, pw, ph);
-    if (frame && frame.header.codec === "particles_f32") {
+    if (frame && frame.header.codec === "particles_typed_f32") {
+      // [x, y, vx, vy, type]: one dot per particle, coloured by type.
+      last.current = frame;
+      const view = new DataView(frame.bits.buffer, frame.bits.byteOffset, frame.bits.byteLength);
+      const n = Math.min(frame.header.count ?? 0, Math.floor(frame.bits.byteLength / 20));
+      const k = Math.max(1, frame.header.types ?? 1);
+      const radius = Math.max(1.2, scale * 0.6);
+      for (let i = 0; i < n; i++) {
+        const o = i * 20;
+        const x = view.getFloat32(o, true) * scale;
+        const y = view.getFloat32(o + 4, true) * scale;
+        const type = view.getFloat32(o + 16, true);
+        ctx.fillStyle = `hsl(${((type * 360) / k + 15).toFixed(0)}, 85%, 60%)`;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+    } else if (frame && frame.header.codec === "particles_f32") {
       last.current = frame;
       const view = new DataView(frame.bits.buffer, frame.bits.byteOffset, frame.bits.byteLength);
       const n = Math.min(frame.header.count ?? 0, Math.floor(frame.bits.byteLength / 16));

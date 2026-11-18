@@ -26,12 +26,21 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-import pyarrow as pa
-import pyarrow.parquet as pq
 
 from alife_lab.artifacts.store import ArtifactReceipt, LocalArtifactStore
 
 CHUNK_ROWS = 10_000
+
+
+def _arrow() -> tuple[Any, Any]:
+    """Import pyarrow lazily: it adds ~60 MB RSS and is only needed for chunk I/O."""
+    import pyarrow as pa
+    import pyarrow.compute  # registers pa.compute
+    import pyarrow.parquet as pq
+
+    return pa, pq
+
+
 _LEGACY_SEQ_BASE = 0
 
 
@@ -57,6 +66,7 @@ class MetricsWriter:
         """Continue the sequence if this epoch already wrote chunks (defensive)."""
         last = -1
         for f in (self.tail_path.parent / "chunks").glob(f"e{self.epoch:03d}_s*.parquet"):
+            pa, pq = _arrow()
             table = pq.read_table(f, columns=["seq"])
             if table.num_rows:
                 last = max(last, int(pa.compute.max(table["seq"]).as_py()))
@@ -89,6 +99,7 @@ class MetricsWriter:
     def compact(self, force: bool = False) -> ArtifactReceipt | None:
         if not self.buffer or (not force and len(self.buffer) < CHUNK_ROWS):
             return None
+        pa, pq = _arrow()
         rows, first = self.buffer, int(self.buffer[0]["seq"])
         names = sorted({k for r in rows for k in r["values"]})
         columns: dict[str, Any] = {
@@ -205,6 +216,7 @@ def read_metrics(
     if legacy.is_file():
         _rows_to_arrays(_read_jsonl(legacy), cols, _LEGACY_SEQ_BASE)
     for chunk in sorted((metrics_dir / "chunks").glob("*.parquet")):
+        _, pq = _arrow()
         table = pq.read_table(chunk)
         names = [c for c in table.column_names if c.startswith("m.")]
         cols.add(

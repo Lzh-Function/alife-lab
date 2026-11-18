@@ -30,7 +30,7 @@ export function CompareView({ comparisonId }: { comparisonId: string }) {
 
   const members = summary.data?.members ?? [];
   const substrate = members[0]?.run.substrate ?? "conway";
-  const tool: ToolState = toolState ?? { ...initialTool(substrate), mode: substrate === "boids" ? "spawn" : "draw" };
+  const tool: ToolState = toolState ?? { ...initialTool(substrate), mode: substrate === "conway" ? "draw" : "spawn" };
   const all = async (fn: (runId: string) => Promise<unknown>) => {
     setBusy(true);
     setError(null);

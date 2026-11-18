@@ -1,0 +1,9 @@
+preset:
+  id: particle_life_clusters
+  scenario: particle_life_clusters.yaml
+  title_key: preset.particle_life_clusters.title
+  description_key: preset.particle_life_clusters.description
+  expected_observation: >-
+    A seeded random interaction matrix; typical outcomes are moving clusters and chasing
+    structures. Visual curiosity only (E0) unless measured.
+  negative_control: preset particle_life_zero_matrix

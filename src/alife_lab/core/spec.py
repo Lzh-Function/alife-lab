@@ -174,7 +174,73 @@ class BoidsExperiment(_Frozen):
         return self
 
 
-AnyExperiment = Annotated[ConwayExperiment | BoidsExperiment, Field(discriminator="substrate")]
+# --------------------------------------------------------------------------- #
+# Particle Life (typed particles with an asymmetric interaction matrix)
+# --------------------------------------------------------------------------- #
+
+MAX_TYPES = 8
+
+
+class ParticleLifeInitialization(_Frozen):
+    count: Annotated[int, Field(ge=0, le=MAX_BOIDS)] = 600
+    types: Annotated[int, Field(ge=1, le=MAX_TYPES)] = 4
+    # "random": uniform positions, zero velocity, uniformly random types.
+    preset: Literal["random"] = "random"
+
+
+class ParticleLifeDynamics(_Frozen):
+    clock_unit: Literal["tick"] = "tick"
+    numeric_policy: Literal["float64_cpu_deterministic"] = "float64_cpu_deterministic"
+    dt: Annotated[float, Field(gt=0.0, le=1.0)] = 0.05
+    r_max: Annotated[float, Field(gt=0.0, le=1_000.0)] = 15.0
+    beta: Annotated[float, Field(gt=0.0, lt=1.0)] = 0.3
+    force_factor: Annotated[float, Field(ge=0.0, le=1_000.0)] = 1.0
+    # Velocity is multiplied by 0.5 ** (dt / friction_half_life) each tick.
+    friction_half_life: Annotated[float, Field(gt=0.0, le=100.0)] = 0.1
+    # matrix[a][b] = attraction of type a towards type b in [-1, 1]; None = drawn from the
+    # run's RNG (uniform [-1, 1]) at initialization and stored in the state/checkpoints.
+    matrix: list[list[Annotated[float, Field(ge=-1.0, le=1.0)]]] | None = None
+
+
+ParticleLifeMetric = Literal["population", "mean_speed", "mean_neighbor_count", "segregation_index"]
+
+
+class ParticleLifeObservation(_Frozen):
+    metrics: tuple[ParticleLifeMetric, ...] = (
+        "population",
+        "mean_speed",
+        "mean_neighbor_count",
+        "segregation_index",
+    )
+
+
+class ParticleLifeExperiment(_Frozen):
+    name: _NAME
+    # Community model without a canonical reference implementation: exploratory only.
+    mode: Literal["exploratory"] = "exploratory"
+    substrate: Literal["particle_life"]
+    seed: _SEED
+    world: ContinuousWorldSpec
+    initialization: ParticleLifeInitialization = ParticleLifeInitialization()
+    dynamics: ParticleLifeDynamics = ParticleLifeDynamics()
+    runner: RunnerSpec = RunnerSpec()
+    observations: ParticleLifeObservation = ParticleLifeObservation()
+
+    @model_validator(mode="after")
+    def _check(self) -> ParticleLifeExperiment:
+        k = self.initialization.types
+        m = self.dynamics.matrix
+        if m is not None and (len(m) != k or any(len(row) != k for row in m)):
+            raise ValueError(f"matrix must be {k}x{k} (initialization.types)")
+        if self.dynamics.r_max * 3 > min(self.world.width, self.world.height):
+            raise ValueError("world must be at least 3 r_max wide and high")
+        return self
+
+
+AnyExperiment = Annotated[
+    ConwayExperiment | BoidsExperiment | ParticleLifeExperiment,
+    Field(discriminator="substrate"),
+]
 
 
 class ExperimentSpec(_Frozen):

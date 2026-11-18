@@ -32,5 +32,4 @@ End-to-end Conway throughput unchanged within noise (128² glider 5 719 vs 5 920
 ## Limitations / follow-ups
 - Range reads scan all chunks (could prune by per-chunk tick statistics).
 - Old journals of killed epochs are read but never compacted.
-- Lazy import of pyarrow in workers (only at first compaction) would reduce memory for short
-  interactive runs.
+- Done (ADR 0015): pyarrow is imported lazily; short interactive runs stay at ≈54 MB.

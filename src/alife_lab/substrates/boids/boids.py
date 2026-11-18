@@ -31,6 +31,14 @@ import numpy.typing as npt
 from alife_lab import API_CONTRACT_VERSION
 from alife_lab.core.spec import MAX_BOIDS, BoidsExperiment, ExperimentSpec
 from alife_lab.substrates.base import Capabilities, MetricDefinition, PluginManifest
+from alife_lab.substrates.particles.neighbors import (
+    Pairs,
+    _wrap_delta,
+    neighbor_pairs,
+    neighbor_pairs_bruteforce,
+)
+
+__all__ = ["BoidsAdapter", "neighbor_pairs", "neighbor_pairs_bruteforce", "steering"]
 
 F64 = npt.NDArray[np.float64]
 I64 = npt.NDArray[np.int64]
@@ -49,95 +57,6 @@ def _boids(spec: ExperimentSpec) -> BoidsExperiment:
 # --------------------------------------------------------------------------- #
 # Neighbour search
 # --------------------------------------------------------------------------- #
-
-
-@dataclass(frozen=True)
-class Pairs:
-    i: I64
-    j: I64
-    dx: F64
-    dy: F64
-    dist2: F64
-
-
-def _wrap_delta(d: F64, size: float) -> F64:
-    return np.asarray((d + size / 2.0) % size - size / 2.0, dtype=np.float64)
-
-
-def _finish_pairs(
-    pos: F64, i: I64, j: I64, radius: float, width: float, height: float, periodic: bool
-) -> Pairs:
-    keep = i != j
-    i, j = i[keep], j[keep]
-    dx = pos[j, 0] - pos[i, 0]
-    dy = pos[j, 1] - pos[i, 1]
-    if periodic:
-        dx = _wrap_delta(dx, width)
-        dy = _wrap_delta(dy, height)
-    dist2 = dx * dx + dy * dy
-    near = dist2 < radius * radius
-    return Pairs(i[near], j[near], dx[near], dy[near], dist2[near])
-
-
-def neighbor_pairs(pos: F64, radius: float, width: float, height: float, periodic: bool) -> Pairs:
-    """Directed pairs (i, j), i != j, with minimal-image distance < radius (cell list)."""
-    n = pos.shape[0]
-    empty = np.zeros(0, dtype=np.int64)
-    if n == 0:
-        z = np.zeros(0, dtype=np.float64)
-        return Pairs(empty, empty, z, z, z)
-    ncx = max(1, int(width // radius))
-    ncy = max(1, int(height // radius))
-    if periodic and (ncx < 3 or ncy < 3):
-        # Neighbour cells would alias; fall back to the exact all-pairs search.
-        return neighbor_pairs_bruteforce(pos, radius, width, height, periodic)
-    cx = np.clip((pos[:, 0] / (width / ncx)).astype(np.int64), 0, ncx - 1)
-    cy = np.clip((pos[:, 1] / (height / ncy)).astype(np.int64), 0, ncy - 1)
-    cid = cy * ncx + cx
-    order = np.argsort(cid, kind="stable")
-    sorted_cid = cid[order]
-    cells = np.arange(ncx * ncy)
-    starts = np.searchsorted(sorted_cid, cells, side="left")
-    ends = np.searchsorted(sorted_cid, cells, side="right")
-    idx = np.arange(n, dtype=np.int64)
-    all_i: list[I64] = []
-    all_j: list[I64] = []
-    for oy in (-1, 0, 1):
-        for ox in (-1, 0, 1):
-            nx = cx + ox
-            ny = cy + oy
-            if periodic:
-                nx %= ncx
-                ny %= ncy
-                valid = np.ones(n, dtype=bool)
-            else:
-                valid = (nx >= 0) & (nx < ncx) & (ny >= 0) & (ny < ncy)
-            ncid = np.where(valid, ny * ncx + nx, 0)
-            cnt = np.where(valid, ends[ncid] - starts[ncid], 0)
-            total = int(cnt.sum())
-            if total == 0:
-                continue
-            i_rep = np.repeat(idx, cnt)
-            offsets = np.repeat(np.cumsum(cnt) - cnt, cnt)
-            local = np.arange(total, dtype=np.int64) - offsets
-            j_rep = order[np.repeat(starts[ncid], cnt) + local]
-            all_i.append(i_rep)
-            all_j.append(j_rep.astype(np.int64))
-    if not all_i:
-        z = np.zeros(0, dtype=np.float64)
-        return Pairs(empty, empty, z, z, z)
-    return _finish_pairs(
-        pos, np.concatenate(all_i), np.concatenate(all_j), radius, width, height, periodic
-    )
-
-
-def neighbor_pairs_bruteforce(
-    pos: F64, radius: float, width: float, height: float, periodic: bool
-) -> Pairs:
-    """O(N²) oracle (tests and tiny worlds only)."""
-    n = pos.shape[0]
-    i, j = np.meshgrid(np.arange(n, dtype=np.int64), np.arange(n, dtype=np.int64), indexing="ij")
-    return _finish_pairs(pos, i.ravel(), j.ravel(), radius, width, height, periodic)
 
 
 def steering(
@@ -166,6 +85,36 @@ def steering(
     acc[has, 0] += dyn.cohesion_weight * mean_dx[has]
     acc[has, 1] += dyn.cohesion_weight * mean_dy[has]
     return acc, counts
+
+
+def steering_components(
+    pos: F64, vel: F64, exp: BoidsExperiment, pairs: Pairs, index: int
+) -> dict[str, Any]:
+    """Weighted rule contributions for one boid (inspection only; never used for dynamics)."""
+    dyn = exp.dynamics
+    mine = pairs.i == index
+    n_nb = int(mine.sum())
+    dx, dy, d2 = pairs.dx[mine], pairs.dy[mine], pairs.dist2[mine]
+    close = (d2 < dyn.separation_radius**2) & (d2 > 0.0)
+    sep = np.array([(-dx[close] / d2[close]).sum(), (-dy[close] / d2[close]).sum()])
+    if n_nb:
+        ali = vel[pairs.j[mine]].mean(axis=0) - vel[index]
+        coh = np.array([dx.mean(), dy.mean()])
+    else:
+        ali = np.zeros(2)
+        coh = np.zeros(2)
+
+    def vec(v: F64, w: float) -> dict[str, float]:
+        x, y = float(w * v[0]), float(w * v[1])
+        return {"x": x, "y": y, "magnitude": math.hypot(x, y)}
+
+    return {
+        "neighbors": n_nb,
+        "too_close": int(close.sum()),
+        "separation": vec(sep, dyn.separation_weight),
+        "alignment": vec(ali, dyn.alignment_weight),
+        "cohesion": vec(coh, dyn.cohesion_weight),
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -423,6 +372,59 @@ class BoidsAdapter:
         else:
             raise ValueError(f"unsupported intervention kind {kind!r}")
         return state, {"population_before": before, "population_after": int(state.pos.shape[0])}
+
+    def inspect(
+        self, state: BoidsState, spec: ExperimentSpec, query: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Boids within ``radius`` of (x, y) and rule contributions for the nearest one."""
+        exp = _boids(spec)
+        x, y = float(query["x"]), float(query["y"])
+        radius = min(float(query.get("radius", 5.0)), max(exp.world.width, exp.world.height))
+        periodic = exp.world.boundary == "periodic"
+        dx = state.pos[:, 0] - x
+        dy = state.pos[:, 1] - y
+        if periodic:
+            dx = _wrap_delta(dx, exp.world.width)
+            dy = _wrap_delta(dy, exp.world.height)
+        dist = np.hypot(dx, dy)
+        inside = np.flatnonzero(dist <= radius)
+        inside = inside[np.argsort(dist[inside], kind="stable")][:20]
+
+        def describe(i: int) -> dict[str, Any]:
+            vx, vy = float(state.vel[i, 0]), float(state.vel[i, 1])
+            return {
+                "id": int(state.ids[i]),
+                "x": float(state.pos[i, 0]),
+                "y": float(state.pos[i, 1]),
+                "vx": vx,
+                "vy": vy,
+                "speed": math.hypot(vx, vy),
+                "heading_deg": (math.degrees(math.atan2(vy, vx)) + 360.0) % 360.0,
+                "distance": float(dist[i]),
+            }
+
+        result: dict[str, Any] = {
+            "substrate": "boids",
+            "tick": state.tick,
+            "query": {"x": x, "y": y, "radius": radius},
+            "count_in_radius": int((dist <= radius).sum()),
+            "boids": [describe(int(i)) for i in inside],
+            "nearest": None,
+        }
+        if inside.size:
+            nearest = int(inside[0])
+            pairs = neighbor_pairs(
+                state.pos,
+                exp.dynamics.perception_radius,
+                exp.world.width,
+                exp.world.height,
+                periodic,
+            )
+            result["nearest"] = {
+                **describe(nearest),
+                "steering": steering_components(state.pos, state.vel, exp, pairs, nearest),
+            }
+        return result
 
     def state_distance(self, a: BoidsState, b: BoidsState) -> dict[str, Any]:
         common, ia, ib = np.intersect1d(a.ids, b.ids, assume_unique=True, return_indices=True)

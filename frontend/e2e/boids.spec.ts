@@ -34,6 +34,12 @@ test("boids run: observe, spawn intervention, paired fork, replay verification",
     await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.5);
     await expect(page.getByTestId("metric-population")).toHaveText("225", { timeout: 10_000 });
     await expect(page.getByTestId("intervention-list")).toContainText("spawn");
+    // Inspector on the live boids state (read-only).
+    await page.getByTestId("brush-inspect").check();
+    await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.5);
+    await expect(page.getByTestId("inspector-boid")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId("inspector-alignment")).toContainText("|");
+    await expect(page.getByTestId("metric-population")).toHaveText("225");
     await page.getByTestId("brush-off").check();
     await page.screenshot({ path: path.join(DATA, "30_boids.png") });
 

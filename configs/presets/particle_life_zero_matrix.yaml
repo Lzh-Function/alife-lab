@@ -1,0 +1,18 @@
+preset:
+  id: particle_life_zero_matrix
+  scenario: particle_life_clusters.yaml
+  title_key: preset.particle_life_zero_matrix.title
+  description_key: preset.particle_life_zero_matrix.description
+  overrides:
+    experiment:
+      name: particle_life_zero_matrix
+      dynamics:
+        matrix:
+          - [0.0, 0.0, 0.0, 0.0]
+          - [0.0, 0.0, 0.0, 0.0]
+          - [0.0, 0.0, 0.0, 0.0]
+          - [0.0, 0.0, 0.0, 0.0]
+  expected_observation: >-
+    Only short-range repulsion: particles spread and stop; segregation_index stays at the
+    well-mixed baseline sum p_k^2.
+  negative_control: null

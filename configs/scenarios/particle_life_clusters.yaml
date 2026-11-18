@@ -1,0 +1,20 @@
+schema_version: 1
+experiment:
+  name: particle_life_clusters
+  mode: exploratory          # community model, no canonical numerical reference
+  substrate: particle_life
+  seed: 11
+  world: {width: 200, height: 200, boundary: periodic}
+  initialization: {preset: random, count: 600, types: 4}
+  dynamics:
+    clock_unit: tick
+    numeric_policy: float64_cpu_deterministic
+    dt: 0.05
+    r_max: 15.0
+    beta: 0.3
+    force_factor: 1.0
+    friction_half_life: 0.1
+    matrix: null               # drawn from the run's RNG (uniform [-1, 1]) at initialization
+  runner: {max_steps: 100000, checkpoint_interval: 500}
+  observations:
+    metrics: [population, mean_speed, mean_neighbor_count, segregation_index]

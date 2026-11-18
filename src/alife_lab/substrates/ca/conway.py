@@ -327,6 +327,53 @@ class ConwayAdapter:
         h, w = state.grid.shape
         return {"codec": "bitpack1", "width": int(w), "height": int(h)}, self.render_payload(state)
 
+    def inspect(
+        self, state: ConwayState, spec: ExperimentSpec, query: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Cell, live-neighbour count, next-tick outcome and a small patch (read-only)."""
+        exp = _conway(spec)
+        h, w = state.grid.shape
+        x, y = int(query["x"]), int(query["y"])
+        if not (0 <= x < w and 0 <= y < h):
+            raise ValueError("(x, y) is outside the world")
+        r = max(0, min(int(query.get("radius", 2)), 8))
+        periodic = exp.world.boundary == "periodic"
+        counts = neighbour_counts(state.grid, exp.world.boundary)
+        birth, survive = parse_rule(exp.dynamics.rule)
+        alive = bool(state.grid[y, x])
+        n = int(counts[y, x])
+        if alive:
+            outcome = "survives" if n in survive else "dies"
+        else:
+            outcome = "born" if n in birth else "stays_dead"
+        patch: list[list[int]] = []
+        patch_counts: list[list[int | None]] = []
+        for yy in range(y - r, y + r + 1):
+            row: list[int] = []
+            row_n: list[int | None] = []
+            for xx in range(x - r, x + r + 1):
+                if periodic:
+                    row.append(int(state.grid[yy % h, xx % w]))
+                    row_n.append(int(counts[yy % h, xx % w]))
+                elif 0 <= yy < h and 0 <= xx < w:
+                    row.append(int(state.grid[yy, xx]))
+                    row_n.append(int(counts[yy, xx]))
+                else:
+                    row.append(-1)  # outside the world (dead boundary)
+                    row_n.append(None)
+            patch.append(row)
+            patch_counts.append(row_n)
+        return {
+            "substrate": "conway",
+            "tick": state.tick,
+            "query": {"x": x, "y": y, "radius": r},
+            "cell": {"alive": alive, "live_neighbors": n, "next_tick": outcome},
+            "rule": exp.dynamics.rule,
+            "patch": patch,
+            "patch_live_neighbors": patch_counts,
+            "patch_origin": {"x": x - r, "y": y - r},
+        }
+
     def state_distance(self, a: ConwayState, b: ConwayState) -> dict[str, Any]:
         if a.grid.shape != b.grid.shape:
             return {"metric": "hamming", "value": None, "exact_equal": False}

@@ -290,6 +290,11 @@ class _Worker:
             elif kind == "checkpoint":
                 message = self.checkpoint("manual")
                 self.ack(command, "applied", result=message["receipt"] if message else None)
+            elif kind == "inspect":
+                # Read-only query; never changes state, metrics or checkpoints.
+                self.ack(
+                    command, "applied", result=self.adapter.inspect(self.state, self.spec, payload)
+                )
             elif kind == "set_speed":
                 tps = float(payload.get("ticks_per_second", self.ticks_per_second))
                 if not (tps == 0 or 0.1 <= tps <= 10_000):

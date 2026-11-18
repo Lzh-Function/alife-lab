@@ -1,6 +1,6 @@
 import { forwardRef, useCallback, useImperativeHandle, useRef } from "react";
 import type { Frame } from "../lib/api";
-import { TOOLS, type SubstrateId, type ToolState } from "../lib/substrates";
+import { PARTICLE_SUBSTRATES, TOOLS, type SubstrateId, type ToolState } from "../lib/substrates";
 import { useT } from "../i18n";
 import { ParticleCanvas, type ParticleCanvasHandle } from "./ParticleCanvas";
 import { WorldCanvas, type WorldCanvasHandle } from "./WorldCanvas";
@@ -15,6 +15,7 @@ interface Props {
   tool: ToolState | null; // null = interventions disabled
   onIntervene: (kind: string, payload: Record<string, unknown>) => void;
   onDisplayFps?: (fps: number) => void;
+  onInspect?: (x: number, y: number) => void;
   maxPixels?: number;
   testId?: string;
 }
@@ -23,15 +24,16 @@ const noop = () => undefined;
 
 // Chooses the renderer and maps pointer input to the substrate's intervention payloads.
 export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
-  { substrate, world, tool, onIntervene, onDisplayFps = noop, maxPixels, testId },
+  { substrate, world, tool, onIntervene, onDisplayFps = noop, onInspect, maxPixels, testId },
   ref,
 ) {
   const grid = useRef<WorldCanvasHandle>(null);
   const particles = useRef<ParticleCanvasHandle>(null);
   useImperativeHandle(ref, () => ({
-    draw: (frame: Frame) => (substrate === "boids" ? particles.current?.draw(frame) : grid.current?.draw(frame)),
+    draw: (frame: Frame) => (PARTICLE_SUBSTRATES.has(substrate) ? particles.current?.draw(frame) : grid.current?.draw(frame)),
   }), [substrate]);
-  const active = tool !== null && tool.mode !== "off";
+  const inspecting = tool !== null && tool.mode === "inspect";
+  const active = tool !== null && tool.mode !== "off" && !inspecting;
 
   const onStroke = useCallback(
     (cells: Array<[number, number]>, value: 0 | 1) => onIntervene("brush", { shape: "cells", cells, value }),
@@ -40,6 +42,10 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
   const onPoint = useCallback(
     (x: number, y: number) => {
       if (!tool || tool.mode === "off") return;
+      if (tool.mode === "inspect") {
+        onInspect?.(x, y);
+        return;
+      }
       const payload: Record<string, unknown> = { x: Number(x.toFixed(3)), y: Number(y.toFixed(3)), radius: tool.radius };
       if (tool.mode === "spawn") payload.count = tool.count;
       onIntervene(tool.mode, payload);
@@ -47,13 +53,13 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
     [tool, onIntervene],
   );
 
-  if (substrate === "boids") {
+  if (PARTICLE_SUBSTRATES.has(substrate)) {
     return (
       <ParticleCanvas
         ref={particles}
         worldWidth={world.width}
         worldHeight={world.height}
-        toolRadius={active ? tool!.radius : null}
+        toolRadius={active || inspecting ? tool!.radius : null}
         onPoint={onPoint}
         onDisplayFps={onDisplayFps}
         maxPixels={maxPixels}
@@ -72,6 +78,7 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
       onDisplayFps={onDisplayFps}
       maxPixels={maxPixels}
       testId={testId}
+      onCellClick={inspecting ? onInspect : undefined}
     />
   );
 });
@@ -101,7 +108,7 @@ export function ToolBar({
             name={name}
             data-testid={`brush-${m}`}
             checked={tool.mode === m}
-            disabled={disabled}
+            disabled={disabled && m !== "off" && m !== "inspect"}
             onChange={() => setTool({ ...tool, mode: m })}
           />
           {t(`lab.tool.${m}`)}

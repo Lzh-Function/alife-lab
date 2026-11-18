@@ -18,6 +18,7 @@ errors: `{"api_version": "v1", "error": {"code", "message"}}`. Interactive OpenA
 | GET | /experiments/{id}/checkpoints, /checkpoints/{cid}/frame, /metrics, /events, /interventions, /provenance | frame = binary preview of a checkpoint |
 | POST | /experiments/{id}/fork | `{checkpoint_id="latest", label, spec_overrides, intervention, profile_id, ticks_per_second, auto_start, start_paused}`; `Idempotency-Key` supported |
 | POST | /experiments/{id}/paired-fork | `{checkpoint_id="now", treatment_intervention, name, start, start_paused}` → comparison with `control`/`treatment` arms |
+| GET | /experiments/{id}/inspect?x=&y=&radius=[&tick=] | read-only inspection (live worker, or replayed state at `tick`) |
 | GET | /experiments/{id}/timeline | checkpoints, interventions, marker events, replay mode |
 | GET | /experiments/{id}/replay/frames?start=&count=&stride= | binary: `uint32 n` + n × (`uint32 len` + frame); header has `source`, `base_tick`, `steps_from_base`, `interventions_replayed` |
 | POST | /experiments/{id}/replay/verify | re-simulate each checkpoint segment; exact comparison |
@@ -31,9 +32,9 @@ dropped_previews`) + payload. Codec `bitpack1` = `numpy.packbits` (row-major, MS
 
 ## Substrate-specific payloads
 - Interventions (`POST /experiments/{id}/interventions`, `{kind, payload}`): `conway` → `brush`
-  (`{shape: "cells"|"circle", ...}`); `boids` → `spawn {x, y, radius, count}`,
+  (`{shape: "cells"|"circle", ...}`); `boids` → `spawn {x, y, radius, count}`, `particle_life` → `spawn {x, y, radius, count, type?}` / `remove`,
   `remove {x, y, radius}`. Kinds not declared by the substrate are rejected (400).
-- Frame codecs: `bitpack1` (`width`, `height`) for Conway; `particles_f32` (`count`,
+- Frame codecs: `bitpack1` (`width`, `height`) for Conway; `particles_typed_f32` (`count`, `types`, world size; float32 `[x, y, vx, vy, type]`) for Particle Life; `particles_f32` (`count`,
   `world_width`, `world_height`; float32 LE `[x, y, vx, vy]` per particle) for Boids.
 - Comparison reports: `divergence.metric` (`hamming` | `rms_position_distance`) and
   `points[].distance_to_first`.

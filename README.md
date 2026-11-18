@@ -12,13 +12,13 @@
 - [`configs/scenarios/`](configs/scenarios/) — `ExperimentSpec`の参考設定。
 - [`configs/execution_profiles/`](configs/execution_profiles/) — 実行先のロール別profile例。**容量固定のpresetではない**。
 
-## 現在の実装状況（Phase 0–1 ＋ Phase 2 第1〜第3スライス＋A・B、2026-11-18）
+## 現在の実装状況（Phase 0–1 ＋ Phase 2（第1〜第3スライス＋A〜D）、2026-11-18）
 
 | 区分 | 内容 |
 |---|---|
-| 実装済み | `alife doctor`／`alife serve`、メトリクスのParquetチャンク保存（JSONLジャーナル併用、範囲読み出し）、スイープ（条件×seed、seed単位の統計：効果量・ブートストラップCI・順列検定・Holm補正、GUI・API・CLI）、サーバー強制終了からの復旧（staging隔離・未索引checkpointの報告）、バックアップ／検証／復元（`alife backup`）、Fork／ペア分岐（対照・処置）／状態比較（Hamming距離）、タイムライン（決定論的リプレイ・リプレイ検証・任意tickからの分岐）、FastAPI + SQLite（WAL、Controller単一ライター）、LocalExecutor（spawnワーカー）＋FakeExecutor、ArtifactStore（local_fs、sha256＋atomic publish）、CPU Conway（NumPy＋スカラーoracle）、Boids（cell-list近傍探索＋O(N²) oracle、exploratoryのみ）、React Web GUI（作成・観察・再生/一時停止・1 tick・ブラシ・チェックポイント・再起動後の復元） |
+| 実装済み | `alife doctor`／`alife serve`、メトリクスのParquetチャンク保存（JSONLジャーナル併用、範囲読み出し）、スイープ（条件×seed、seed単位の統計：効果量・ブートストラップCI・順列検定・Holm補正、GUI・API・CLI）、サーバー強制終了からの復旧（staging隔離・未索引checkpointの報告）、バックアップ／検証／復元（`alife backup`）、Fork／ペア分岐（対照・処置）／状態比較（Hamming距離）、タイムライン（決定論的リプレイ・リプレイ検証・任意tickからの分岐）、FastAPI + SQLite（WAL、Controller単一ライター）、LocalExecutor（spawnワーカー）＋FakeExecutor、ArtifactStore（local_fs、sha256＋atomic publish）、CPU Conway（NumPy＋スカラーoracle）、Boids（cell-list近傍探索＋O(N²) oracle、exploratoryのみ）、Particle Life（種間行列、exploratoryのみ）、Inspector（読み取り専用の検査：実行中／リプレイ）、React Web GUI（作成・観察・再生/一時停止・1 tick・ブラシ・チェックポイント・再起動後の復元） |
 | 部分実装 | CLI（`run`, `runs list/inspect/verify/fork/replay-verify`, `compare`, `sweep`, `backup`, `targets`, `presets`, `substrates`） |
-| 計画のみ | Particle Life、Inspector、remote/multi-GPU/cluster executor、Lenia/BFF等のPhase 3以降の基質、GPU backend |
+| 計画のみ | remote/multi-GPU/cluster executor、Lenia/BFF等のPhase 3以降の基質、GPU backend |
 
 ## 起動方法
 

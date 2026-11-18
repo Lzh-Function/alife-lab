@@ -4,7 +4,10 @@
 import type { Frame } from "./api";
 import { popcount } from "./api";
 
-export type SubstrateId = "conway" | "boids";
+export type SubstrateId = "conway" | "boids" | "particle_life";
+
+/** Substrates rendered as continuous particles (vs. grids). */
+export const PARTICLE_SUBSTRATES = new Set(["boids", "particle_life"]);
 
 export interface ToolState {
   mode: string; // "off" or an intervention mode
@@ -21,15 +24,21 @@ export interface ToolDescriptor {
 
 export const TOOLS: Record<SubstrateId, ToolDescriptor> = {
   conway: {
-    modes: ["off", "draw", "erase"],
+    modes: ["off", "inspect", "draw", "erase"],
     radius: { min: 0, max: 8, step: 1, initial: 0 },
     noteKey: "lab.brush.note",
   },
   boids: {
-    modes: ["off", "spawn", "remove"],
+    modes: ["off", "inspect", "spawn", "remove"],
     radius: { min: 1, max: 40, step: 1, initial: 8 },
     count: { min: 1, max: 500, initial: 30 },
     noteKey: "lab.tool.boids_note",
+  },
+  particle_life: {
+    modes: ["off", "inspect", "spawn", "remove"],
+    radius: { min: 1, max: 40, step: 1, initial: 6 },
+    count: { min: 1, max: 500, initial: 30 },
+    noteKey: "lab.tool.particles_note",
   },
 };
 
@@ -90,6 +99,25 @@ export const FORM_FIELDS: Record<SubstrateId, FormField[]> = {
     { path: "dynamics.noise", labelKey: "form.boids.noise", kind: "float", min: 0, step: 0.01 },
     ...RUNNER,
   ],
+  particle_life: [
+    { path: "seed", labelKey: "form.seed", kind: "int", min: 0 },
+    { path: "initialization.count", labelKey: "form.particles.count", kind: "int", min: 0, max: 10000 },
+    { path: "world.width", labelKey: "form.width", kind: "float", min: 10 },
+    { path: "world.height", labelKey: "form.height", kind: "float", min: 10 },
+    {
+      path: "world.boundary",
+      labelKey: "form.boundary",
+      kind: "select",
+      options: [
+        { value: "periodic", labelKey: "form.boundary.periodic" },
+        { value: "reflect", labelKey: "form.boundary.reflect" },
+      ],
+    },
+    { path: "dynamics.r_max", labelKey: "form.particles.r_max", kind: "float", min: 0.1 },
+    { path: "dynamics.force_factor", labelKey: "form.particles.force_factor", kind: "float", min: 0 },
+    { path: "dynamics.friction_half_life", labelKey: "form.particles.friction_half_life", kind: "float", min: 0.001 },
+    ...RUNNER,
+  ],
 };
 
 export function getPath(obj: Record<string, unknown>, path: string): unknown {
@@ -111,6 +139,8 @@ export function setPath(obj: Record<string, unknown>, path: string, value: unkno
 
 /** Population shown for a display frame (alive cells or number of particles). */
 export function framePopulation(frame: Frame): number {
-  if (frame.header.codec === "particles_f32") return frame.header.count ?? 0;
+  if (frame.header.codec === "particles_f32" || frame.header.codec === "particles_typed_f32") {
+    return frame.header.count ?? 0;
+  }
   return popcount(frame.bits);
 }

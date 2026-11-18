@@ -1,0 +1,23 @@
+# Type sorting needs type-dependent attraction: zero matrix (negative control) vs same-type
+# attraction, one segregation_index value per seeded run.
+schema_version: 1
+sweep:
+  name: particle_life_sorting
+  base_preset: particle_life_clusters
+  overrides:
+    initialization: {count: 600}
+    runner: {max_steps: 800, checkpoint_interval: 800}
+  seeds: [0, 1, 2, 3, 4, 5]
+  factors:
+    - path: dynamics.matrix
+      values:
+        - [[0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]]
+        - [[1.0, -0.2, -0.2, -0.2], [-0.2, 1.0, -0.2, -0.2], [-0.2, -0.2, 1.0, -0.2], [-0.2, -0.2, -0.2, 1.0]]
+      labels: [zero_matrix, same_type_attraction]
+  reference_condition: 0
+  endpoint: {metric: segregation_index, at: final}
+  design: confirmatory
+  hypothesis: >-
+    With same-type attraction (diagonal 1, off-diagonal -0.2) the final segregation_index after
+    800 ticks (600 particles, 4 types) is higher than with an all-zero matrix.
+  profile_id: cpu_dev

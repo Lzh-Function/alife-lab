@@ -108,3 +108,8 @@ See ADR 0014: 1 M rows — JSONL 113 MB vs Parquet 16.9 MB; downsampled read 2.1
 Throughput re-measured with `scripts/measure_throughput.py` (8 s windows): 128² glider 5 719,
 128² random 5 161, 512² 499, 1024² 112 ticks/s (unchanged within noise). Resident memory with
 pyarrow loaded: worker ≈113 MB (was ≈53 MB), API process ≈103 MB (was ≈31.5 MB).
+
+### Particle Life (2026-11-18, single core)
+600 particles, 4 types, 200² torus: ≈690–780 ticks/s (adapter step incl. cell-list search).
+Sweep `particle_life_sorting` (12 runs × 800 ticks, 4 runs in parallel): 6.9 s wall.
+Worker RSS with lazy pyarrow import, short interactive run: 53.5 MB.

@@ -1285,6 +1285,44 @@ class Controller:
             "segments": segments,
         }
 
+    async def inspect(
+        self, run_id: str, query: dict[str, Any], tick: int | None = None
+    ) -> dict[str, Any]:
+        """Read-only inspection: live worker state, or a replayed state at ``tick``."""
+        row = self._run_row(run_id)
+        job = self.jobs.get(run_id)
+        live = job is not None and not job.finished and RunState(row["state"]) in ACTIVE_STATES
+        if tick is None and live:
+            assert job is not None and self.loop is not None
+            command_id = str(uuid.uuid4())
+            future: asyncio.Future[dict[str, Any]] = self.loop.create_future()
+            job.pending[command_id] = future
+            try:
+                job.handle.conn.send(
+                    {"command_id": command_id, "kind": "inspect", "payload": query}
+                )
+            except (OSError, BrokenPipeError) as exc:
+                job.pending.pop(command_id, None)
+                raise Conflict(f"worker channel closed: {exc}", "not_live") from exc
+            try:
+                ack = await asyncio.wait_for(asyncio.shield(future), ACK_TIMEOUT_SECONDS)
+            except TimeoutError as exc:
+                raise Conflict("worker did not answer the inspection in time", "timeout") from exc
+            if ack.get("status") != "applied":
+                raise ControllerError(str(ack.get("error") or "inspection rejected"))
+            result: dict[str, Any] = ack["result"]
+            result["source"] = {"method": "live_worker", "applied_clock": ack["applied_clock"]}
+            return result
+        target = int(row["tick"]) if tick is None else tick
+        if target > int(row["tick"]):
+            raise ControllerError(f"tick {target} is beyond the run's current tick", "out_of_range")
+        if not self._replay_supported(run_id):
+            raise ControllerError("deterministic replay is not supported", "visual_only")
+        base = self._base_for(run_id, target)
+        inp = self._replay_input(run_id, base)
+        inspected: dict[str, Any] = await self._in_pool(replay_mod.inspect_at, inp, target, query)
+        return inspected
+
     async def fork_at_tick(
         self,
         parent_run_id: str,
@@ -1606,6 +1644,12 @@ class Controller:
             "result": message.get("result"),
             "error": message.get("error"),
         }
+        if message.get("kind") == "inspect":
+            # Read-only queries are neither persisted as commands nor broadcast.
+            pending = job.pending.pop(command_id, None)
+            if pending is not None and not pending.done():
+                pending.set_result(ack)
+            return
         self.db.execute(
             "UPDATE commands SET status=?, ack_json=? WHERE command_id=?",
             (message["status"], canonical_json(ack), command_id),

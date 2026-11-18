@@ -8,6 +8,7 @@ import { initialTool, type ToolState } from "../lib/substrates";
 import { Sparkline } from "./Sparkline";
 import { StateBadge } from "./StateBadge";
 import { Timeline } from "./Timeline";
+import { InspectorPanel, type Inspection } from "./InspectorPanel";
 
 const LIVE = new Set(["starting", "running", "pausing", "paused", "resuming"]);
 const MAX_ROWS = 4000;
@@ -24,6 +25,10 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
   const [dropped, setDropped] = useState(0);
   const [worker, setWorker] = useState<{ rss: number | null; cpu: number | null }>({ rss: null, cpu: null });
   const [tool, setTool] = useState<ToolState | null>(null);
+  const [inspection, setInspection] = useState<Inspection | null>(null);
+  const [inspectError, setInspectError] = useState<string | null>(null);
+  const shownReplayTick = useRef<number | null>(null);
+  const currentToolRef = useRef<ToolState | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [speed, setSpeed] = useState<string>("");
@@ -132,8 +137,22 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
     [runId, tick],
   );
 
+  const onInspect = (x: number, y: number) => {
+    const tickArg = replay && shownReplayTick.current !== null ? shownReplayTick.current : undefined;
+    const toolRadius = currentToolRef.current?.radius ?? 2;
+    const r = summary?.substrate === "conway" ? Math.max(2, toolRadius) : toolRadius;
+    api
+      .inspect(runId, Number(x.toFixed(3)), Number(y.toFixed(3)), r, tickArg)
+      .then((d) => {
+        setInspection(d);
+        setInspectError(null);
+      })
+      .catch((e) => setInspectError(e instanceof ApiError ? e.message : String(e)));
+  };
+
   if (!summary) return <p>{run.isError ? t("common.error") : t("common.loading")}</p>;
   const currentTool = tool ?? initialTool(summary.substrate);
+  currentToolRef.current = currentTool;
   const world = summary.spec.experiment.world;
   const last = rows.length ? rows[rows.length - 1] : null;
   const metricIds = summary.spec.experiment.observations.metrics;
@@ -222,17 +241,26 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
             ref={canvas}
             substrate={summary.substrate}
             world={world}
-            tool={live && !replay ? currentTool : null}
+            tool={currentTool.mode === "inspect" ? currentTool : live && !replay ? currentTool : null}
             onIntervene={onIntervene}
+            onInspect={onInspect}
             onDisplayFps={setUiFps}
           />
         </div>
         <p className="muted small">{t("lab.preview_note")} · {t("lab.evidence")}</p>
         {replay && <p className="notice small" data-testid="replay-banner">{t("timeline.banner")}</p>}
-        <Timeline runId={runId} liveTick={tick} active={replay} onActiveChange={onReplayActive} onFrame={onReplayFrame} />
+        <Timeline
+          runId={runId}
+          liveTick={tick}
+          active={replay}
+          onActiveChange={onReplayActive}
+          onFrame={onReplayFrame}
+          onShownTick={(v) => (shownReplayTick.current = v)}
+        />
       </section>
 
       <aside className="lab-side">
+        <InspectorPanel data={inspection} error={inspectError} />
         <div className="panel">
           <h3>{t("lab.metrics")}</h3>
           <dl className="stats">

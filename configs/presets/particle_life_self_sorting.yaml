@@ -1,0 +1,18 @@
+preset:
+  id: particle_life_self_sorting
+  scenario: particle_life_clusters.yaml
+  title_key: preset.particle_life_self_sorting.title
+  description_key: preset.particle_life_self_sorting.description
+  overrides:
+    experiment:
+      name: particle_life_self_sorting
+      dynamics:
+        matrix:
+          - [1.0, -0.2, -0.2, -0.2]
+          - [-0.2, 1.0, -0.2, -0.2]
+          - [-0.2, -0.2, 1.0, -0.2]
+          - [-0.2, -0.2, -0.2, 1.0]
+  expected_observation: >-
+    Same-type attraction: segregation_index rises from ~sum p_k^2 (~0.25) to ~0.6 within 800
+    ticks (measured, 4 seeds).
+  negative_control: preset particle_life_zero_matrix

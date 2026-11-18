@@ -14,13 +14,14 @@ interface Props {
   onDisplayFps: (fps: number) => void;
   maxPixels?: number;
   testId?: string;
+  onCellClick?: (x: number, y: number) => void;
 }
 
 const MAX_STROKE_CELLS = 65536;
 
 // Canvas2D renderer: decoupled from React; frames are painted via requestAnimationFrame.
 export const WorldCanvas = forwardRef<WorldCanvasHandle, Props>(function WorldCanvas(
-  { width, height, brushMode, brushRadius, onStroke, onDisplayFps, maxPixels = 720, testId = "world-canvas" },
+  { width, height, brushMode, brushRadius, onStroke, onDisplayFps, maxPixels = 720, testId = "world-canvas", onCellClick },
   ref,
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -136,7 +137,11 @@ export const WorldCanvas = forwardRef<WorldCanvasHandle, Props>(function WorldCa
       width={width * scale}
       height={height * scale}
       onPointerDown={(ev) => {
-        if (brushMode === "off") return;
+        if (brushMode === "off") {
+          const cell = cellAt(ev);
+          if (cell && onCellClick) onCellClick(cell[0], cell[1]);
+          return;
+        }
         ev.currentTarget.setPointerCapture(ev.pointerId);
         stroke.current = new Map();
         lastCell.current = null;

@@ -505,6 +505,17 @@ def create_app(
             )
         return envelope(result)
 
+    @app.get(f"{API}/experiments/{{run_id}}/inspect")
+    async def inspect(
+        run_id: str,
+        x: Annotated[float, Query()],
+        y: Annotated[float, Query()],
+        radius: Annotated[float, Query(ge=0, le=1000)] = 2,
+        tick: Annotated[int | None, Query(ge=0)] = None,
+    ) -> dict[str, Any]:
+        query = {"x": x, "y": y, "radius": radius}
+        return envelope(await ctl().inspect(run_id, query, tick))
+
     @app.get(f"{API}/experiments/{{run_id}}/timeline")
     async def timeline(run_id: str) -> dict[str, Any]:
         return envelope(ctl().timeline(run_id))

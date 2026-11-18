@@ -10,6 +10,7 @@ interface Props {
   active: boolean;
   onActiveChange: (active: boolean) => void;
   onFrame: (frame: ReplayFrame) => void;
+  onShownTick?: (tick: number | null) => void;
 }
 
 const PLAY_FPS = 15;
@@ -17,7 +18,7 @@ const BATCH = 30;
 
 // Timeline: checkpoint / intervention markers, seek by deterministic replay, replay
 // verification and fork-from-any-tick. Never changes the live run's state.
-export function Timeline({ runId, liveTick, active, onActiveChange, onFrame }: Props) {
+export function Timeline({ runId, liveTick, active, onActiveChange, onFrame, onShownTick }: Props) {
   const t = useT();
   const timeline = useQuery({ queryKey: ["timeline", runId], queryFn: () => api.timeline(runId), refetchInterval: 3000 });
   // `tick` is the requested target; `frameInfo.tick` is the state actually on the canvas.
@@ -42,8 +43,9 @@ export function Timeline({ runId, liveTick, active, onActiveChange, onFrame }: P
       setFrameInfo(frame.header);
       setAlive(framePopulation(frame));
       setTick(frame.header.tick);
+      onShownTick?.(frame.header.tick);
     },
-    [onFrame],
+    [onFrame, onShownTick],
   );
 
   const seek = useCallback(

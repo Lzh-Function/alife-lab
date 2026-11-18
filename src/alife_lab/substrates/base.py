@@ -74,6 +74,10 @@ class SubstrateAdapter(Protocol):
         """Display payload: header (``codec`` + codec-specific dimensions) and bytes."""
         ...
 
+    def inspect(self, state: Any, spec: ExperimentSpec, query: dict[str, Any]) -> dict[str, Any]:
+        """Read-only description of the state around a query point (must not mutate)."""
+        ...
+
     def state_distance(self, a: Any, b: Any) -> dict[str, Any]:
         """Exact comparison of two states of the same spec.
 

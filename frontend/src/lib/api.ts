@@ -339,6 +339,11 @@ export const api = {
   comparisons: () => request<Array<Omit<ComparisonSummary, "members">>>("GET", "/comparisons"),
   comparison: (id: string) => request<ComparisonSummary>("GET", `/comparisons/${id}`),
   comparisonReport: (id: string) => request<ComparisonReport>("GET", `/comparisons/${id}/report?max_points=1000`),
+  inspect: (id: string, x: number, y: number, radius: number, tick?: number) =>
+    request<import("../components/InspectorPanel").Inspection>(
+      "GET",
+      `/experiments/${id}/inspect?x=${x}&y=${y}&radius=${radius}${tick === undefined ? "" : `&tick=${tick}`}`,
+    ),
   timeline: (id: string) => request<Timeline>("GET", `/experiments/${id}/timeline`),
   replayFrames: async (id: string, start: number, count = 1, stride = 1): Promise<ReplayFrame[]> => {
     const resp = await fetch(`/api/v1/experiments/${id}/replay/frames?start=${start}&count=${count}&stride=${stride}`);
@@ -380,6 +385,7 @@ export interface Frame {
     width?: number;
     height?: number;
     count?: number;
+    types?: number;
     world_width?: number;
     world_height?: number;
     dropped_previews?: number;

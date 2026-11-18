@@ -17,6 +17,8 @@ from alife_lab.core.hashing import sha256_json
 MAX_SWEEP_RUNS = 200
 _PATH = r"^(dynamics|world|initialization|runner|observations)\.[a-z_]{1,64}$"
 Scalar = float | int | str | bool
+# Structured levels (e.g. a Particle Life interaction matrix) are allowed when labelled.
+Level = Scalar | list[list[float]]
 
 
 class _Frozen(BaseModel):
@@ -25,7 +27,7 @@ class _Frozen(BaseModel):
 
 class SweepFactor(_Frozen):
     path: Annotated[str, Field(pattern=_PATH)]
-    values: Annotated[list[Scalar], Field(min_length=1, max_length=20)]
+    values: Annotated[list[Level], Field(min_length=1, max_length=20)]
     labels: list[Annotated[str, Field(min_length=1, max_length=40)]] | None = None
 
     @model_validator(mode="after")
@@ -34,6 +36,8 @@ class SweepFactor(_Frozen):
             raise ValueError("labels must match values")
         if len({repr(v) for v in self.values}) != len(self.values):
             raise ValueError("factor values must be distinct")
+        if self.labels is None and any(isinstance(v, list) for v in self.values):
+            raise ValueError("structured factor values (e.g. matrices) require labels")
         return self
 
     def label(self, i: int) -> str:

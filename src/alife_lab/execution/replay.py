@@ -158,6 +158,21 @@ def replay_state(inp: ReplayInput, target: int) -> dict[str, Any]:
     return {"tick": int(state.tick), "checkpoint_bytes": data, "interventions_replayed": applied}
 
 
+def inspect_at(inp: ReplayInput, target: int, query: dict[str, Any]) -> dict[str, Any]:
+    """Reconstruct the state at ``target`` and run the adapter's read-only inspection."""
+    _check_range(inp, target)
+    spec, adapter, state = _load(inp)
+    pending = [i for i in inp.interventions if int(i["tick"]) <= target]
+    state, applied = _advance_to(spec, adapter, state, target, pending)
+    result: dict[str, Any] = adapter.inspect(state, spec, query)
+    result["source"] = {
+        "method": "deterministic_replay",
+        "base_tick": inp.base_tick,
+        "interventions_replayed": applied,
+    }
+    return result
+
+
 def verify_segment(
     inp: ReplayInput, target_path: str, target_sha256: str, target_tick: int
 ) -> dict[str, Any]:

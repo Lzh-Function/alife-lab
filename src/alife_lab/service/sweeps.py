@@ -21,7 +21,11 @@ from alife_lab.substrates import get_manifest
 if TYPE_CHECKING:
     from alife_lab.service.controller import Controller
 
-ALWAYS_COMPUTED = {"conway": {"alive_cell_count"}, "boids": {"population"}}
+ALWAYS_COMPUTED = {
+    "conway": {"alive_cell_count"},
+    "boids": {"population"},
+    "particle_life": {"population"},
+}
 UNIT_NOTE = (
     "Unit of analysis: one independently seeded run per value. Time points within a run are not "
     "treated as independent samples."
