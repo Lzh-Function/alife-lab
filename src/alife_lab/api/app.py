@@ -90,6 +90,8 @@ class InterventionSpec(_Req):
 
 class ForkRequest(_Req):
     checkpoint_id: str = "latest"
+    # Alternative to checkpoint_id: fork at an arbitrary tick via deterministic replay.
+    tick: Annotated[int, Field(ge=0)] | None = None
     label: Annotated[str, Field(min_length=1, max_length=120)] | None = None
     spec_overrides: dict[str, Any] | None = None
     intervention: InterventionSpec | None = None
@@ -436,16 +438,31 @@ def create_app(
             previous = c.idempotency_lookup(idempotency_key, "fork", request_hash)
             if previous is not None:
                 return envelope({**c.run_summary(previous["run_id"]), "idempotent_replay": True})
-        child = c.fork_run(
-            run_id,
-            body.checkpoint_id,
-            label=body.label,
-            spec_overrides=body.spec_overrides,
-            intervention=body.intervention.model_dump() if body.intervention else None,
-            profile_id=body.profile_id,
-            ticks_per_second=body.ticks_per_second,
-            author="browser_or_api",
-        )
+        intervention = body.intervention.model_dump() if body.intervention else None
+        if body.tick is not None:
+            if body.checkpoint_id != "latest" or body.spec_overrides or body.profile_id:
+                raise ControllerError(
+                    "tick forks cannot be combined with checkpoint_id, spec_overrides or profile_id"
+                )
+            child = await c.fork_at_tick(
+                run_id,
+                body.tick,
+                label=body.label,
+                intervention=intervention,
+                ticks_per_second=body.ticks_per_second,
+                author="browser_or_api",
+            )
+        else:
+            child = c.fork_run(
+                run_id,
+                body.checkpoint_id,
+                label=body.label,
+                spec_overrides=body.spec_overrides,
+                intervention=intervention,
+                profile_id=body.profile_id,
+                ticks_per_second=body.ticks_per_second,
+                author="browser_or_api",
+            )
         if idempotency_key is not None:
             c.idempotency_store(idempotency_key, "fork", request_hash, {"run_id": child["id"]})
         if body.auto_start:
@@ -485,6 +502,31 @@ def create_app(
                 idempotency_key, "paired_fork", request_hash, {"comparison_id": result["id"]}
             )
         return envelope(result)
+
+    @app.get(f"{API}/experiments/{{run_id}}/timeline")
+    async def timeline(run_id: str) -> dict[str, Any]:
+        return envelope(ctl().timeline(run_id))
+
+    @app.get(f"{API}/experiments/{{run_id}}/replay/frames")
+    async def replay_frames(
+        run_id: str,
+        start: Annotated[int, Query(ge=0)],
+        count: Annotated[int, Query(ge=1, le=200)] = 1,
+        stride: Annotated[int, Query(ge=1, le=100_000)] = 1,
+    ) -> Response:
+        frames = await ctl().replay_frames(run_id, start, count, stride)
+        parts = [struct.pack(">I", len(frames))]
+        for frame in frames:
+            header = {k: v for k, v in frame.items() if k != "data"}
+            header["codec"] = "bitpack1"
+            packed = _pack_frame(header, frame["data"])
+            parts.append(struct.pack(">I", len(packed)))
+            parts.append(packed)
+        return Response(content=b"".join(parts), media_type="application/octet-stream")
+
+    @app.post(f"{API}/experiments/{{run_id}}/replay/verify")
+    async def replay_verify(run_id: str) -> dict[str, Any]:
+        return envelope(await ctl().verify_replay(run_id))
 
     @app.post(f"{API}/comparisons", status_code=201)
     async def create_comparison(body: ComparisonRequest) -> dict[str, Any]:

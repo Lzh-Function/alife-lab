@@ -11,14 +11,17 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import fcntl
+import itertools
 import json
 import logging
+import multiprocessing
 import os
 import secrets
 import threading
 import time
 import uuid
 from collections import deque
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -37,6 +40,7 @@ from alife_lab.core.states import (
     RunState,
     check_transition,
 )
+from alife_lab.execution import replay as replay_mod
 from alife_lab.execution.executors import Executor, JobHandle, ValidationReport
 from alife_lab.execution.worker import WorkerJob
 from alife_lab.provenance import environment_record
@@ -154,6 +158,7 @@ class Controller:
         self.target = executor.probe()
         self._closed = False
         self._db_closed = False
+        self._replay_pool: ProcessPoolExecutor | None = None
 
     # ------------------------------------------------------------------ lifecycle
 
@@ -203,6 +208,8 @@ class Controller:
             if not job.finished:
                 job.handle.terminate()
                 self._finish_job(job, RunState.INTERRUPTED, "shutdown_timeout", None)
+        if self._replay_pool is not None:
+            self._replay_pool.shutdown(wait=False, cancel_futures=True)
         self._db_closed = True
         self.db.close()
         _release_lock(self._lock_handle)
@@ -487,6 +494,16 @@ class Controller:
                     "fork_tick",
                 )
             }
+            origin = lineage.get("reconstructed_origin")
+            manifest["lineage"]["origin"] = (
+                {
+                    "method": "deterministic_replay",
+                    "base_checkpoint_id": lineage["parent_checkpoint_id"],
+                    "interventions_replayed": origin["interventions_replayed"],
+                }
+                if origin
+                else {"method": "checkpoint_copy"}
+            )
         receipts = []
         for logical, value in (
             ("manifest.json", manifest),
@@ -692,12 +709,17 @@ class Controller:
     def _install_fork_origin(self, run_id: str, lineage: dict[str, Any]) -> None:
         """Copy the verified parent checkpoint into the child as its origin state."""
         parent = lineage["parent_checkpoint"]
-        data = self.store.resolve(parent["run_id"], parent["logical_path"]).read_bytes()
-        from alife_lab.core.hashing import sha256_bytes
+        origin = lineage.get("reconstructed_origin")
+        if origin is not None:
+            data = origin["bytes"]
+            tick = int(origin["tick"])
+        else:
+            data = self.store.resolve(parent["run_id"], parent["logical_path"]).read_bytes()
+            from alife_lab.core.hashing import sha256_bytes
 
-        if sha256_bytes(data) != parent["sha256"]:
-            raise Conflict("parent checkpoint checksum mismatch", "checksum_mismatch")
-        tick = int(parent["simulation_clock"])
+            if sha256_bytes(data) != parent["sha256"]:
+                raise Conflict("parent checkpoint checksum mismatch", "checksum_mismatch")
+            tick = int(parent["simulation_clock"])
         receipt = self.store.publish_bytes(
             run_id,
             f"checkpoints/fork_origin_t{tick:012d}.npz",
@@ -738,8 +760,13 @@ class Controller:
         profile_id: str | None = None,
         ticks_per_second: float | None = None,
         author: str = "local_user",
+        reconstructed_origin: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Create a child run whose initial state is a parent checkpoint (pending state)."""
+        """Create a child run whose initial state is a parent checkpoint (pending state).
+
+        ``reconstructed_origin`` (from :meth:`fork_at_tick`) replaces the checkpoint copy with
+        a deterministically replayed state: {"bytes", "tick", "interventions_replayed"}.
+        """
         parent = self._run_row(parent_run_id)
         checkpoint = self._resolve_checkpoint(parent_run_id, checkpoint_id)
         exp = self.db.one(
@@ -766,6 +793,8 @@ class Controller:
         except ValueError as exc:
             raise ControllerError(f"invalid fork spec: {exc}", "invalid_spec") from exc
         fork_tick = int(checkpoint["simulation_clock"])
+        if reconstructed_origin is not None:
+            fork_tick = int(reconstructed_origin["tick"])
         if spec.experiment.runner.max_steps <= fork_tick:
             raise ControllerError(
                 f"max_steps ({spec.experiment.runner.max_steps}) must exceed the fork tick "
@@ -788,6 +817,7 @@ class Controller:
             "parent_effective_mode": parent["effective_mode"],
             "fork_tick": fork_tick,
             "parent_checkpoint": checkpoint,
+            "reconstructed_origin": reconstructed_origin,
         }
         tps = parent["ticks_per_second"] if ticks_per_second is None else ticks_per_second
         child = self.create_run(
@@ -983,6 +1013,259 @@ class Controller:
             "divergence": state_divergence(query, self.store, run_ids),
             "metrics": {rid: self.metrics(rid, max_points=max_points)["rows"] for rid in run_ids},
         }
+
+    # ------------------------------------------------------------------ timeline / replay
+
+    def _pool(self) -> ProcessPoolExecutor:
+        if self._replay_pool is None:
+            self._replay_pool = ProcessPoolExecutor(
+                max_workers=1, mp_context=multiprocessing.get_context("spawn")
+            )
+        return self._replay_pool
+
+    async def _in_pool(self, fn: Any, *args: Any) -> Any:
+        loop = asyncio.get_running_loop()
+        try:
+            return await loop.run_in_executor(self._pool(), fn, *args)
+        except replay_mod.ReplayError as exc:
+            raise ControllerError(str(exc), "replay_failed") from exc
+
+    def _ordered_checkpoints(self, run_id: str) -> list[dict[str, Any]]:
+        return [
+            dict(r)
+            for r in self.db.all(
+                "SELECT * FROM checkpoints WHERE run_id=? ORDER BY simulation_clock, created_at, "
+                "rowid",
+                (run_id,),
+            )
+        ]
+
+    def _replay_supported(self, run_id: str) -> bool:
+        exp = self.db.one(
+            "SELECT e.substrate FROM runs r JOIN experiments e ON e.id=r.experiment_id "
+            "WHERE r.id=?",
+            (run_id,),
+        )
+        assert exp is not None
+        return get_manifest(exp["substrate"]).capabilities.supports_deterministic_cpu
+
+    def _replay_input(
+        self, run_id: str, base: dict[str, Any], cutoff_time: float | None = None
+    ) -> replay_mod.ReplayInput:
+        row = self._run_row(run_id)
+        exp = self.db.one("SELECT spec_json FROM experiments WHERE id=?", (row["experiment_id"],))
+        assert exp is not None
+        rows = self.db.all(
+            "SELECT id, kind, payload_json, applied_clock, applied_at FROM interventions "
+            "WHERE run_id=? AND status='applied' AND (applied_clock > ? OR "
+            "(applied_clock = ? AND applied_at > ?)) ORDER BY applied_clock, applied_at",
+            (run_id, base["simulation_clock"], base["simulation_clock"], base["created_at"]),
+        )
+        interventions = [
+            {
+                "tick": int(r["applied_clock"]),
+                "kind": r["kind"],
+                "payload": json.loads(r["payload_json"]),
+                "intervention_id": r["id"],
+            }
+            for r in rows
+            if cutoff_time is None or r["applied_at"] < cutoff_time
+        ]
+        return replay_mod.ReplayInput(
+            spec=json.loads(exp["spec_json"]),
+            base_path=str(self.store.resolve(run_id, base["logical_path"])),
+            base_sha256=base["sha256"],
+            base_tick=int(base["simulation_clock"]),
+            base_expected_spec_digest=base["spec_hash"],
+            interventions=interventions,
+        )
+
+    def _base_for(self, run_id: str, tick: int) -> dict[str, Any]:
+        candidates = [c for c in self._ordered_checkpoints(run_id) if c["simulation_clock"] <= tick]
+        if not candidates:
+            raise ControllerError(f"no checkpoint at or before tick {tick}", "out_of_range")
+        return candidates[-1]
+
+    def timeline(self, run_id: str) -> dict[str, Any]:
+        row = self._run_row(run_id)
+        checkpoints = self._ordered_checkpoints(run_id)
+        interventions = self.db.all(
+            "SELECT id, kind, status, requested_clock, applied_clock FROM interventions "
+            "WHERE run_id=? ORDER BY requested_at",
+            (run_id,),
+        )
+        marker_types = (
+            "intervention_applied",
+            "mode_changed",
+            "job_started",
+            "job_finished",
+            "run_interrupted",
+            "interventions_rolled_back",
+            "forked_from",
+            "run_forked",
+        )
+        placeholders = ",".join("?" * len(marker_types))
+        events = self.db.all(
+            f"SELECT seq, type, clock_value, severity FROM events WHERE run_id=? AND type IN "  # noqa: S608
+            f"({placeholders}) ORDER BY seq",
+            (run_id, *marker_types),
+        )
+        supported = self._replay_supported(run_id)
+        return {
+            "run_id": run_id,
+            "clock_unit": "tick",
+            "range": [checkpoints[0]["simulation_clock"] if checkpoints else None, row["tick"]],
+            "replay": {
+                "mode": "exact_recompute" if supported else "visual_only",
+                "max_frames_per_request": replay_mod.MAX_FRAMES,
+                "max_ticks_per_replay": replay_mod.MAX_REPLAY_TICKS,
+                "note": (
+                    "States between checkpoints are recomputed deterministically from the "
+                    "previous checkpoint and the logged interventions."
+                    if supported
+                    else "Only checkpointed states can be shown."
+                ),
+            },
+            "checkpoints": [
+                {
+                    "id": c["id"],
+                    "tick": c["simulation_clock"],
+                    "reason": c["reason"],
+                    "epoch": c["epoch"],
+                }
+                for c in checkpoints
+            ],
+            "interventions": [dict(i) for i in interventions],
+            "events": [dict(e) for e in events],
+        }
+
+    async def replay_frames(
+        self, run_id: str, start: int, count: int = 1, stride: int = 1
+    ) -> list[dict[str, Any]]:
+        row = self._run_row(run_id)
+        if not self._replay_supported(run_id):
+            raise ControllerError("deterministic replay is not supported", "visual_only")
+        last = start + (count - 1) * stride
+        if last > int(row["tick"]):
+            raise ControllerError(
+                f"tick {last} is beyond the run's current tick {row['tick']}", "out_of_range"
+            )
+        base = self._base_for(run_id, start)
+        inp = self._replay_input(run_id, base)
+        frames: list[dict[str, Any]] = await self._in_pool(
+            replay_mod.replay_frames, inp, start, count, stride
+        )
+        exact_ticks = {c["simulation_clock"] for c in self._ordered_checkpoints(run_id)}
+        for frame in frames:
+            frame["base_checkpoint_id"] = base["id"]
+            frame["base_tick"] = base["simulation_clock"]
+            frame["source"] = (
+                "checkpoint_tick" if frame["tick"] in exact_ticks else "deterministic_replay"
+            )
+        return frames
+
+    async def verify_replay(
+        self, run_id: str, max_segments: int = 500, max_total_ticks: int = 200_000
+    ) -> dict[str, Any]:
+        """Re-simulate every checkpoint-to-checkpoint segment and compare exact states."""
+        if not self._replay_supported(run_id):
+            raise ControllerError("deterministic replay is not supported", "visual_only")
+        cps = self._ordered_checkpoints(run_id)
+        segments: list[dict[str, Any]] = []
+        budget = max_total_ticks
+        for a, b in itertools.pairwise(cps):
+            span = int(b["simulation_clock"]) - int(a["simulation_clock"])
+            if len(segments) >= max_segments or span > budget:
+                break
+            budget -= span
+            inp = self._replay_input(run_id, a, cutoff_time=b["created_at"])
+            inp = replay_mod.ReplayInput(
+                **{
+                    **inp.__dict__,
+                    "interventions": [
+                        i for i in inp.interventions if i["tick"] <= b["simulation_clock"]
+                    ],
+                }
+            )
+            result: dict[str, Any] = await self._in_pool(
+                replay_mod.verify_segment,
+                inp,
+                str(self.store.resolve(run_id, b["logical_path"])),
+                b["sha256"],
+                int(b["simulation_clock"]),
+            )
+            segments.append(
+                {
+                    "from_checkpoint": a["id"],
+                    "to_checkpoint": b["id"],
+                    "from_tick": a["simulation_clock"],
+                    "to_tick": b["simulation_clock"],
+                    **result,
+                }
+            )
+        total = max(0, len(cps) - 1)
+        mismatch = any(not s["ok"] for s in segments)
+        if mismatch:
+            status = "mismatch"
+        elif total == 0:
+            status = "nothing_to_verify"  # fewer than two checkpoints: no claim is made
+        elif len(segments) < total:
+            status = "partial"
+        else:
+            status = "verified"
+        if segments:
+            self._emit_event(
+                run_id,
+                "replay_mismatch" if mismatch else "replay_verified",
+                {
+                    "status": status,
+                    "segments": len(segments),
+                    "segments_total": total,
+                    "failed": [s for s in segments if not s["ok"]][:20],
+                },
+                severity="error" if mismatch else "info",
+            )
+        return {
+            "run_id": run_id,
+            "status": status,
+            "ok": status == "verified",
+            "segments_checked": len(segments),
+            "segments_total": total,
+            "max_total_ticks": max_total_ticks,
+            "segments": segments,
+        }
+
+    async def fork_at_tick(
+        self,
+        parent_run_id: str,
+        tick: int,
+        label: str | None = None,
+        intervention: dict[str, Any] | None = None,
+        ticks_per_second: float | None = None,
+        author: str = "local_user",
+    ) -> dict[str, Any]:
+        """Fork from an arbitrary tick by deterministic replay from the previous checkpoint."""
+        row = self._run_row(parent_run_id)
+        if not self._replay_supported(parent_run_id):
+            raise ControllerError("deterministic replay is not supported", "visual_only")
+        if tick > int(row["tick"]):
+            raise ControllerError(f"tick {tick} is beyond the run's current tick", "out_of_range")
+        base = self._base_for(parent_run_id, tick)
+        inp = self._replay_input(parent_run_id, base)
+        result: dict[str, Any] = await self._in_pool(replay_mod.replay_state, inp, tick)
+        return self.fork_run(
+            parent_run_id,
+            base["id"],
+            label=label or f"fork@t{tick}",
+            intervention=intervention,
+            ticks_per_second=ticks_per_second,
+            author=author,
+            reconstructed_origin={
+                "bytes": result["checkpoint_bytes"],
+                "tick": result["tick"],
+                "interventions_replayed": result["interventions_replayed"],
+            },
+        )
 
     def _dispatch_queue(self) -> None:
         while self.queue:

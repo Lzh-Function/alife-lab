@@ -169,6 +169,11 @@ def test_rewound_interventions_are_marked_rolled_back(settings: Settings) -> Non
             assert c.run_summary(rid)["clock"]["value"] == 0
             assert [i["status"] for i in c.list_interventions(rid)] == ["rolled_back"]
             assert "interventions_rolled_back" in [e["type"] for e in c.list_events(rid)]
+            # Replay must ignore the rolled-back intervention and still match checkpoints.
+            await c.control(rid, "step", {"count": 60})
+            await c.control(rid, "checkpoint")
+            report = await c.verify_replay(rid)
+            assert report["ok"] and report["segments_checked"] >= 2
         finally:
             await c.shutdown()
 

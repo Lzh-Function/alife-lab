@@ -172,6 +172,33 @@ export interface ComparisonReport {
   metrics: Record<string, MetricRow[]>;
 }
 
+export interface Timeline {
+  run_id: string;
+  range: [number | null, number];
+  replay: { mode: "exact_recompute" | "visual_only"; max_frames_per_request: number; note: string };
+  checkpoints: Array<{ id: string; tick: number; reason: string; epoch: number }>;
+  interventions: Array<{ id: string; kind: string; status: string; requested_clock: number | null; applied_clock: number | null }>;
+  events: Array<{ seq: number; type: string; clock_value: number | null; severity: string }>;
+}
+
+export interface ReplayFrame extends Frame {
+  header: Frame["header"] & {
+    source: "checkpoint_tick" | "deterministic_replay";
+    base_checkpoint_id: string;
+    base_tick: number;
+    steps_from_base: number;
+    interventions_replayed: number;
+  };
+}
+
+export interface ReplayReport {
+  ok: boolean;
+  status: "verified" | "mismatch" | "nothing_to_verify" | "partial";
+  segments_checked: number;
+  segments_total: number;
+  segments: Array<{ from_tick: number; to_tick: number; ok: boolean; differing_cells?: number; interventions_replayed?: number; reason?: string }>;
+}
+
 export function sessionToken(): string {
   if (cachedToken !== null) return cachedToken;
   const meta = document.querySelector('meta[name="alife-token"]');
@@ -257,6 +284,23 @@ export const api = {
   comparisons: () => request<Array<Omit<ComparisonSummary, "members">>>("GET", "/comparisons"),
   comparison: (id: string) => request<ComparisonSummary>("GET", `/comparisons/${id}`),
   comparisonReport: (id: string) => request<ComparisonReport>("GET", `/comparisons/${id}/report?max_points=1000`),
+  timeline: (id: string) => request<Timeline>("GET", `/experiments/${id}/timeline`),
+  replayFrames: async (id: string, start: number, count = 1, stride = 1): Promise<ReplayFrame[]> => {
+    const resp = await fetch(`/api/v1/experiments/${id}/replay/frames?start=${start}&count=${count}&stride=${stride}`);
+    if (!resp.ok) {
+      let message = resp.statusText;
+      try {
+        message = ((await resp.json()) as { error: ApiErrorBody }).error.message;
+      } catch {
+        /* binary or empty */
+      }
+      throw new ApiError(resp.status, "replay_error", message);
+    }
+    return unpackFrames(await resp.arrayBuffer()) as ReplayFrame[];
+  },
+  verifyReplay: (id: string) => request<ReplayReport>("POST", `/experiments/${id}/replay/verify`),
+  forkAtTick: (id: string, tick: number) =>
+    request<RunSummary>("POST", `/experiments/${id}/fork`, { tick, auto_start: true, start_paused: true }, { "Idempotency-Key": `fork-${newCommandId()}` }),
   checkpoints: (id: string) => request<Checkpoint[]>("GET", `/experiments/${id}/checkpoints`),
   events: (id: string, sinceSeq = 0) => request<RunEvent[]>("GET", `/experiments/${id}/events?since_seq=${sinceSeq}`),
   metrics: (id: string) => request<{ rows: MetricRow[]; total_points: number; stride: number }>("GET", `/experiments/${id}/metrics?max_points=2000`),
@@ -278,6 +322,33 @@ export function unpackFrame(buffer: ArrayBuffer): Frame {
   const n = view.getUint32(0, false);
   const header = JSON.parse(new TextDecoder().decode(new Uint8Array(buffer, 4, n))) as Frame["header"];
   return { header, bits: new Uint8Array(buffer, 4 + n) };
+}
+
+/** Multiple frames: uint32 count, then (uint32 length, frame) repeated. */
+export function unpackFrames(buffer: ArrayBuffer): Frame[] {
+  const view = new DataView(buffer);
+  const n = view.getUint32(0, false);
+  const frames: Frame[] = [];
+  let pos = 4;
+  for (let i = 0; i < n; i++) {
+    const size = view.getUint32(pos, false);
+    frames.push(unpackFrame(buffer.slice(pos + 4, pos + 4 + size)));
+    pos += 4 + size;
+  }
+  return frames;
+}
+
+/** Number of set bits in a packed frame (alive cells for a binary grid). */
+export function popcount(bits: Uint8Array): number {
+  let n = 0;
+  for (const b of bits) {
+    let v = b;
+    while (v) {
+      v &= v - 1;
+      n++;
+    }
+  }
+  return n;
 }
 
 /** Bit at index i of a numpy.packbits (big-endian bit order) buffer. */

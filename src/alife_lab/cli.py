@@ -412,6 +412,44 @@ def cmd_fork(args: argparse.Namespace) -> int:
     return asyncio.run(main())
 
 
+def cmd_replay_verify(args: argparse.Namespace) -> int:
+    from alife_lab.execution.executors import LocalExecutor
+    from alife_lab.service.controller import Controller, ControllerError, ControllerLocked
+    from alife_lab.service.settings import load_settings
+
+    async def main() -> int:
+        try:
+            controller = Controller(load_settings(), LocalExecutor())
+        except ControllerLocked as exc:
+            print(
+                f"{exc}. Use POST /api/v1/experiments/<id>/replay/verify on the running server.",
+                file=sys.stderr,
+            )
+            return 2
+        await controller.start()
+        try:
+            report = await controller.verify_replay(args.run_id)
+        except ControllerError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        finally:
+            await controller.shutdown()
+        for seg in report["segments"]:
+            status = "ok" if seg["ok"] else "MISMATCH"
+            print(
+                f"[{status}] t={seg['from_tick']}->{seg['to_tick']} "
+                f"differing={seg.get('differing_cells')} "
+                f"replayed={seg.get('interventions_replayed')}"
+            )
+        print(
+            f"{report['segments_checked']}/{report['segments_total']} segments checked: "
+            f"{report['status']}"
+        )
+        return 0 if report["ok"] else 1
+
+    return asyncio.run(main())
+
+
 def cmd_compare(args: argparse.Namespace) -> int:
     from alife_lab.artifacts.store import LocalArtifactStore
     from alife_lab.service.compare import state_divergence
@@ -494,6 +532,9 @@ def build_parser() -> argparse.ArgumentParser:
     rf.add_argument("--max-steps", type=int)
     rf.add_argument("--label")
     rf.set_defaults(func=cmd_fork)
+    rv = rsub.add_parser("replay-verify", help="re-simulate between checkpoints and compare states")
+    rv.add_argument("run_id")
+    rv.set_defaults(func=cmd_replay_verify)
     p.set_defaults(func=cmd_runs)
 
     p = sub.add_parser("compare", help="state divergence of runs at common checkpoint ticks")

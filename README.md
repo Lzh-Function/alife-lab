@@ -12,13 +12,13 @@
 - [`configs/scenarios/`](configs/scenarios/) — `ExperimentSpec`の参考設定。
 - [`configs/execution_profiles/`](configs/execution_profiles/) — 実行先のロール別profile例。**容量固定のpresetではない**。
 
-## 現在の実装状況（Phase 0–1 ＋ Phase 2 第1スライス、2026-11-18）
+## 現在の実装状況（Phase 0–1 ＋ Phase 2 第1・第2スライス、2026-11-18）
 
 | 区分 | 内容 |
 |---|---|
-| 実装済み | `alife doctor`／`alife serve`、Fork／ペア分岐（対照・処置）／状態比較（Hamming距離、GUI・API・CLI）、FastAPI + SQLite（WAL、Controller単一ライター）、LocalExecutor（spawnワーカー）＋FakeExecutor、ArtifactStore（local_fs、sha256＋atomic publish）、CPU Conway（NumPy＋スカラーoracle）、React Web GUI（作成・観察・再生/一時停止・1 tick・ブラシ・チェックポイント・再起動後の復元） |
-| 部分実装 | CLI（`run`, `runs list/inspect/verify/fork`, `compare`, `targets`, `presets`, `substrates`）、メトリクスはJSONL（Parquetは未導入） |
-| 計画のみ | replay/timeline、seed間の統計比較、remote/multi-GPU/cluster executor、Lenia/BFF等の他基質、GPU backend |
+| 実装済み | `alife doctor`／`alife serve`、Fork／ペア分岐（対照・処置）／状態比較（Hamming距離）、タイムライン（決定論的リプレイ・リプレイ検証・任意tickからの分岐）、FastAPI + SQLite（WAL、Controller単一ライター）、LocalExecutor（spawnワーカー）＋FakeExecutor、ArtifactStore（local_fs、sha256＋atomic publish）、CPU Conway（NumPy＋スカラーoracle）、React Web GUI（作成・観察・再生/一時停止・1 tick・ブラシ・チェックポイント・再起動後の復元） |
+| 部分実装 | CLI（`run`, `runs list/inspect/verify/fork/replay-verify`, `compare`, `targets`, `presets`, `substrates`）、メトリクスはJSONL（Parquetは未導入） |
+| 計画のみ | seed間の統計比較、remote/multi-GPU/cluster executor、Lenia/BFF等の他基質、GPU backend |
 
 ## 起動方法
 

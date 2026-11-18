@@ -6,6 +6,7 @@ import { useT } from "../i18n";
 import { WorldCanvas, type WorldCanvasHandle } from "./WorldCanvas";
 import { Sparkline } from "./Sparkline";
 import { StateBadge } from "./StateBadge";
+import { Timeline } from "./Timeline";
 
 const LIVE = new Set(["starting", "running", "pausing", "paused", "resuming"]);
 const MAX_ROWS = 4000;
@@ -26,6 +27,11 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [speed, setSpeed] = useState<string>("");
+  // Replay mode: the canvas shows replayed states; live previews are not drawn.
+  const [replay, setReplay] = useState(false);
+  const replayRef = useRef(false);
+  replayRef.current = replay;
+  const lastLive = useRef<Frame | null>(null);
 
   const run = useQuery({ queryKey: ["run", runId], queryFn: () => api.run(runId), refetchInterval: 2000 });
   const checkpoints = useQuery({ queryKey: ["checkpoints", runId], queryFn: () => api.checkpoints(runId) });
@@ -54,8 +60,9 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
 
   const conn = useRunStream(runId, {
     onFrame: (frame: Frame) => {
-      canvas.current?.draw(frame);
+      lastLive.current = frame;
       setTick(frame.header.tick);
+      if (!replayRef.current) canvas.current?.draw(frame);
       if (frame.header.dropped_previews !== undefined) setDropped(frame.header.dropped_previews);
     },
     onMetrics: (newRows, sps) => {
@@ -91,10 +98,17 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
   useEffect(() => {
     if (!summary || live || !latestId) return;
     api.checkpointFrame(runId, latestId).then((f) => {
-      canvas.current?.draw(f);
+      lastLive.current = f;
+      if (!replayRef.current) canvas.current?.draw(f);
       setTick(f.header.tick);
     }).catch(() => undefined);
   }, [runId, latestId, live, summary]);
+
+  const onReplayActive = useCallback((active: boolean) => {
+    setReplay(active);
+    if (!active && lastLive.current) canvas.current?.draw(lastLive.current);
+  }, []);
+  const onReplayFrame = useCallback((frame: Frame) => canvas.current?.draw(frame), []);
 
   const act = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -221,13 +235,15 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
             ref={canvas}
             width={world.width}
             height={world.height}
-            brushMode={live ? brushMode : "off"}
+            brushMode={live && !replay ? brushMode : "off"}
             brushRadius={radius}
             onStroke={onStroke}
             onDisplayFps={setUiFps}
           />
         </div>
         <p className="muted small">{t("lab.preview_note")} · {t("lab.evidence")}</p>
+        {replay && <p className="notice small" data-testid="replay-banner">{t("timeline.banner")}</p>}
+        <Timeline runId={runId} liveTick={tick} active={replay} onActiveChange={onReplayActive} onFrame={onReplayFrame} />
       </section>
 
       <aside className="lab-side">

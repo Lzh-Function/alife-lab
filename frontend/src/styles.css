@@ -142,3 +142,11 @@ button.small { padding: 0.05rem 0.4rem; font-size: 0.85em; }
 .dot.arm-b { color: #c2410c; }
 .dot.arm-c { color: #6d28d9; }
 .dot.arm-d { color: #0369a1; }
+.timeline .track { position: relative; height: 18px; margin: 0.3rem 0; border-radius: 4px; background: var(--bg); border: 1px solid var(--border); }
+.timeline .mark { position: absolute; top: 2px; width: 2px; height: 12px; transform: translateX(-1px); }
+.timeline .mark-ckpt { background: #127a63; }
+.timeline .mark-intv { background: #c2410c; top: 0; height: 16px; width: 3px; }
+.timeline .mark-intv.status-rolled_back, .timeline .mark-intv.status-aborted { background: var(--muted); opacity: 0.6; }
+.timeline .mark-cursor { background: var(--text); width: 2px; top: -2px; height: 20px; }
+.scrubber { width: 100%; }
+.ok-text { color: #127a63; }

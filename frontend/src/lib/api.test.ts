@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bitAt, circleCells, unpackFrame } from "./api";
+import { bitAt, circleCells, popcount, unpackFrame, unpackFrames } from "./api";
 import { DICTIONARIES, MESSAGE_KEYS } from "../i18n";
 
 describe("frame decoding", () => {
@@ -29,5 +29,30 @@ describe("i18n", () => {
       expect(DICTIONARIES.ja[key]).toBeTruthy();
       expect(DICTIONARIES.en[key]).toBeTruthy();
     }
+  });
+});
+
+describe("multi-frame decoding", () => {
+  it("splits a length-prefixed frame sequence", () => {
+    const mk = (tick: number, byte: number) => {
+      const header = new TextEncoder().encode(JSON.stringify({ tick, width: 8, height: 1, codec: "bitpack1" }));
+      const f = new Uint8Array(4 + header.length + 1);
+      new DataView(f.buffer).setUint32(0, header.length, false);
+      f.set(header, 4);
+      f[4 + header.length] = byte;
+      return f;
+    };
+    const a = mk(1, 0b11000000);
+    const b = mk(2, 0b11111111);
+    const buf = new Uint8Array(4 + 4 + a.length + 4 + b.length);
+    const dv = new DataView(buf.buffer);
+    dv.setUint32(0, 2, false);
+    dv.setUint32(4, a.length, false);
+    buf.set(a, 8);
+    dv.setUint32(8 + a.length, b.length, false);
+    buf.set(b, 12 + a.length);
+    const frames = unpackFrames(buf.buffer);
+    expect(frames.map((f) => f.header.tick)).toEqual([1, 2]);
+    expect(frames.map((f) => popcount(f.bits))).toEqual([2, 8]);
   });
 });

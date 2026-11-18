@@ -247,3 +247,46 @@ def test_fork_and_paired_fork_api(client: TestClient) -> None:
     r = client.post("/api/v1/comparisons", json={"run_ids": [rid]}, headers=H)
     assert r.status_code == 422
     assert client.get("/api/v1/comparisons/cmp_nope").status_code == 404
+
+
+def _unpack_many(raw: bytes) -> list[tuple[dict[str, Any], bytes]]:
+    (n,) = struct.unpack(">I", raw[:4])
+    out, pos = [], 4
+    for _ in range(n):
+        (size,) = struct.unpack(">I", raw[pos : pos + 4])
+        out.append(_unpack(raw[pos + 4 : pos + 4 + size]))
+        pos += 4 + size
+    return out
+
+
+def test_timeline_replay_and_tick_fork_api(client: TestClient) -> None:
+    body = {
+        "preset_id": "conway_glider",
+        "profile_id": "cpu_dev",
+        "ticks_per_second": 0,
+        "auto_start": True,
+        "start_paused": True,
+        "overrides": {"runner": {"max_steps": 100000, "checkpoint_interval": 10}},
+    }
+    rid = data(client.post("/api/v1/experiments", json=body, headers=H))["id"]
+    wait_state(client, rid, "paused")
+    data(client.post(f"/api/v1/experiments/{rid}/step", json={"count": 25}, headers=H))
+    timeline = data(client.get(f"/api/v1/experiments/{rid}/timeline"))
+    assert timeline["range"] == [0, 25]
+    assert [c["tick"] for c in timeline["checkpoints"]] == [0, 10, 20]
+    raw = client.get(f"/api/v1/experiments/{rid}/replay/frames?start=0&count=26").content
+    frames = _unpack_many(raw)
+    assert [h["tick"] for h, _ in frames] == list(range(26))
+    assert frames[12][0]["source"] == "deterministic_replay"
+    assert frames[12][0]["base_tick"] == 0  # one pass from the base at the start tick
+    # Glider: 5 alive cells in every replayed frame.
+    assert all(bin(int.from_bytes(p, "big")).count("1") == 5 for _, p in frames)
+    r = client.get(f"/api/v1/experiments/{rid}/replay/frames?start=26")
+    assert r.status_code == 400
+    assert data(client.post(f"/api/v1/experiments/{rid}/replay/verify", headers=H))["ok"]
+    child = data(client.post(f"/api/v1/experiments/{rid}/fork", json={"tick": 13}, headers=H))
+    assert child["clock"]["value"] == 13 and child["label"] == "fork@t13"
+    r = client.post(
+        f"/api/v1/experiments/{rid}/fork", json={"tick": 13, "checkpoint_id": "x"}, headers=H
+    )
+    assert r.status_code == 400
