@@ -303,8 +303,82 @@ class BFFExperiment(_Frozen):
         return self
 
 
+# --------------------------------------------------------------------------- #
+# Lenia (Chan 2019; LeniaND.py semantics)
+# --------------------------------------------------------------------------- #
+
+
+class LeniaWorld(_Frozen):
+    width: Annotated[int, Field(ge=16, le=MAX_WORLD_SIDE)] = 128
+    height: Annotated[int, Field(ge=16, le=MAX_WORLD_SIDE)] = 128
+    boundary: Literal["periodic"] = "periodic"  # FFT convolution is periodic
+
+
+class LeniaKernel(_Frozen):
+    R: Annotated[int, Field(ge=2, le=128)] = 13
+    # Ring weights ("b"), e.g. [1] or [1, 0.5]; at most 4 rings.
+    b: Annotated[
+        list[Annotated[float, Field(ge=0.0, le=1.0)]], Field(min_length=1, max_length=4)
+    ] = [1.0]
+    core: Literal["polynomial", "exponential", "step", "staircase"] = "polynomial"  # kn 1..4
+
+
+class LeniaGrowth(_Frozen):
+    m: Annotated[float, Field(gt=0.0, le=1.0)] = 0.15
+    s: Annotated[float, Field(gt=0.0, le=1.0)] = 0.015
+    function: Literal["polynomial", "gaussian", "step"] = "polynomial"  # gn 1..3
+
+
+class LeniaDynamics(_Frozen):
+    clock_unit: Literal["tick"] = "tick"
+    numeric_policy: Literal["float64_fft_cpu"] = "float64_fft_cpu"
+    T: Annotated[int, Field(ge=1, le=10_000)] = 10  # dt = 1 / T
+    kernel: LeniaKernel = LeniaKernel()
+    growth: LeniaGrowth = LeniaGrowth()
+
+
+class LeniaInitialization(_Frozen):
+    # "pattern": a named creature from Chan's animals.json (embedded, MIT);
+    # "random": uniform noise in a centred square of side `size`.
+    preset: Literal["pattern", "random", "empty"] = "pattern"
+    pattern: Literal["O2u"] = "O2u"
+    size: Annotated[int, Field(ge=1, le=MAX_WORLD_SIDE)] = 64
+    density: Annotated[float, Field(ge=0.0, le=1.0)] = 0.5
+
+
+LeniaMetric = Literal["mass", "alive_fraction", "max_value", "centroid_displacement"]
+
+
+class LeniaObservation(_Frozen):
+    metrics: tuple[LeniaMetric, ...] = (
+        "mass",
+        "alive_fraction",
+        "max_value",
+        "centroid_displacement",
+    )
+
+
+class LeniaExperiment(_Frozen):
+    name: _NAME
+    mode: Literal["reference", "exploratory"] = "reference"
+    substrate: Literal["lenia"]
+    seed: _SEED
+    world: LeniaWorld = LeniaWorld()
+    initialization: LeniaInitialization = LeniaInitialization()
+    dynamics: LeniaDynamics = LeniaDynamics()
+    runner: RunnerSpec = RunnerSpec()
+    observations: LeniaObservation = LeniaObservation()
+
+    @model_validator(mode="after")
+    def _check(self) -> LeniaExperiment:
+        diameter = 2 * self.dynamics.kernel.R + 1
+        if diameter > min(self.world.width, self.world.height):
+            raise ValueError("kernel diameter 2R+1 must fit in the world")
+        return self
+
+
 AnyExperiment = Annotated[
-    ConwayExperiment | BoidsExperiment | ParticleLifeExperiment | BFFExperiment,
+    ConwayExperiment | BoidsExperiment | ParticleLifeExperiment | BFFExperiment | LeniaExperiment,
     Field(discriminator="substrate"),
 ]
 

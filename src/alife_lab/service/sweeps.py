@@ -25,6 +25,8 @@ ALWAYS_COMPUTED = {
     "conway": {"alive_cell_count"},
     "boids": {"population"},
     "particle_life": {"population"},
+    "bff": set(),
+    "lenia": set(),
 }
 UNIT_NOTE = (
     "Unit of analysis: one independently seeded run per value. Time points within a run are not "
@@ -32,11 +34,11 @@ UNIT_NOTE = (
 )
 
 
-def _deep_merge(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
+def deep_merge(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
     out = dict(base)
     for key, value in overrides.items():
         if isinstance(value, dict) and isinstance(out.get(key), dict):
-            out[key] = _deep_merge(out[key], value)
+            out[key] = deep_merge(out[key], value)
         else:
             out[key] = value
     return out
@@ -70,7 +72,7 @@ class SweepService:
             base = body.base_spec
         experiment = dict(base["experiment"])
         if body.overrides:
-            experiment = _deep_merge(experiment, body.overrides)
+            experiment = deep_merge(experiment, body.overrides)
         experiment["name"] = body.name
         members: list[dict[str, Any]] = []
         conditions = body.conditions()

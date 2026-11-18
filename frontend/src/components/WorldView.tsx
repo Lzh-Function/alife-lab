@@ -1,10 +1,11 @@
 import { forwardRef, useCallback, useImperativeHandle, useRef } from "react";
 import type { Frame } from "../lib/api";
-import { PARTICLE_SUBSTRATES, TOOLS, type SubstrateId, type ToolState } from "../lib/substrates";
+import { FIELD_SUBSTRATES, PARTICLE_SUBSTRATES, TOOLS, type SubstrateId, type ToolState } from "../lib/substrates";
 import { useT } from "../i18n";
 import { ParticleCanvas, type ParticleCanvasHandle } from "./ParticleCanvas";
 import { WorldCanvas, type WorldCanvasHandle } from "./WorldCanvas";
 import { SoupCanvas, type SoupCanvasHandle } from "./SoupCanvas";
+import { FieldCanvas, type FieldCanvasHandle } from "./FieldCanvas";
 
 export interface WorldViewHandle {
   draw: (frame: Frame) => void;
@@ -31,13 +32,16 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
   const grid = useRef<WorldCanvasHandle>(null);
   const particles = useRef<ParticleCanvasHandle>(null);
   const soup = useRef<SoupCanvasHandle>(null);
+  const field = useRef<FieldCanvasHandle>(null);
   useImperativeHandle(ref, () => ({
     draw: (frame: Frame) =>
       substrate === "bff"
         ? soup.current?.draw(frame)
-        : PARTICLE_SUBSTRATES.has(substrate)
-          ? particles.current?.draw(frame)
-          : grid.current?.draw(frame),
+        : FIELD_SUBSTRATES.has(substrate)
+          ? field.current?.draw(frame)
+          : PARTICLE_SUBSTRATES.has(substrate)
+            ? particles.current?.draw(frame)
+            : grid.current?.draw(frame),
   }), [substrate]);
   const inspecting = tool !== null && tool.mode === "inspect";
   const active = tool !== null && tool.mode !== "off" && !inspecting;
@@ -55,6 +59,7 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
       }
       const payload: Record<string, unknown> = { x: Number(x.toFixed(3)), y: Number(y.toFixed(3)), radius: tool.radius };
       if (tool.mode === "spawn") payload.count = tool.count;
+      if (tool.mode === "paint") payload.value = tool.value ?? 1;
       onIntervene(tool.mode, payload);
     },
     [tool, onIntervene],
@@ -87,6 +92,20 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
             ...(tool.mode === "inject" ? { program: tool.program ?? "", encoding: "text" } : {}),
           });
         }}
+        onDisplayFps={onDisplayFps}
+        maxPixels={maxPixels}
+        testId={testId}
+      />
+    );
+  }
+  if (FIELD_SUBSTRATES.has(substrate)) {
+    return (
+      <FieldCanvas
+        ref={field}
+        width={world.width}
+        height={world.height}
+        toolRadius={active || inspecting ? tool!.radius : null}
+        onPoint={onPoint}
         onDisplayFps={onDisplayFps}
         maxPixels={maxPixels}
         testId={testId}
@@ -178,6 +197,21 @@ export function ToolBar({
             onChange={(e) => setTool({ ...tool, program: e.target.value })}
             style={{ width: "16rem" }}
           />
+        </label>
+      )}
+      {d.value && (
+        <label className="inline">
+          {t("lab.tool.value")}
+          <input
+            type="range"
+            data-testid="tool-value"
+            min={0}
+            max={1}
+            step={0.05}
+            value={tool.value ?? d.value.initial}
+            onChange={(e) => setTool({ ...tool, value: Number(e.target.value) })}
+          />
+          {(tool.value ?? d.value.initial).toFixed(2)}
         </label>
       )}
       {d.count && (

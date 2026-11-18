@@ -30,6 +30,12 @@ export interface Inspection {
   type_counts_in_radius?: number[];
   matrix?: number[][];
   nearest_particle?: { id: number; type: number; speed: number; neighbors_by_type: number[] } | null;
+  // lenia
+  value?: number;
+  potential?: number;
+  growth?: number;
+  next_value?: number;
+  patch_mass?: number;
 }
 
 const f = (v: number, d = 3) => (Math.abs(v) >= 100 ? v.toFixed(1) : v.toPrecision(d));
@@ -143,6 +149,24 @@ export function InspectorPanel({ data, error }: { data: Inspection | null; error
                 </table>
               )}
             </>
+          )}
+          {data.substrate === "lenia" && data.value !== undefined && (
+            <dl className="stats small" data-testid="inspector-field">
+              <dt>{t("inspector.cell")}</dt>
+              <dd className="mono">
+                ({data.query?.x}, {data.query?.y}) · A = {data.value.toFixed(4)}
+              </dd>
+              <dt>{t("inspector.potential")}</dt>
+              <dd className="mono">{data.potential?.toFixed(4)}</dd>
+              <dt>{t("inspector.growth")}</dt>
+              <dd className="mono">{data.growth?.toFixed(4)}</dd>
+              <dt>{t("inspector.next_value")}</dt>
+              <dd className="mono" data-testid="inspector-next">{data.next_value?.toFixed(4)}</dd>
+              <dt>{t("inspector.patch_mass")}</dt>
+              <dd className="mono">
+                {data.patch_mass?.toFixed(3)} (r = {data.query?.radius})
+              </dd>
+            </dl>
           )}
           {data.substrate === "boids" && (
             <>

@@ -29,6 +29,7 @@ from alife_lab.execution.executors import Executor
 from alife_lab.execution.probe import probe_system
 from alife_lab.service.controller import Controller, ControllerError, Subscriber
 from alife_lab.service.settings import Settings
+from alife_lab.service.sweeps import deep_merge
 from alife_lab.substrates import get_manifest, has_substrate, list_substrates
 
 API = "/api/v1"
@@ -156,12 +157,7 @@ def _resolve_spec(
         if unknown:
             raise ControllerError(f"unsupported override keys: {sorted(unknown)}")
         merged = json.loads(json.dumps(base))
-        exp = merged["experiment"]
-        for key, value in overrides.items():
-            if isinstance(value, dict) and isinstance(exp.get(key), dict):
-                exp[key] = {**exp[key], **value}
-            else:
-                exp[key] = value
+        merged["experiment"] = deep_merge(merged["experiment"], overrides)
         base = merged
     try:
         return ExperimentSpec.model_validate(base)

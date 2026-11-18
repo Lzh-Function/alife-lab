@@ -1,0 +1,10 @@
+preset:
+  id: lenia_orbium
+  scenario: lenia_orbium.yaml
+  title_key: preset.lenia_orbium.title
+  description_key: preset.lenia_orbium.description
+  overrides: {}
+  expected_observation: >-
+    Orbium keeps its shape (mass stays near 74-77) and glides; centroid_displacement grows
+    roughly linearly with time.
+  negative_control: preset lenia_orbium_off_niche

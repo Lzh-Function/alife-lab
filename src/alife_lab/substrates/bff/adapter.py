@@ -249,7 +249,9 @@ class BFFAdapter:
         if wanted & {"h0_bits_per_byte", "brotli_bits_per_byte", "higher_order_entropy"}:
             out.update(soup_entropy_metrics(state.soup))
         if wanted & {"unique_programs", "top_program_fraction"}:
-            _, counts = np.unique(state.soup, axis=0, return_counts=True)
+            # Rows as opaque 64-byte values: same counts as unique(axis=0), ~3x faster.
+            rows = np.ascontiguousarray(state.soup).view(np.dtype((np.void, HALF))).ravel()
+            _, counts = np.unique(rows, return_counts=True)
             out["unique_programs"] = float(counts.size)
             out["top_program_fraction"] = float(counts.max() / state.soup.shape[0])
         out["ops_per_pair"] = float(state.last["ops_per_pair"]) if state.last else math.nan

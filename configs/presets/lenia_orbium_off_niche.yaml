@@ -1,0 +1,14 @@
+preset:
+  id: lenia_orbium_off_niche
+  scenario: lenia_orbium.yaml
+  title_key: preset.lenia_orbium_off_niche.title
+  description_key: preset.lenia_orbium_off_niche.description
+  overrides:
+    experiment:
+      name: lenia_orbium_off_niche
+      mode: exploratory
+      dynamics: {growth: {m: 0.17, s: 0.015, function: polynomial}}
+  expected_observation: >-
+    Negative control: the same Orbium pattern with the growth centre moved to m = 0.17 is
+    outside its parameter niche and dissolves (mass reaches 0 within 500 ticks, seed-free).
+  negative_control: null

@@ -6,6 +6,7 @@ from alife_lab.substrates.base import PluginManifest, SubstrateAdapter
 from alife_lab.substrates.bff.adapter import BFF_MANIFEST, BFFAdapter
 from alife_lab.substrates.boids.boids import BOIDS_MANIFEST, BoidsAdapter
 from alife_lab.substrates.ca.conway import CONWAY_MANIFEST, ConwayAdapter
+from alife_lab.substrates.lenia.lenia import LENIA_MANIFEST, LeniaAdapter
 from alife_lab.substrates.particle_life.particle_life import (
     PARTICLE_LIFE_MANIFEST,
     ParticleLifeAdapter,
@@ -16,6 +17,7 @@ _REGISTRY: dict[str, tuple[PluginManifest, type[SubstrateAdapter]]] = {
     "boids": (BOIDS_MANIFEST, BoidsAdapter),
     "particle_life": (PARTICLE_LIFE_MANIFEST, ParticleLifeAdapter),
     "bff": (BFF_MANIFEST, BFFAdapter),
+    "lenia": (LENIA_MANIFEST, LeniaAdapter),
 }
 
 

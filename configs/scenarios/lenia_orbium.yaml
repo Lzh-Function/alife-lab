@@ -1,0 +1,20 @@
+# Lenia (Chan 2019) with the default update path of LeniaND.py: periodic FFT convolution,
+# A <- clip(A + G(K*A)/T, 0, 1), float64 on the CPU. Orbium unicaudatus (code O2u) with its
+# catalogued parameters from animals.json, centred in a 128 x 128 world (LeniaND -s 7).
+schema_version: 1
+experiment:
+  name: lenia_orbium
+  mode: reference
+  substrate: lenia
+  seed: 0
+  world: {width: 128, height: 128, boundary: periodic}
+  dynamics:
+    clock_unit: tick
+    numeric_policy: float64_fft_cpu
+    T: 10
+    kernel: {R: 13, b: [1.0], core: polynomial}
+    growth: {m: 0.15, s: 0.015, function: polynomial}
+  initialization: {preset: pattern, pattern: O2u}
+  runner: {max_steps: 100000, checkpoint_interval: 1000}
+  observations:
+    metrics: [mass, alive_fraction, max_value, centroid_displacement]

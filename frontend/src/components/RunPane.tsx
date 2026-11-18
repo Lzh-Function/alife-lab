@@ -38,7 +38,7 @@ export function RunPane({
     },
     onMetrics: (rows) => {
       const last = rows[rows.length - 1];
-      if (last) setAlive(last.values.alive_cell_count ?? last.values.population ?? null);
+      if (last) setAlive(last.values.alive_cell_count ?? last.values.population ?? (last.values.mass != null ? Math.round(last.values.mass * 10) / 10 : null));
     },
     onEvent: (ev) => {
       if (ev.type === "checkpoint_ready") onCheckpoint();

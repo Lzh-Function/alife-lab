@@ -60,7 +60,7 @@ export function CompareView({ comparisonId }: { comparisonId: string }) {
   const aliveSeries: Series[] = members.map((m, i) => ({
     label: m.arm,
     className: ARM_CLASSES[i],
-    points: (report.data?.metrics[m.run.id] ?? []).map((r) => [r.tick, r.values.alive_cell_count ?? r.values.population ?? null]),
+    points: (report.data?.metrics[m.run.id] ?? []).map((r) => [r.tick, r.values.alive_cell_count ?? r.values.population ?? r.values.mass ?? null]),
   }));
 
   return (

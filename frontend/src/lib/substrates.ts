@@ -4,22 +4,26 @@
 import type { Frame } from "./api";
 import { popcount } from "./api";
 
-export type SubstrateId = "conway" | "boids" | "particle_life" | "bff";
+export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia";
 
 /** Substrates rendered as continuous particles (vs. grids). */
 export const PARTICLE_SUBSTRATES = new Set(["boids", "particle_life"]);
+/** Substrates rendered as a continuous scalar field (codec field_u8). */
+export const FIELD_SUBSTRATES = new Set(["lenia"]);
 
 export interface ToolState {
   mode: string; // "off" or an intervention mode
   radius: number;
   count: number;
   program?: string; // BFF: program text to inject
+  value?: number; // Lenia: value painted into the field
 }
 
 export interface ToolDescriptor {
   modes: string[]; // first entry is "off"
   radius: { min: number; max: number; step: number; initial: number };
   count?: { min: number; max: number; initial: number };
+  value?: { initial: number };
   noteKey: string;
 }
 
@@ -40,6 +44,12 @@ export const TOOLS: Record<SubstrateId, ToolDescriptor> = {
     radius: { min: 0, max: 8, step: 1, initial: 0 },
     noteKey: "lab.tool.bff_note",
   },
+  lenia: {
+    modes: ["off", "inspect", "paint", "erase"],
+    radius: { min: 1, max: 30, step: 1, initial: 5 },
+    value: { initial: 1 },
+    noteKey: "lab.tool.lenia_note",
+  },
   particle_life: {
     modes: ["off", "inspect", "spawn", "remove"],
     radius: { min: 1, max: 40, step: 1, initial: 6 },
@@ -50,7 +60,7 @@ export const TOOLS: Record<SubstrateId, ToolDescriptor> = {
 
 export function initialTool(substrate: string): ToolState {
   const d = TOOLS[(substrate as SubstrateId) in TOOLS ? (substrate as SubstrateId) : "conway"];
-  return { mode: "off", radius: d.radius.initial, count: d.count?.initial ?? 0 };
+  return { mode: "off", radius: d.radius.initial, count: d.count?.initial ?? 0, value: d.value?.initial };
 }
 
 export interface FormField {
@@ -121,6 +131,26 @@ export const FORM_FIELDS: Record<SubstrateId, FormField[]> = {
     { path: "dynamics.step_limit", labelKey: "form.bff.step_limit", kind: "int", min: 0 },
     ...RUNNER,
   ],
+  lenia: [
+    { path: "seed", labelKey: "form.seed", kind: "int", min: 0 },
+    { path: "world.width", labelKey: "form.width", kind: "int", min: 16, max: 1024 },
+    { path: "world.height", labelKey: "form.height", kind: "int", min: 16, max: 1024 },
+    {
+      path: "initialization.preset",
+      labelKey: "form.lenia.init",
+      kind: "select",
+      options: [
+        { value: "pattern", labelKey: "form.lenia.init.pattern" },
+        { value: "random", labelKey: "form.lenia.init.random" },
+        { value: "empty", labelKey: "form.lenia.init.empty" },
+      ],
+    },
+    { path: "dynamics.T", labelKey: "form.lenia.T", kind: "int", min: 1, max: 1000 },
+    { path: "dynamics.kernel.R", labelKey: "form.lenia.R", kind: "int", min: 2, max: 128 },
+    { path: "dynamics.growth.m", labelKey: "form.lenia.m", kind: "float", min: 0, max: 1, step: 0.001 },
+    { path: "dynamics.growth.s", labelKey: "form.lenia.s", kind: "float", min: 0.0001, max: 1, step: 0.001 },
+    ...RUNNER,
+  ],
   particle_life: [
     { path: "seed", labelKey: "form.seed", kind: "int", min: 0 },
     { path: "initialization.count", labelKey: "form.particles.count", kind: "int", min: 0, max: 10000 },
@@ -162,6 +192,11 @@ export function setPath(obj: Record<string, unknown>, path: string, value: unkno
 /** Population shown for a display frame (alive cells or number of particles). */
 export function framePopulation(frame: Frame): number {
   if (frame.header.codec === "bff_soup") return (frame.header as { programs?: number }).programs ?? 0;
+  if (frame.header.codec === "field_u8") {
+    let n = 0;
+    for (let i = 0; i < frame.bits.length; i++) if (frame.bits[i] > 2) n++;
+    return n;
+  }
   if (frame.header.codec === "particles_f32" || frame.header.codec === "particles_typed_f32") {
     return frame.header.count ?? 0;
   }
