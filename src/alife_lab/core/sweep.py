@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from alife_lab.core.hashing import sha256_json
 
 MAX_SWEEP_RUNS = 200
-_PATH = r"^(dynamics|world|initialization|runner|observations)\.[a-z_]{1,64}$"
+_PATH = r"^(dynamics|world|initialization|runner|observations|soup)\.[a-z_]{1,64}$"
 Scalar = float | int | str | bool
 # Structured levels (e.g. a Particle Life interaction matrix) are allowed when labelled.
 Level = Scalar | list[list[float]]

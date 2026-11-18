@@ -237,8 +237,74 @@ class ParticleLifeExperiment(_Frozen):
         return self
 
 
+# --------------------------------------------------------------------------- #
+# BFF primordial soup (CuBFF semantics)
+# --------------------------------------------------------------------------- #
+
+BFF_DEFAULT_MUTATION = 1 << 18  # out of 2^30 (= 1/4096 ≈ 0.024 %), CuBFF default
+
+
+class BFFSoup(_Frozen):
+    num_programs: Annotated[int, Field(ge=2, le=1 << 20, multiple_of=2)] = 4096
+    init: Literal["random", "zero"] = "random"
+
+
+class BFFDynamics(_Frozen):
+    clock_unit: Literal["epoch"] = "epoch"
+    numeric_policy: Literal["exact_integer"] = "exact_integer"
+    variant: Literal["bff_noheads", "bff"] = "bff_noheads"
+    # Per-byte replacement probability numerator over 2^30 (CuBFF ``mutation_prob``).
+    mutation_prob: Annotated[int, Field(ge=0, le=1 << 30)] = BFF_DEFAULT_MUTATION
+    # 0 = non-execution control (pairs are shuffled and mutated but never executed).
+    step_limit: Annotated[int, Field(ge=0, le=1 << 16)] = 8192
+
+
+BFFMetric = Literal[
+    "h0_bits_per_byte",
+    "brotli_bits_per_byte",
+    "higher_order_entropy",
+    "ops_per_pair",
+    "unique_programs",
+    "top_program_fraction",
+    "mutated_bytes",
+]
+
+
+class BFFObservation(_Frozen):
+    metrics: tuple[BFFMetric, ...] = (
+        "h0_bits_per_byte",
+        "brotli_bits_per_byte",
+        "higher_order_entropy",
+        "ops_per_pair",
+        "unique_programs",
+        "top_program_fraction",
+    )
+
+
+class BFFExperiment(_Frozen):
+    name: _NAME
+    mode: Literal["reference", "exploratory"] = "reference"
+    substrate: Literal["bff"]
+    seed: Annotated[int, Field(ge=0, lt=2**64)]
+    soup: BFFSoup = BFFSoup()
+    dynamics: BFFDynamics = BFFDynamics()
+    runner: RunnerSpec = RunnerSpec()
+    observations: BFFObservation = BFFObservation()
+
+    @model_validator(mode="after")
+    def _check_reference(self) -> BFFExperiment:
+        if self.mode == "reference" and (
+            self.dynamics.step_limit != 8192 or self.soup.init != "random"
+        ):
+            raise ValueError(
+                "reference mode for 'bff' requires CuBFF defaults: step_limit 8192 and "
+                "random initialization (num_programs, seed and mutation_prob are CuBFF flags)"
+            )
+        return self
+
+
 AnyExperiment = Annotated[
-    ConwayExperiment | BoidsExperiment | ParticleLifeExperiment,
+    ConwayExperiment | BoidsExperiment | ParticleLifeExperiment | BFFExperiment,
     Field(discriminator="substrate"),
 ]
 

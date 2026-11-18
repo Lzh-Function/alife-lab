@@ -19,6 +19,13 @@ export interface Inspection {
   boids?: Boid[];
   nearest?: (Boid & { steering: { neighbors: number; too_close: number; separation: Vec; alignment: Vec; cohesion: Vec } }) | null;
   query?: { x: number; y: number; radius: number };
+  // bff
+  index?: number;
+  program_hex?: string;
+  disassembly?: string;
+  instruction_fraction?: number;
+  exact_copies_in_soup?: number;
+  self_pair_test?: { description: string; ops: number; first_half_unchanged: boolean; second_half_equals_program: boolean };
   // particle_life
   type_counts_in_radius?: number[];
   matrix?: number[][];
@@ -72,6 +79,32 @@ export function InspectorPanel({ data, error }: { data: Inspection | null; error
                 </tbody>
               </table>
               <p className="muted small">{t("inspector.patch_note")}</p>
+            </>
+          )}
+          {data.substrate === "bff" && data.disassembly !== undefined && (
+            <>
+              <dl className="stats small" data-testid="inspector-program">
+                <dt>{t("inspector.program_index")}</dt>
+                <dd className="mono">#{data.index}</dd>
+                <dt>{t("inspector.copies")}</dt>
+                <dd className="mono" data-testid="inspector-copies">{data.exact_copies_in_soup}</dd>
+                <dt>{t("inspector.instruction_fraction")}</dt>
+                <dd className="mono">{((data.instruction_fraction ?? 0) * 100).toFixed(0)}%</dd>
+              </dl>
+              <pre className="program" data-testid="inspector-disassembly">
+                {data.disassembly.slice(0, 32)}
+                {"\n"}
+                {data.disassembly.slice(32)}
+              </pre>
+              <p className="muted small mono">{data.program_hex?.slice(0, 64)}…</p>
+              {data.self_pair_test && (
+                <p className="small">
+                  {t("inspector.self_pair")}: ops {data.self_pair_test.ops},{" "}
+                  {data.self_pair_test.second_half_equals_program ? t("inspector.self_pair.copy_kept") : t("inspector.self_pair.changed")}
+                  <br />
+                  <span className="muted">{t("inspector.self_pair_note")}</span>
+                </p>
+              )}
             </>
           )}
           {data.substrate === "particle_life" && (

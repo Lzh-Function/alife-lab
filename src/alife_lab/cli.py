@@ -200,9 +200,14 @@ def cmd_presets(args: argparse.Namespace) -> int:
 
     for preset in load_presets(load_settings().configs_dir).values():
         exp = preset.spec.experiment
+        world = getattr(exp, "world", None)
+        size = (
+            f"{world.width}x{world.height}"
+            if world is not None
+            else f"{exp.soup.num_programs} programs"  # type: ignore[union-attr]
+        )
         print(
-            f"{preset.id}\t{exp.substrate}\t{exp.world.width}x{exp.world.height}\t"
-            f"seed={exp.seed}\tspec={preset.spec.digest()[:12]}"
+            f"{preset.id}\t{exp.substrate}\t{size}\tseed={exp.seed}\tspec={preset.spec.digest()[:12]}"
         )
     return 0
 

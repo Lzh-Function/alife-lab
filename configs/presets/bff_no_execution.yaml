@@ -1,0 +1,14 @@
+preset:
+  id: bff_no_execution
+  scenario: bff_reference.yaml
+  title_key: preset.bff_no_execution.title
+  description_key: preset.bff_no_execution.description
+  overrides:
+    experiment:
+      name: bff_no_execution
+      mode: exploratory
+      dynamics: {step_limit: 0}
+  expected_observation: >-
+    Pairing and background mutation only: no program ever runs, so no self-modification or
+    copying can occur; higher-order entropy should stay near its initial value.
+  negative_control: null

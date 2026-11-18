@@ -186,7 +186,7 @@ class _Worker:
             "run_id": self.job.run_id,
             "job_id": self.job.job_id,
             "epoch": self.job.epoch,
-            "clock_unit": "tick",
+            "clock_unit": self.adapter.manifest.capabilities.clock_unit,
             "spec_digest": self.spec_digest,
             "substrate": self.spec.experiment.substrate,
             "backend": "numpy",
@@ -240,7 +240,7 @@ class _Worker:
                 "kind": command.get("kind"),
                 "status": status,
                 "applied_clock": self.tick,
-                "clock_unit": "tick",
+                "clock_unit": self.adapter.manifest.capabilities.clock_unit,
                 **extra,
             }
         )

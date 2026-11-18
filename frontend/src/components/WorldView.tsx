@@ -4,6 +4,7 @@ import { PARTICLE_SUBSTRATES, TOOLS, type SubstrateId, type ToolState } from "..
 import { useT } from "../i18n";
 import { ParticleCanvas, type ParticleCanvasHandle } from "./ParticleCanvas";
 import { WorldCanvas, type WorldCanvasHandle } from "./WorldCanvas";
+import { SoupCanvas, type SoupCanvasHandle } from "./SoupCanvas";
 
 export interface WorldViewHandle {
   draw: (frame: Frame) => void;
@@ -29,8 +30,14 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
 ) {
   const grid = useRef<WorldCanvasHandle>(null);
   const particles = useRef<ParticleCanvasHandle>(null);
+  const soup = useRef<SoupCanvasHandle>(null);
   useImperativeHandle(ref, () => ({
-    draw: (frame: Frame) => (PARTICLE_SUBSTRATES.has(substrate) ? particles.current?.draw(frame) : grid.current?.draw(frame)),
+    draw: (frame: Frame) =>
+      substrate === "bff"
+        ? soup.current?.draw(frame)
+        : PARTICLE_SUBSTRATES.has(substrate)
+          ? particles.current?.draw(frame)
+          : grid.current?.draw(frame),
   }), [substrate]);
   const inspecting = tool !== null && tool.mode === "inspect";
   const active = tool !== null && tool.mode !== "off" && !inspecting;
@@ -53,6 +60,39 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
     [tool, onIntervene],
   );
 
+  if (substrate === "bff") {
+    return (
+      <SoupCanvas
+        ref={soup}
+        toolRadius={active || inspecting ? (tool?.radius ?? 0) : null}
+        onTile={(col, row, columns, programs) => {
+          if (!tool) return;
+          if (tool.mode === "inspect") {
+            onInspect?.(col, row);
+            return;
+          }
+          // Explicit program indices (a square block of tiles) keep the intervention replayable.
+          const indices: number[] = [];
+          for (let dy = -tool.radius; dy <= tool.radius; dy++) {
+            for (let dx = -tool.radius; dx <= tool.radius; dx++) {
+              const c = col + dx;
+              const r = row + dy;
+              const idx = r * columns + c;
+              if (c >= 0 && c < columns && r >= 0 && idx < programs) indices.push(idx);
+            }
+          }
+          if (!indices.length) return;
+          onIntervene(tool.mode === "inject" ? "inject_program" : "zero_programs", {
+            indices,
+            ...(tool.mode === "inject" ? { program: tool.program ?? "", encoding: "text" } : {}),
+          });
+        }}
+        onDisplayFps={onDisplayFps}
+        maxPixels={maxPixels}
+        testId={testId}
+      />
+    );
+  }
   if (PARTICLE_SUBSTRATES.has(substrate)) {
     return (
       <ParticleCanvas
@@ -126,6 +166,20 @@ export function ToolBar({
         />
         {tool.radius}
       </label>
+      {substrate === "bff" && (
+        <label className="inline">
+          {t("lab.tool.program")}
+          <input
+            className="mono"
+            data-testid="tool-program"
+            maxLength={64}
+            value={tool.program ?? ""}
+            placeholder="[[{.>]-]"
+            onChange={(e) => setTool({ ...tool, program: e.target.value })}
+            style={{ width: "16rem" }}
+          />
+        </label>
+      )}
       {d.count && (
         <label className="inline">
           {t("lab.tool.count")}

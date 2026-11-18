@@ -299,6 +299,17 @@ class Controller:
             "environment": self.environment,
         }
 
+    def clock_unit(self, run_id: str) -> str:
+        """Substrate clock unit (``tick``, ``epoch``, …). ``runs.tick`` stores its value."""
+        row = self.db.one(
+            "SELECT e.substrate FROM runs r JOIN experiments e ON e.id=r.experiment_id "
+            "WHERE r.id=?",
+            (run_id,),
+        )
+        if row is None:
+            return "tick"
+        return get_manifest(row["substrate"]).capabilities.clock_unit
+
     def _run_row(self, run_id: str) -> dict[str, Any]:
         row = self.db.one("SELECT * FROM runs WHERE id=?", (run_id,))
         if row is None:
@@ -345,7 +356,7 @@ class Controller:
             "spec_hash": exp["spec_hash"],
             "profile_hash": row["profile_hash"],
             "spec": json.loads(exp["spec_json"]),
-            "clock": {"unit": "tick", "value": row["tick"]},
+            "clock": {"unit": self.clock_unit(run_id), "value": row["tick"]},
             "epoch": row["epoch"],
             "ticks_per_second": row["ticks_per_second"],
             "created_at": row["created_at"],
@@ -443,7 +454,7 @@ class Controller:
         result = read_metrics(
             self.store.run_dir(run_id), start_ticks, since_tick, until_tick, max_points
         )
-        return {"run_id": run_id, "clock_unit": "tick", **result}
+        return {"run_id": run_id, "clock_unit": self.clock_unit(run_id), **result}
 
     def provenance(self, run_id: str) -> dict[str, Any]:
         self._run_row(run_id)
@@ -787,7 +798,7 @@ class Controller:
                 "fork",
                 0,
                 tick,
-                "tick",
+                self.clock_unit(run_id),
                 receipt.logical_path,
                 receipt.storage_uri,
                 receipt.sha256,
@@ -1163,7 +1174,7 @@ class Controller:
         supported = self._replay_supported(run_id)
         return {
             "run_id": run_id,
-            "clock_unit": "tick",
+            "clock_unit": self.clock_unit(run_id),
             "range": [checkpoints[0]["simulation_clock"] if checkpoints else None, row["tick"]],
             "replay": {
                 "mode": "exact_recompute" if supported else "visual_only",
@@ -1539,7 +1550,7 @@ class Controller:
                 run_id,
                 {
                     "type": "heartbeat",
-                    "clock": {"unit": "tick", "value": message["tick"]},
+                    "clock": {"unit": self.clock_unit(run_id), "value": message["tick"]},
                     "steps_per_second": job.steps_per_second,
                     "worker_rss_mb": job.last_rss_mb,
                     "worker_cpu_percent": job.cpu_percent,
@@ -1611,7 +1622,7 @@ class Controller:
                 job.job_id,
                 job.epoch,
                 int(message["tick"]),
-                "tick",
+                self.clock_unit(job.run_id),
                 receipt["logical_path"],
                 receipt["storage_uri"],
                 receipt["sha256"],
@@ -1640,7 +1651,7 @@ class Controller:
             "kind": message.get("kind"),
             "status": message["status"],
             "applied_clock": message.get("applied_clock"),
-            "clock_unit": "tick",
+            "clock_unit": self.clock_unit(job.run_id),
             "result": message.get("result"),
             "error": message.get("error"),
         }
@@ -1992,7 +2003,7 @@ class Controller:
                 "previous": current.value,
                 "reason": reason,
                 "revision": row["revision"] + 1,
-                "clock": {"unit": "tick", "value": row["tick"]},
+                "clock": {"unit": self.clock_unit(run_id), "value": row["tick"]},
             },
         )
 
@@ -2007,6 +2018,7 @@ class Controller:
     ) -> dict[str, Any]:
         row = self._run_row(run_id)
         clock_value = row["tick"] if clock is None else clock
+        unit = self.clock_unit(run_id)
         now = time.time()
         with self.db.transaction() as conn:
             seq_row = conn.execute(
@@ -2019,7 +2031,7 @@ class Controller:
                 (
                     run_id,
                     seq,
-                    "tick",
+                    unit,
                     clock_value,
                     now,
                     source,
@@ -2032,7 +2044,7 @@ class Controller:
         envelope = {
             "run_id": run_id,
             "seq": seq,
-            "clock_unit": "tick",
+            "clock_unit": unit,
             "clock_value": clock_value,
             "observed_at_utc": now,
             "source": source,

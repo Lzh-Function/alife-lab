@@ -123,6 +123,7 @@ class RestoreRequest(_Req):
 
 
 _ALLOWED_OVERRIDE_KEYS = {
+    "soup",
     "name",
     "seed",
     "mode",

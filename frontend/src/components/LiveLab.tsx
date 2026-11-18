@@ -183,7 +183,7 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
             disabled={busy || summary.state !== "paused"}
             onClick={() => act(() => api.control(runId, "step", { count: 1 }))}
           >
-            ⏭ {t("lab.step")}
+            ⏭ {t("lab.step_unit").replace("{unit}", t(`clock.${summary.clock.unit}`))}
           </button>
           <button data-testid="btn-checkpoint" disabled={busy || !live} onClick={() => act(() => api.control(runId, "checkpoints"))}>
             💾 {t("lab.checkpoint")}
@@ -216,7 +216,7 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
             ■ {t("lab.cancel")}
           </button>
           <label className="inline">
-            {t("lab.speed")}
+            {t("lab.speed_unit").replace("{unit}", t(`clock.${summary.clock.unit}`))}
             <input
               type="number"
               min={0}
@@ -264,7 +264,7 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
         <div className="panel">
           <h3>{t("lab.metrics")}</h3>
           <dl className="stats">
-            <dt>{t("lab.tick")}</dt>
+            <dt>{t(`clock.${summary.clock.unit}`)}</dt>
             <dd data-testid="tick">{tick ?? summary.clock.value}</dd>
             {metricIds.map((m) => (
               <MetricStat key={m} id={m} value={last?.values[m] ?? null} />

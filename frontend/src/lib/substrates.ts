@@ -4,7 +4,7 @@
 import type { Frame } from "./api";
 import { popcount } from "./api";
 
-export type SubstrateId = "conway" | "boids" | "particle_life";
+export type SubstrateId = "conway" | "boids" | "particle_life" | "bff";
 
 /** Substrates rendered as continuous particles (vs. grids). */
 export const PARTICLE_SUBSTRATES = new Set(["boids", "particle_life"]);
@@ -13,6 +13,7 @@ export interface ToolState {
   mode: string; // "off" or an intervention mode
   radius: number;
   count: number;
+  program?: string; // BFF: program text to inject
 }
 
 export interface ToolDescriptor {
@@ -33,6 +34,11 @@ export const TOOLS: Record<SubstrateId, ToolDescriptor> = {
     radius: { min: 1, max: 40, step: 1, initial: 8 },
     count: { min: 1, max: 500, initial: 30 },
     noteKey: "lab.tool.boids_note",
+  },
+  bff: {
+    modes: ["off", "inspect", "inject", "zero"],
+    radius: { min: 0, max: 8, step: 1, initial: 0 },
+    noteKey: "lab.tool.bff_note",
   },
   particle_life: {
     modes: ["off", "inspect", "spawn", "remove"],
@@ -99,6 +105,22 @@ export const FORM_FIELDS: Record<SubstrateId, FormField[]> = {
     { path: "dynamics.noise", labelKey: "form.boids.noise", kind: "float", min: 0, step: 0.01 },
     ...RUNNER,
   ],
+  bff: [
+    { path: "seed", labelKey: "form.seed", kind: "int", min: 0 },
+    { path: "soup.num_programs", labelKey: "form.bff.num_programs", kind: "int", min: 2, step: 2 },
+    {
+      path: "dynamics.variant",
+      labelKey: "form.bff.variant",
+      kind: "select",
+      options: [
+        { value: "bff_noheads", labelKey: "form.bff.variant.noheads" },
+        { value: "bff", labelKey: "form.bff.variant.heads" },
+      ],
+    },
+    { path: "dynamics.mutation_prob", labelKey: "form.bff.mutation_prob", kind: "int", min: 0 },
+    { path: "dynamics.step_limit", labelKey: "form.bff.step_limit", kind: "int", min: 0 },
+    ...RUNNER,
+  ],
   particle_life: [
     { path: "seed", labelKey: "form.seed", kind: "int", min: 0 },
     { path: "initialization.count", labelKey: "form.particles.count", kind: "int", min: 0, max: 10000 },
@@ -139,6 +161,7 @@ export function setPath(obj: Record<string, unknown>, path: string, value: unkno
 
 /** Population shown for a display frame (alive cells or number of particles). */
 export function framePopulation(frame: Frame): number {
+  if (frame.header.codec === "bff_soup") return (frame.header as { programs?: number }).programs ?? 0;
   if (frame.header.codec === "particles_f32" || frame.header.codec === "particles_typed_f32") {
     return frame.header.count ?? 0;
   }

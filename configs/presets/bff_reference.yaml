@@ -1,0 +1,11 @@
+preset:
+  id: bff_reference
+  scenario: bff_reference.yaml
+  title_key: preset.bff_reference.title
+  description_key: preset.bff_reference.description
+  expected_observation: >-
+    Random 64-byte programs interact in pairs without any fitness. In the paper, a sharp rise
+    of higher-order entropy marks the takeover by self-replicators after thousands of epochs
+    (soup of 2^17); timing is stochastic and soup-size dependent. Candidate events only (E0/E1)
+    until checked with replication assays and controls.
+  negative_control: presets bff_no_execution (no execution) and bff_no_mutation

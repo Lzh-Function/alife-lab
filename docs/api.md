@@ -33,8 +33,8 @@ dropped_previews`) + payload. Codec `bitpack1` = `numpy.packbits` (row-major, MS
 ## Substrate-specific payloads
 - Interventions (`POST /experiments/{id}/interventions`, `{kind, payload}`): `conway` → `brush`
   (`{shape: "cells"|"circle", ...}`); `boids` → `spawn {x, y, radius, count}`, `particle_life` → `spawn {x, y, radius, count, type?}` / `remove`,
-  `remove {x, y, radius}`. Kinds not declared by the substrate are rejected (400).
-- Frame codecs: `bitpack1` (`width`, `height`) for Conway; `particles_typed_f32` (`count`, `types`, world size; float32 `[x, y, vx, vy, type]`) for Particle Life; `particles_f32` (`count`,
+  `remove {x, y, radius}`; `bff` → `inject_program {indices, program, encoding}`, `zero_programs {indices}`. Kinds not declared by the substrate are rejected (400).
+- Frame codecs: `bff_soup` (`programs`, `columns`; raw bytes of up to 4096 programs) for BFF; `bitpack1` (`width`, `height`) for Conway; `particles_typed_f32` (`count`, `types`, world size; float32 `[x, y, vx, vy, type]`) for Particle Life; `particles_f32` (`count`,
   `world_width`, `world_height`; float32 LE `[x, y, vx, vy]` per particle) for Boids.
 - Comparison reports: `divergence.metric` (`hamming` | `rms_position_distance`) and
   `points[].distance_to_first`.

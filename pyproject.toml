@@ -13,6 +13,7 @@ dependencies = [
     "pyyaml>=6.0.2",
     "psutil>=7.1",
     "pyarrow>=21.0",
+    "brotli>=1.1",
 ]
 
 [project.scripts]
@@ -69,5 +70,5 @@ plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
 # pyarrow ships without type information.
-module = ["pyarrow", "pyarrow.*"]
+module = ["pyarrow", "pyarrow.*", "brotli"]
 ignore_missing_imports = true

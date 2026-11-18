@@ -1,0 +1,13 @@
+preset:
+  id: bff_no_mutation
+  scenario: bff_reference.yaml
+  title_key: preset.bff_no_mutation.title
+  description_key: preset.bff_no_mutation.description
+  overrides:
+    experiment:
+      name: bff_no_mutation
+      dynamics: {mutation_prob: 0}
+  expected_observation: >-
+    Execution without background mutation (the paper reports replicators can still arise via
+    self-modification). Compare with bff_reference across seeds.
+  negative_control: preset bff_no_execution

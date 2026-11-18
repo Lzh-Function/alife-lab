@@ -167,3 +167,5 @@ textarea { font: inherit; color: inherit; background: var(--panel); border: 1px 
 .contents { display: contents; }
 .matrix { border-collapse: collapse; margin-top: 0.4rem; }
 .matrix td { border: 1px solid var(--border); padding: 0.15rem 0.35rem; text-align: right; font-variant-numeric: tabular-nums; }
+pre.program { font-size: 12px; letter-spacing: 0.08em; background: var(--cell-dead); color: #e6e9ef; padding: 0.4rem; border-radius: 4px; }
+.panel .mono { overflow-wrap: anywhere; }
