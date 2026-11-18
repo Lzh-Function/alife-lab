@@ -19,6 +19,7 @@ export function Library({ onOpen }: { onOpen: (runId: string) => void }) {
             <th>{t("col.state")}</th>
             <th>{t("col.tick")}</th>
             <th>{t("col.mode")}</th>
+            <th>{t("col.parent")}</th>
             <th>{t("col.created")}</th>
             <th />
           </tr>
@@ -33,6 +34,7 @@ export function Library({ onOpen }: { onOpen: (runId: string) => void }) {
               </td>
               <td>{r.tick}</td>
               <td>{r.effective_mode}</td>
+              <td className="mono small">{r.parent_run_id ?? ""}</td>
               <td>{new Date(r.created_at * 1000).toLocaleString(lang)}</td>
               <td>
                 <button data-testid={`open-${r.id}`} onClick={() => onOpen(r.id)}>

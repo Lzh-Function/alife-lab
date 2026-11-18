@@ -12,13 +12,15 @@ interface Props {
   brushRadius: number;
   onStroke: (cells: Array<[number, number]>, value: 0 | 1) => void;
   onDisplayFps: (fps: number) => void;
+  maxPixels?: number;
+  testId?: string;
 }
 
 const MAX_STROKE_CELLS = 65536;
 
 // Canvas2D renderer: decoupled from React; frames are painted via requestAnimationFrame.
 export const WorldCanvas = forwardRef<WorldCanvasHandle, Props>(function WorldCanvas(
-  { width, height, brushMode, brushRadius, onStroke, onDisplayFps },
+  { width, height, brushMode, brushRadius, onStroke, onDisplayFps, maxPixels = 720, testId = "world-canvas" },
   ref,
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -124,12 +126,12 @@ export const WorldCanvas = forwardRef<WorldCanvasHandle, Props>(function WorldCa
     schedule();
   };
 
-  const scale = Math.max(1, Math.floor(Math.min(720 / width, 720 / height)));
+  const scale = Math.max(1, Math.floor(Math.min(maxPixels / width, maxPixels / height)));
 
   return (
     <canvas
       ref={canvasRef}
-      data-testid="world-canvas"
+      data-testid={testId}
       className={`world-canvas ${brushMode !== "off" ? "brush-active" : ""}`}
       width={width * scale}
       height={height * scale}

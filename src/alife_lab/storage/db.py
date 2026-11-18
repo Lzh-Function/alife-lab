@@ -150,6 +150,30 @@ MIGRATIONS: list[tuple[int, str]] = [
         );
         """,
     ),
+    (
+        2,
+        """
+        ALTER TABLE checkpoints ADD COLUMN spec_hash TEXT;
+        ALTER TABLE runs ADD COLUMN label TEXT;
+        CREATE TABLE comparisons (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            design TEXT NOT NULL,
+            parent_run_id TEXT,
+            parent_checkpoint_id TEXT,
+            created_at REAL NOT NULL,
+            notes_json TEXT NOT NULL DEFAULT '{}'
+        );
+        CREATE TABLE comparison_members (
+            comparison_id TEXT NOT NULL REFERENCES comparisons(id),
+            run_id TEXT NOT NULL REFERENCES runs(id),
+            arm TEXT NOT NULL,
+            position INTEGER NOT NULL,
+            PRIMARY KEY (comparison_id, run_id)
+        );
+        CREATE INDEX runs_parent ON runs(parent_run_id);
+        """,
+    ),
 ]
 
 
@@ -175,6 +199,13 @@ class Database:
             applied = {
                 int(r[0]) for r in self._conn.execute("SELECT version FROM schema_migrations")
             }
+            pending = [v for v, _ in MIGRATIONS if v not in applied]
+            if pending and applied:
+                # Spec 10.5: keep a consistent pre-migration copy of existing metadata.
+                backup = self.path.with_name(
+                    f"{self.path.name}.pre-v{max(pending)}-{int(time.time())}.bak"
+                )
+                self.backup_to(backup)
             for version, sql in MIGRATIONS:
                 if version in applied:
                     continue

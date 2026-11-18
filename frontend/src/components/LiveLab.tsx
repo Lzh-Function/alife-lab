@@ -10,7 +10,7 @@ import { StateBadge } from "./StateBadge";
 const LIVE = new Set(["starting", "running", "pausing", "paused", "resuming"]);
 const MAX_ROWS = 4000;
 
-export function LiveLab({ runId }: { runId: string }) {
+export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComparison: (id: string) => void }) {
   const t = useT();
   const qc = useQueryClient();
   const canvas = useRef<WorldCanvasHandle>(null);
@@ -126,7 +126,7 @@ export function LiveLab({ runId }: { runId: string }) {
   return (
     <div className="lab">
       <section className="lab-main">
-        <div className="lab-head">
+        <div className="lab-head" data-testid="lab-head">
           <h2 data-testid="run-name">{summary.name}</h2>
           <StateBadge state={summary.state} />
           <span className={`mode mode-${summary.effective_mode}`} data-testid="run-mode">
@@ -153,6 +153,25 @@ export function LiveLab({ runId }: { runId: string }) {
           </button>
           <button data-testid="btn-checkpoint" disabled={busy || !live} onClick={() => act(() => api.control(runId, "checkpoints"))}>
             💾 {t("lab.checkpoint")}
+          </button>
+          <button
+            data-testid="btn-paired-fork"
+            title={t("lab.paired_fork_note")}
+            disabled={busy || !(live || summary.latest_checkpoint)}
+            onClick={async () => {
+              setBusy(true);
+              setError(null);
+              try {
+                const cmp = await api.pairedFork(runId, live ? "now" : "latest");
+                onOpenComparison(cmp.id);
+              } catch (e) {
+                setError(e instanceof ApiError ? `${e.code}: ${e.message}` : String(e));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            ⑂ {t("lab.paired_fork")}
           </button>
           {summary.restorable && (
             <button data-testid="btn-restore" className="primary" disabled={busy} onClick={() => act(() => api.restore(runId))}>
@@ -256,13 +275,66 @@ export function LiveLab({ runId }: { runId: string }) {
           {summary.intervened && <p className="notice small">{t("lab.mode.changed")}</p>}
         </div>
 
+        {(summary.parent_run_id || summary.children.length > 0 || summary.comparisons.length > 0) && (
+          <div className="panel" data-testid="lineage">
+            <h3>{t("lab.lineage")}</h3>
+            <dl className="stats small">
+              {summary.parent_run_id && (
+                <>
+                  <dt>{t("lab.parent")}</dt>
+                  <dd>
+                    <a className="mono" href={`#/lab/${summary.parent_run_id}`}>{summary.parent_run_id}</a>
+                  </dd>
+                </>
+              )}
+              {summary.children.length > 0 && (
+                <>
+                  <dt>{t("lab.children")}</dt>
+                  <dd>
+                    {summary.children.map((c) => (
+                      <div key={c}>
+                        <a className="mono" href={`#/lab/${c}`}>{c}</a>
+                      </div>
+                    ))}
+                  </dd>
+                </>
+              )}
+              {summary.comparisons.length > 0 && (
+                <>
+                  <dt>{t("lab.comparisons")}</dt>
+                  <dd>
+                    {summary.comparisons.map((c) => (
+                      <div key={c}>
+                        <a className="mono" href={`#/compare/${c}`}>{c}</a>
+                      </div>
+                    ))}
+                  </dd>
+                </>
+              )}
+            </dl>
+          </div>
+        )}
+
         <div className="panel">
           <h3>{t("lab.checkpoints")} ({checkpoints.data?.length ?? 0})</h3>
           <ul className="list small" data-testid="checkpoint-list">
             {(checkpoints.data ?? []).slice(-8).reverse().map((c) => (
               <li key={c.id}>
                 <span className="mono">t={c.simulation_clock}</span> · {c.reason} · e{c.epoch} ·{" "}
-                <span className="mono" title={c.sha256}>{c.sha256.slice(0, 8)}</span>
+                <span className="mono" title={c.sha256}>{c.sha256.slice(0, 8)}</span>{" "}
+                <button
+                  className="ghost small"
+                  data-testid={`fork-${c.id}`}
+                  disabled={busy}
+                  onClick={() =>
+                    act(async () => {
+                      const child = await api.fork(runId, c.id, `fork@t${c.simulation_clock}`);
+                      window.location.hash = `/lab/${child.id}`;
+                    })
+                  }
+                >
+                  ⑂ {t("lab.fork")}
+                </button>
               </li>
             ))}
           </ul>

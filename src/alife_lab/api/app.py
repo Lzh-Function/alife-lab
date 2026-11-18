@@ -83,6 +83,36 @@ class InterventionRequest(ControlRequest):
     payload: dict[str, Any]
 
 
+class InterventionSpec(_Req):
+    kind: Literal["brush"]
+    payload: dict[str, Any]
+
+
+class ForkRequest(_Req):
+    checkpoint_id: str = "latest"
+    label: Annotated[str, Field(min_length=1, max_length=120)] | None = None
+    spec_overrides: dict[str, Any] | None = None
+    intervention: InterventionSpec | None = None
+    profile_id: str | None = None
+    ticks_per_second: Annotated[float, Field(ge=0, le=10_000)] | None = None
+    auto_start: bool = False
+    start_paused: bool = True
+
+
+class PairedForkRequest(_Req):
+    checkpoint_id: str = "now"
+    treatment_intervention: InterventionSpec | None = None
+    name: Annotated[str, Field(min_length=1, max_length=200)] | None = None
+    ticks_per_second: Annotated[float, Field(ge=0, le=10_000)] | None = None
+    start: bool = True
+    start_paused: bool = True
+
+
+class ComparisonRequest(_Req):
+    run_ids: Annotated[list[str], Field(min_length=2, max_length=4)]
+    name: Annotated[str, Field(min_length=1, max_length=200)] = "manual comparison"
+
+
 class RestoreRequest(_Req):
     checkpoint_id: str = "latest"
     start_paused: bool = True
@@ -391,6 +421,90 @@ def create_app(
     async def restore(run_id: str, body: RestoreRequest | None = None) -> dict[str, Any]:
         body = body or RestoreRequest()
         return envelope(await ctl().restore_run(run_id, body.checkpoint_id, body.start_paused))
+
+    @app.post(f"{API}/experiments/{{run_id}}/fork", status_code=201)
+    async def fork(
+        run_id: str,
+        body: ForkRequest,
+        idempotency_key: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        c = ctl()
+        request_hash = sha256_json({"run": run_id, **body.model_dump(mode="json")})
+        if idempotency_key is not None:
+            if not _IDEMPOTENCY_RE.match(idempotency_key):
+                raise ControllerError("invalid Idempotency-Key")
+            previous = c.idempotency_lookup(idempotency_key, "fork", request_hash)
+            if previous is not None:
+                return envelope({**c.run_summary(previous["run_id"]), "idempotent_replay": True})
+        child = c.fork_run(
+            run_id,
+            body.checkpoint_id,
+            label=body.label,
+            spec_overrides=body.spec_overrides,
+            intervention=body.intervention.model_dump() if body.intervention else None,
+            profile_id=body.profile_id,
+            ticks_per_second=body.ticks_per_second,
+            author="browser_or_api",
+        )
+        if idempotency_key is not None:
+            c.idempotency_store(idempotency_key, "fork", request_hash, {"run_id": child["id"]})
+        if body.auto_start:
+            child = await c.start_run(child["id"], start_paused=body.start_paused)
+        return envelope(child)
+
+    @app.post(f"{API}/experiments/{{run_id}}/paired-fork", status_code=201)
+    async def paired_fork(
+        run_id: str,
+        body: PairedForkRequest,
+        idempotency_key: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        c = ctl()
+        request_hash = sha256_json({"run": run_id, **body.model_dump(mode="json")})
+        if idempotency_key is not None:
+            if not _IDEMPOTENCY_RE.match(idempotency_key):
+                raise ControllerError("invalid Idempotency-Key")
+            previous = c.idempotency_lookup(idempotency_key, "paired_fork", request_hash)
+            if previous is not None:
+                return envelope(
+                    {**c.comparison_summary(previous["comparison_id"]), "idempotent_replay": True}
+                )
+        result = await c.paired_fork(
+            run_id,
+            body.checkpoint_id,
+            treatment_intervention=(
+                body.treatment_intervention.model_dump() if body.treatment_intervention else None
+            ),
+            name=body.name,
+            ticks_per_second=body.ticks_per_second,
+            start=body.start,
+            start_paused=body.start_paused,
+            author="browser_or_api",
+        )
+        if idempotency_key is not None:
+            c.idempotency_store(
+                idempotency_key, "paired_fork", request_hash, {"comparison_id": result["id"]}
+            )
+        return envelope(result)
+
+    @app.post(f"{API}/comparisons", status_code=201)
+    async def create_comparison(body: ComparisonRequest) -> dict[str, Any]:
+        return envelope(ctl().create_comparison(body.run_ids, body.name))
+
+    @app.get(f"{API}/comparisons")
+    async def comparisons() -> dict[str, Any]:
+        return envelope(ctl().list_comparisons())
+
+    @app.get(f"{API}/comparisons/{{comparison_id}}")
+    async def comparison(comparison_id: str) -> dict[str, Any]:
+        return envelope(ctl().comparison_summary(comparison_id))
+
+    @app.get(f"{API}/comparisons/{{comparison_id}}/report")
+    async def comparison_report(
+        comparison_id: str,
+        max_points: Annotated[int, Query(ge=1, le=20_000)] = 1000,
+    ) -> dict[str, Any]:
+        report = await run_in_threadpool(ctl().comparison_report, comparison_id, max_points)
+        return envelope(report)
 
     @app.post(f"{API}/experiments/{{run_id}}/cancel")
     async def cancel(run_id: str) -> dict[str, Any]:

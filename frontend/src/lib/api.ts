@@ -37,6 +37,12 @@ export interface Checkpoint {
 export interface RunSummary {
   id: string;
   name: string;
+  label: string | null;
+  experiment_id: string;
+  parent_run_id: string | null;
+  parent_checkpoint_id: string | null;
+  children: string[];
+  comparisons: string[];
   substrate: string;
   declared_mode: "reference" | "exploratory";
   effective_mode: "reference" | "exploratory";
@@ -78,6 +84,7 @@ export interface RunListItem {
   name: string;
   substrate: string;
   spec_hash: string;
+  parent_run_id: string | null;
 }
 
 export interface Preset {
@@ -136,6 +143,34 @@ export interface CommandResult {
 }
 
 let cachedToken: string | null = null;
+
+export interface BrushIntervention {
+  kind: "brush";
+  payload: Record<string, unknown>;
+}
+
+export interface ComparisonSummary {
+  id: string;
+  name: string;
+  design: string;
+  parent_run_id: string | null;
+  parent_checkpoint_id: string | null;
+  created_at: number;
+  members: Array<{ arm: string; run: RunSummary }>;
+}
+
+export interface DivergencePoint {
+  tick: number;
+  hamming_to_first: Array<number | null>;
+  alive: number[];
+  reasons: string[];
+}
+
+export interface ComparisonReport {
+  comparison: ComparisonSummary;
+  divergence: { definition: string; common_ticks: number; sampled_ticks: number; shape_mismatch: boolean; points: DivergencePoint[] };
+  metrics: Record<string, MetricRow[]>;
+}
 
 export function sessionToken(): string {
   if (cachedToken !== null) return cachedToken;
@@ -210,6 +245,18 @@ export const api = {
     }),
   restore: (id: string) => request<RunSummary>("POST", `/experiments/${id}/restore`, { checkpoint_id: "latest", start_paused: true }),
   cancel: (id: string) => request<RunSummary>("POST", `/experiments/${id}/cancel`),
+  fork: (id: string, checkpointId: string, label?: string) =>
+    request<RunSummary>("POST", `/experiments/${id}/fork`, { checkpoint_id: checkpointId, label, auto_start: true, start_paused: true }, { "Idempotency-Key": `fork-${newCommandId()}` }),
+  pairedFork: (id: string, checkpointId = "now", treatment?: BrushIntervention) =>
+    request<ComparisonSummary>(
+      "POST",
+      `/experiments/${id}/paired-fork`,
+      { checkpoint_id: checkpointId, treatment_intervention: treatment ?? null, start: true, start_paused: true },
+      { "Idempotency-Key": `pf-${newCommandId()}` },
+    ),
+  comparisons: () => request<Array<Omit<ComparisonSummary, "members">>>("GET", "/comparisons"),
+  comparison: (id: string) => request<ComparisonSummary>("GET", `/comparisons/${id}`),
+  comparisonReport: (id: string) => request<ComparisonReport>("GET", `/comparisons/${id}/report?max_points=1000`),
   checkpoints: (id: string) => request<Checkpoint[]>("GET", `/experiments/${id}/checkpoints`),
   events: (id: string, sinceSeq = 0) => request<RunEvent[]>("GET", `/experiments/${id}/events?since_seq=${sinceSeq}`),
   metrics: (id: string) => request<{ rows: MetricRow[]; total_points: number; stride: number }>("GET", `/experiments/${id}/metrics?max_points=2000`),

@@ -60,7 +60,10 @@ class WorkerJob:
     start_paused: bool
     ticks_per_second: float
     preview_fps: float
-    restore_from: dict[str, Any] | None = None  # {"logical_path", "sha256"}
+    # {"logical_path", "sha256", optional "expected_spec_digest", optional "fork_origin"}
+    restore_from: dict[str, Any] | None = None
+    # Commands applied before the first tick (e.g. the intervention of a fork arm).
+    initial_commands: list[dict[str, Any]] = field(default_factory=list)
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -125,11 +128,15 @@ class _Worker:
             raise ArtifactError(f"checkpoint {logical} failed checksum verification")
         payload = decode_checkpoint(data)
         meta = payload["meta"]
-        if meta.get("spec_digest") != self.spec_digest:
+        expected_spec = self.job.restore_from.get("expected_spec_digest") or self.spec_digest
+        if meta.get("spec_digest") != expected_spec:
             raise ArtifactError("checkpoint belongs to a different scientific spec")
         self.state = self.adapter.deserialize_state(payload, self.spec)
         self.last_checkpoint_tick = int(meta["tick"])
         self.log("info", "restored", checkpoint=logical, tick=self.state.tick)
+        if self.job.restore_from.get("fork_origin"):
+            # A fork is a new run: its metric history starts at the fork tick.
+            self.record_metrics()
 
     @property
     def tick(self) -> int:
@@ -193,10 +200,13 @@ class _Worker:
             "reason": reason,
         }
         data = encode_checkpoint(serialized["arrays"], meta)
-        logical = f"checkpoints/e{self.job.epoch:03d}_t{self.tick:012d}.npz"
-        if reason == "manual" and self.last_checkpoint_tick == self.tick:
-            stamp = int(time.time() * 1000)
-            logical = f"checkpoints/e{self.job.epoch:03d}_t{self.tick:012d}_m{stamp}.npz"
+        base = f"checkpoints/e{self.job.epoch:03d}_t{self.tick:012d}"
+        logical = f"{base}.npz"
+        suffix = 1
+        while self.store.resolve(self.job.run_id, logical).exists():
+            # Same tick, different state (e.g. after an intervention) or a repeated manual save.
+            logical = f"{base}_n{suffix}.npz"
+            suffix += 1
         receipt = self.store.publish_bytes(
             self.job.run_id, logical, data, kind="checkpoint", mime_type="application/x-npz"
         )
@@ -273,6 +283,8 @@ class _Worker:
                 self.state, result = self.adapter.apply_intervention(
                     self.state, self.spec, intervention_kind, dict(payload.get("payload") or {})
                 )
+                # The state now differs from any checkpoint at this tick.
+                self.last_checkpoint_tick = None
                 # Re-record the metrics row for the current tick: post-intervention state.
                 self.record_metrics()
                 self.metric_buffer[-1]["post_intervention"] = True
@@ -306,6 +318,8 @@ class _Worker:
 
     def run(self) -> None:
         self.init_state()
+        for command in self.job.initial_commands:
+            self.handle(command)
         self.send(
             {"type": "ready", "tick": self.tick, "state": "running" if self.running else "paused"}
         )

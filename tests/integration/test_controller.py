@@ -18,19 +18,9 @@ from alife_lab.artifacts.store import decode_checkpoint
 from alife_lab.core.spec import ExperimentSpec
 from alife_lab.execution.executors import FakeExecutor, LocalExecutor
 from alife_lab.service.controller import Conflict, Controller, ControllerLocked
-from alife_lab.service.settings import Settings, load_settings
+from alife_lab.service.settings import Settings
 
 ROOT = Path(__file__).resolve().parents[2]
-
-
-@pytest.fixture
-def settings(tmp_path: Path) -> Settings:
-    return replace(
-        load_settings(),
-        runs_root=tmp_path / "runs",
-        home=tmp_path / "home",
-        configs_dir=ROOT / "configs",
-    )
 
 
 def spec(

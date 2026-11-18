@@ -15,8 +15,8 @@ from typing import Any
 from alife_lab import __version__
 
 PLANNED_COMMANDS = (
-    "runs fork / runs reproduce / compare / report / export / sweep / discoveries / assays / "
-    "benchmark (planned, Phase 2+)"
+    "runs reproduce / report / export / sweep / discoveries / assays / benchmark "
+    "(planned, Phase 2+)"
 )
 
 
@@ -293,8 +293,8 @@ def cmd_runs(args: argparse.Namespace) -> int:
     conn = _ro_db()
     if args.runs_cmd == "list":
         sql = (
-            "SELECT r.id, r.state, r.tick, r.effective_mode, e.name FROM runs r "
-            "JOIN experiments e ON e.id=r.experiment_id"
+            "SELECT r.id, r.state, r.tick, r.effective_mode, COALESCE(r.label, e.name) AS name "
+            "FROM runs r JOIN experiments e ON e.id=r.experiment_id"
         )
         params: tuple[Any, ...] = ()
         if args.status:
@@ -352,6 +352,92 @@ def cmd_runs(args: argparse.Namespace) -> int:
 # --------------------------------------------------------------------------- #
 
 
+# --------------------------------------------------------------------------- #
+# fork (headless) / compare (read-only)
+# --------------------------------------------------------------------------- #
+
+
+def cmd_fork(args: argparse.Namespace) -> int:
+    import yaml
+
+    from alife_lab.execution.executors import LocalExecutor
+    from alife_lab.service.controller import Controller, ControllerError, ControllerLocked
+    from alife_lab.service.settings import load_settings
+
+    intervention = None
+    if args.intervention:
+        with Path(args.intervention).open("r", encoding="utf-8") as handle:
+            intervention = yaml.safe_load(handle)
+        if not isinstance(intervention, dict):
+            print("intervention file must contain a mapping {kind, payload}", file=sys.stderr)
+            return 2
+    overrides = {"runner": {"max_steps": args.max_steps}} if args.max_steps else None
+
+    async def main() -> int:
+        try:
+            controller = Controller(load_settings(), LocalExecutor())
+        except ControllerLocked as exc:
+            print(f"{exc}. Use the web GUI/API of the running server instead.", file=sys.stderr)
+            return 2
+        await controller.start()
+        try:
+            child = controller.fork_run(
+                args.run_id,
+                args.checkpoint,
+                label=args.label,
+                spec_overrides=overrides,
+                intervention=intervention,
+                ticks_per_second=0,
+                author="cli",
+            )
+            rid = child["id"]
+            print(f"forked {rid} from {args.run_id} at tick {child['clock']['value']}")
+            await controller.start_run(rid)
+            while controller.run_summary(rid)["state"] not in (
+                "completed",
+                "failed",
+                "cancelled",
+                "interrupted",
+            ):
+                await asyncio.sleep(0.2)
+            summary = controller.run_summary(rid)
+            print(f"{rid}: {summary['state']} at tick {summary['clock']['value']}")
+            return 0 if summary["state"] == "completed" else 1
+        except ControllerError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        finally:
+            await controller.shutdown()
+
+    return asyncio.run(main())
+
+
+def cmd_compare(args: argparse.Namespace) -> int:
+    from alife_lab.artifacts.store import LocalArtifactStore
+    from alife_lab.service.compare import state_divergence
+    from alife_lab.service.settings import load_settings
+
+    conn = _ro_db()
+
+    def query(sql: str, params: Any) -> list[dict[str, Any]]:
+        return [dict(r) for r in conn.execute(sql, params)]
+
+    for rid in args.run_ids:
+        if not query("SELECT id FROM runs WHERE id=?", (rid,)):
+            print(f"run {rid} not found", file=sys.stderr)
+            return 1
+    report = state_divergence(query, LocalArtifactStore(load_settings().runs_root), args.run_ids)
+    if args.json:
+        _print_json(report)
+        return 0
+    print(f"common checkpoint ticks: {report['common_ticks']} (shown: {report['sampled_ticks']})")
+    print("tick\t" + "\t".join(f"hamming[{i}]" for i in range(len(args.run_ids))) + "\talive")
+    for point in report["points"]:
+        values = "\t".join("-" if d is None else str(d) for d in point["hamming_to_first"])
+        print(f"{point['tick']}\t{values}\t{point['alive']}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="alife",
@@ -401,7 +487,19 @@ def build_parser() -> argparse.ArgumentParser:
     for name in ("inspect", "verify"):
         rp = rsub.add_parser(name)
         rp.add_argument("run_id")
+    rf = rsub.add_parser("fork", help="fork a run from a checkpoint and run it headless")
+    rf.add_argument("run_id")
+    rf.add_argument("--checkpoint", default="latest")
+    rf.add_argument("--intervention", help="YAML file with {kind: brush, payload: {...}}")
+    rf.add_argument("--max-steps", type=int)
+    rf.add_argument("--label")
+    rf.set_defaults(func=cmd_fork)
     p.set_defaults(func=cmd_runs)
+
+    p = sub.add_parser("compare", help="state divergence of runs at common checkpoint ticks")
+    p.add_argument("run_ids", nargs="+")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_compare)
     return parser
 
 

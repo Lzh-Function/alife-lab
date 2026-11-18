@@ -4,14 +4,17 @@ import { Catalog } from "./components/Catalog";
 import { Library } from "./components/Library";
 import { LiveLab } from "./components/LiveLab";
 import { Diagnostics } from "./components/Diagnostics";
+import { CompareView, ComparisonList } from "./components/CompareView";
 
-type View = "catalog" | "library" | "lab" | "diagnostics";
+type View = "catalog" | "library" | "lab" | "compare" | "diagnostics";
+const VIEWS = ["catalog", "library", "lab", "compare", "diagnostics"] as const;
 
-function parseHash(): { view: View; runId: string | null } {
+function parseHash(): { view: View; runId: string | null; comparisonId: string | null } {
   const parts = window.location.hash.replace(/^#\/?/, "").split("/");
-  const view = (["catalog", "library", "lab", "diagnostics"] as const).find((v) => v === parts[0]) ?? "catalog";
+  const view = VIEWS.find((v) => v === parts[0]) ?? "catalog";
   const runId = parts[1] && /^run_[0-9a-f]{16}$/.test(parts[1]) ? parts[1] : null;
-  return { view, runId };
+  const comparisonId = parts[1] && /^cmp_[0-9a-f]{16}$/.test(parts[1]) ? parts[1] : null;
+  return { view, runId, comparisonId };
 }
 
 export function App() {
@@ -30,6 +33,9 @@ export function App() {
     window.location.hash = runId && view === "lab" ? `/lab/${runId}` : `/${view}`;
   };
   const open = (runId: string) => go("lab", runId);
+  const openComparison = (id: string) => {
+    window.location.hash = `/compare/${id}`;
+  };
 
   return (
     <div className="app">
@@ -39,7 +45,7 @@ export function App() {
           <span className="muted">{t("app.subtitle")}</span>
         </div>
         <nav>
-          {(["catalog", "library", "lab", "diagnostics"] as const).map((v) => (
+          {VIEWS.map((v) => (
             <button key={v} data-testid={`nav-${v}`} className={route.view === v ? "active" : ""} onClick={() => go(v)}>
               {t(`nav.${v}`)}
             </button>
@@ -52,7 +58,18 @@ export function App() {
       <main>
         {route.view === "catalog" && <Catalog onOpen={open} />}
         {route.view === "library" && <Library onOpen={open} />}
-        {route.view === "lab" && (route.runId ? <LiveLab key={route.runId} runId={route.runId} /> : <p className="muted">{t("lab.none")}</p>)}
+        {route.view === "lab" &&
+          (route.runId ? (
+            <LiveLab key={route.runId} runId={route.runId} onOpenComparison={openComparison} />
+          ) : (
+            <p className="muted">{t("lab.none")}</p>
+          ))}
+        {route.view === "compare" &&
+          (route.comparisonId ? (
+            <CompareView key={route.comparisonId} comparisonId={route.comparisonId} />
+          ) : (
+            <ComparisonList onOpen={openComparison} />
+          ))}
         {route.view === "diagnostics" && <Diagnostics />}
       </main>
     </div>

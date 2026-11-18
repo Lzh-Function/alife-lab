@@ -15,5 +15,4 @@ Online backups must use the SQLite backup API (`Database.backup_to`).
 
 ## Consequences
 - Fewer dependencies; explicit SQL.
-- Before the first schema change after real data exists, add a pre-migration backup
-  step (spec §10.5) — not yet implemented.
+- Pre-migration backup implemented in migration 2 (`*.pre-v<N>-<ts>.bak`).

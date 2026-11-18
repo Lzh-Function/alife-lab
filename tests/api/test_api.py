@@ -192,3 +192,58 @@ def test_live_run_over_api_and_websocket(client: TestClient) -> None:
     assert client.post(f"/api/v1/experiments/{rid}/step", headers=H).status_code == 409
     data(client.post(f"/api/v1/experiments/{rid}/cancel", headers=H))
     wait_state(client, rid, "cancelled")
+
+
+def test_fork_and_paired_fork_api(client: TestClient) -> None:
+    body = {
+        "preset_id": "conway_glider",
+        "profile_id": "cpu_dev",
+        "ticks_per_second": 0,
+        "auto_start": True,
+        "start_paused": True,
+        "overrides": {"runner": {"max_steps": 100000, "checkpoint_interval": 10}},
+    }
+    rid = data(client.post("/api/v1/experiments", json=body, headers=H))["id"]
+    wait_state(client, rid, "paused")
+    data(client.post(f"/api/v1/experiments/{rid}/step", json={"count": 8}, headers=H))
+    brush = {"kind": "brush", "payload": {"shape": "circle", "x": 3, "y": 3, "radius": 1}}
+    key = {"Idempotency-Key": "pf-" + uuid.uuid4().hex}
+    cmp1 = data(
+        client.post(
+            f"/api/v1/experiments/{rid}/paired-fork",
+            json={"treatment_intervention": brush},
+            headers={**H, **key},
+        )
+    )
+    again = data(
+        client.post(
+            f"/api/v1/experiments/{rid}/paired-fork",
+            json={"treatment_intervention": brush},
+            headers={**H, **key},
+        )
+    )
+    assert again["id"] == cmp1["id"] and again["idempotent_replay"] is True
+    arms = [m["arm"] for m in cmp1["members"]]
+    assert arms == ["control", "treatment"]
+    ids = [m["run"]["id"] for m in cmp1["members"]]
+    for arm_id in ids:
+        wait_state(client, arm_id, "paused")
+        data(client.post(f"/api/v1/experiments/{arm_id}/step", json={"count": 12}, headers=H))
+    report = data(client.get(f"/api/v1/comparisons/{cmp1['id']}/report"))
+    points = report["divergence"]["points"]
+    assert [p["tick"] for p in points] == [8, 10, 20]
+    assert points[-1]["hamming_to_first"][1] > 0
+    assert set(report["metrics"]) == set(ids)
+    assert any(c["id"] == cmp1["id"] for c in data(client.get("/api/v1/comparisons")))
+    # Plain fork with a forbidden override.
+    r = client.post(
+        f"/api/v1/experiments/{rid}/fork",
+        json={"spec_overrides": {"seed": 3}},
+        headers=H,
+    )
+    assert r.status_code == 400
+    child = data(client.post(f"/api/v1/experiments/{rid}/fork", json={"label": "solo"}, headers=H))
+    assert child["state"] == "pending" and child["parent_run_id"] == rid
+    r = client.post("/api/v1/comparisons", json={"run_ids": [rid]}, headers=H)
+    assert r.status_code == 422
+    assert client.get("/api/v1/comparisons/cmp_nope").status_code == 404

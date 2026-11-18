@@ -16,6 +16,10 @@ errors: `{"api_version": "v1", "error": {"code", "message"}}`. Interactive OpenA
 | POST | /experiments/{id}/restore | latest checkpoint only (`fork_required` otherwise) |
 | POST | /experiments/{id}/cancel, /verify | verify = sha256 of every indexed artifact |
 | GET | /experiments/{id}/checkpoints, /checkpoints/{cid}/frame, /metrics, /events, /interventions, /provenance | frame = binary preview of a checkpoint |
+| POST | /experiments/{id}/fork | `{checkpoint_id="latest", label, spec_overrides, intervention, profile_id, ticks_per_second, auto_start, start_paused}`; `Idempotency-Key` supported |
+| POST | /experiments/{id}/paired-fork | `{checkpoint_id="now", treatment_intervention, name, start, start_paused}` → comparison with `control`/`treatment` arms |
+| POST/GET | /comparisons, /comparisons/{cid} | 2–4 runs |
+| GET | /comparisons/{cid}/report | `divergence.points[].hamming_to_first` at common checkpoint ticks + aligned metrics |
 | WS | /stream/experiments/{id}?token=… | JSON: hello, run_state, metrics, event, command_ack, heartbeat, resync_required; binary preview frames |
 
 Binary frame: `uint32 BE header length` + JSON header (`tick,width,height,codec,

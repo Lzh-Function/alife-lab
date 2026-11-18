@@ -1,1 +1,0 @@
-{"root":["./src/App.tsx","./src/i18n.ts","./src/main.tsx","./src/components/Catalog.tsx","./src/components/Diagnostics.tsx","./src/components/Library.tsx","./src/components/LiveLab.tsx","./src/components/Sparkline.tsx","./src/components/StateBadge.tsx","./src/components/WorldCanvas.tsx","./src/lib/api.test.ts","./src/lib/api.ts","./src/lib/stream.ts"],"version":"5.9.3"}
