@@ -28,14 +28,29 @@
 | Kernel sums to 1, zero for d ≥ R, mirror symmetric | pass |
 | Growth functions within [−1, 1], G(m) = 1 | pass |
 | Adapter step == ported `calc_once` for 50 steps | bitwise equal |
+| Adapter == original LeniaND.py CPU path (see below) | bitwise equal, 1000 steps |
 | Orbium (128², T=10) keeps mass within ±15 % for 600 ticks and moves | pass |
 | Checkpoint round trip ⇒ bitwise identical continuation | pass |
 | Worker restart + paint intervention + replay verification across a periodic checkpoint | `verified` |
 
-**Not yet verified:** a direct run of the original `LeniaND.py` against this port. A script that
-executes the upstream file with its GUI/GPU imports stubbed was prepared but not run, because
-running downloaded third-party code needs the user's explicit approval. Until then the
-bitwise claim is "equal to our transcription of LeniaND's update path", not "equal to LeniaND".
+## Upstream comparison (scripts/compare_lenia_upstream.py, run 2026-11-18)
+The original `LeniaND.py` (commit above) was executed locally with its GUI/GPU imports stubbed
+and the GPU path disabled (CPU `numpy.fft`), side by side with the adapter, starting from the
+same Orbium board:
+
+| world | steps | initial state | kernel FFT | max abs difference (all steps) | final SHA-256 of float64 state (both) |
+|---|---|---|---|---|---|
+| 128² | 1000 | equal | equal | 0.0 | `3c5ee630b2eb566a5565bd038e430659f5221eb0a8fdcc4c0a0c0decc8b29a3c` |
+| 256² | 500 | equal | equal | 0.0 | `a55f95d94e295439d0408fc967f8ea10bcb8872eaa16bd5b4b8d4bb3828b3fd4` |
+
+NumPy 2.5.4, x86_64. Bitwise equality depends on the FFT implementation and SIMD dispatch, so
+the digests are evidence for this environment, not portable fixtures.
+
+Finding during the comparison: the first version of the port computed
+`kfft * np.fft.fftn(A)`. NumPy elides the temporary and evaluates `fftn(A) * kfft` in place;
+complex multiplication is not bitwise commutative in NumPy's SIMD loops, which produced 1-ulp
+differences from step 1 (max 5.4e-6 after 1000 steps). The port now keeps `world_fft` as a
+named array and multiplies `kfft * world_fft` like LeniaND; a test pins this order.
 
 ## Negative control
 `lenia_orbium_off_niche`: the same Orbium with the growth centre m = 0.17 (s = 0.015) dissolves

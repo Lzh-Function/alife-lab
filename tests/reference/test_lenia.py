@@ -181,3 +181,14 @@ def test_render_quantises_to_u8() -> None:
 def test_spec_rejects_kernel_larger_than_world() -> None:
     with pytest.raises(ValidationError):
         make(size=16, dynamics={"kernel": {"R": 13}})
+
+
+def test_potential_multiplies_kernel_first_like_leniand() -> None:
+    # LeniaND computes kernel_FFT * world_FFT with world_FFT as a named array. Complex
+    # multiplication is not bitwise commutative in NumPy, so the order is part of fidelity.
+    rng = np.random.default_rng(5)
+    cells = rng.random((64, 64))
+    kfft = ref.kernel_fft(64, 64, 13, [1.0], "polynomial")
+    world_fft = np.fft.fftn(cells)
+    expected = np.fft.fftshift(np.real(np.fft.ifftn(kfft * world_fft)))
+    assert np.array_equal(ref.potential(cells, kfft), expected)

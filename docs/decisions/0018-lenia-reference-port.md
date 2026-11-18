@@ -13,6 +13,8 @@ depends on details (kernel centred at `size // 2`, `fftshift` after the inverse 
   `substrates/lenia/reference.py` with the licence text, and build the adapter on them.
 - float64 + `numpy.fft` is the only backend (`numeric_policy: float64_fft_cpu`). GPU/float32
   backends must be added as separate numeric policies and compared against this oracle.
+- Fidelity check: `scripts/compare_lenia_upstream.py` runs the original LeniaND.py CPU path
+  side by side; bitwise equal for 1000 steps (128²) after fixing the complex multiply order.
 - Independent check: an O(N·K) direct periodic convolution oracle in tests, not derived from
   the FFT code.
 - New display codec `field_u8` (one byte per cell) rendered by `FieldCanvas` with a fixed

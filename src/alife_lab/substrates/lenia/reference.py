@@ -68,8 +68,16 @@ def kernel_fft(height: int, width: int, R: int, b: list[float], core: str) -> F6
 
 
 def potential(cells: F64, kfft: F64) -> F64:
-    """calc_once: U = fftshift(real(ifftn(K_fft * fftn(A))))."""
-    out: F64 = np.fft.fftshift(np.real(np.fft.ifftn(kfft * np.fft.fftn(cells))))
+    """calc_once: U = fftshift(real(ifftn(K_fft * fftn(A)))).
+
+    ``world_fft`` must stay a named array: with a temporary operand NumPy elides the
+    temporary and computes ``fftn(A) * K_fft`` in place, and complex multiplication is not
+    bitwise commutative in NumPy's SIMD loops (1-ulp differences from LeniaND, which keeps
+    ``world_FFT`` as an attribute and multiplies ``kernel_FFT * world_FFT``).
+    """
+    world_fft = np.fft.fftn(cells)
+    potential_fft = kfft * world_fft
+    out: F64 = np.fft.fftshift(np.real(np.fft.ifftn(potential_fft)))
     return out
 
 
