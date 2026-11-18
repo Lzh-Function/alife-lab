@@ -1,0 +1,14 @@
+preset:
+  id: boids_noisy
+  scenario: boids_flocking.yaml
+  title_key: preset.boids_noisy.title
+  description_key: preset.boids_noisy.description
+  overrides:
+    experiment:
+      name: boids_noisy
+      dynamics:
+        noise: 0.15
+  expected_observation: >-
+    Velocity noise competes with alignment; order is lower and fluctuates. Seeded and
+    replayable (the RNG state is part of the checkpoint).
+  negative_control: preset boids_no_alignment

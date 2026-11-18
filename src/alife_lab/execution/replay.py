@@ -100,7 +100,7 @@ def _check_range(inp: ReplayInput, target: int) -> None:
 
 
 def replay_frames(inp: ReplayInput, start: int, count: int, stride: int) -> list[dict[str, Any]]:
-    """Frames for ticks start, start+stride, … (count of them), bitpacked."""
+    """Display frames for ticks start, start+stride, … (count of them)."""
     if not 1 <= count <= MAX_FRAMES or stride < 1:
         raise ReplayError(f"count must be 1..{MAX_FRAMES} and stride >= 1")
     last = start + (count - 1) * stride
@@ -109,20 +109,22 @@ def replay_frames(inp: ReplayInput, start: int, count: int, stride: int) -> list
     spec, adapter, state = _load(inp)
     wanted = set(range(start, last + 1, stride))
     pending = [i for i in inp.interventions if int(i["tick"]) <= last]
+    scheduled = len(pending)
     frames: list[dict[str, Any]] = []
 
     def capture(st: Any) -> None:
         tick = int(st.tick)
         # A tick is captured once all its interventions were applied (no pending at tick).
         if tick in wanted and not (pending and int(pending[0]["tick"]) == tick):
+            header, data = adapter.render(st)
             frames.append(
                 {
                     "tick": tick,
-                    "width": int(st.grid.shape[1]),
-                    "height": int(st.grid.shape[0]),
-                    "data": adapter.render_payload(st),
+                    **header,
+                    "data": data,
                     "steps_from_base": tick - inp.base_tick,
-                    "interventions_replayed": len(inp.interventions) - len(pending),
+                    # Interventions applied between the base and this frame's tick.
+                    "interventions_replayed": scheduled - len(pending),
                 }
             )
             wanted.discard(tick)
@@ -168,11 +170,11 @@ def verify_segment(
     if sha256_bytes(data) != target_sha256:
         return {"ok": False, "reason": "target checkpoint checksum mismatch"}
     stored = adapter.deserialize_state(decode_checkpoint(data), spec)
-    expected = stored.grid
-    differing = int(np.count_nonzero(expected != state.grid))
+    distance = adapter.state_distance(stored, state)
     return {
-        "ok": differing == 0 and not pending,
-        "differing_cells": differing,
+        "ok": bool(distance["exact_equal"]) and not pending,
+        "distance_metric": distance["metric"],
+        "distance": distance["value"],
         "interventions_replayed": applied,
         "unapplied_interventions": len(pending),
         "ticks": target_tick - inp.base_tick,

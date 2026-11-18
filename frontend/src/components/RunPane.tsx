@@ -4,7 +4,8 @@ import { api, ApiError } from "../lib/api";
 import { useRunStream } from "../lib/stream";
 import { useT } from "../i18n";
 import { StateBadge } from "./StateBadge";
-import { WorldCanvas, type WorldCanvasHandle } from "./WorldCanvas";
+import { WorldView, type WorldViewHandle } from "./WorldView";
+import type { ToolState } from "../lib/substrates";
 
 const LIVE = new Set(["starting", "running", "pausing", "paused", "resuming"]);
 
@@ -12,19 +13,17 @@ const LIVE = new Set(["starting", "running", "pausing", "paused", "resuming"]);
 export function RunPane({
   runId,
   arm,
-  brushMode,
-  brushRadius,
+  tool,
   onCheckpoint,
 }: {
   runId: string;
   arm: string;
-  brushMode: "off" | "draw" | "erase";
-  brushRadius: number;
+  tool: ToolState | null;
   onCheckpoint: () => void;
 }) {
   const t = useT();
   const qc = useQueryClient();
-  const canvas = useRef<WorldCanvasHandle>(null);
+  const canvas = useRef<WorldViewHandle>(null);
   const [tick, setTick] = useState<number | null>(null);
   const [alive, setAlive] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +38,7 @@ export function RunPane({
     },
     onMetrics: (rows) => {
       const last = rows[rows.length - 1];
-      if (last) setAlive(last.values.alive_cell_count ?? null);
+      if (last) setAlive(last.values.alive_cell_count ?? last.values.population ?? null);
     },
     onEvent: (ev) => {
       if (ev.type === "checkpoint_ready") onCheckpoint();
@@ -59,10 +58,10 @@ export function RunPane({
     }).catch(() => undefined);
   }, [runId, latestId, live, summary]);
 
-  const onStroke = useCallback(
-    (cells: Array<[number, number]>, value: 0 | 1) => {
+  const onIntervene = useCallback(
+    (kind: string, payload: Record<string, unknown>) => {
       api
-        .intervene(runId, { shape: "cells", cells, value }, tick ?? 0)
+        .intervene(runId, kind, payload, tick ?? 0)
         .then((r) => setError(r.status === "rejected" ? (r.ack?.error ?? "rejected") : null))
         .catch((e) => setError(e instanceof ApiError ? e.message : String(e)));
     },
@@ -81,19 +80,17 @@ export function RunPane({
         <span className={`conn conn-${conn}`}>{t(`conn.${conn}`)}</span>
       </div>
       <div className="small">
-        {t("lab.tick")} <span data-testid={`tick-${arm}`} className="mono">{tick ?? summary.clock.value}</span> · {t("metric.alive_cell_count")}{" "}
+        {t("lab.tick")} <span data-testid={`tick-${arm}`} className="mono">{tick ?? summary.clock.value}</span> · {t("timeline.population")}{" "}
         <span className="mono">{alive ?? "—"}</span>
       </div>
       {error && <p className="error small">{error}</p>}
       <div className="canvas-wrap">
-        <WorldCanvas
+        <WorldView
           ref={canvas}
-          width={world.width}
-          height={world.height}
-          brushMode={live ? brushMode : "off"}
-          brushRadius={brushRadius}
-          onStroke={onStroke}
-          onDisplayFps={() => undefined}
+          substrate={summary.substrate}
+          world={world}
+          tool={live ? tool : null}
+          onIntervene={onIntervene}
           maxPixels={420}
           testId={`canvas-${arm}`}
         />

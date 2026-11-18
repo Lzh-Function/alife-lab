@@ -10,7 +10,7 @@ import re
 import struct
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any
 
 from fastapi import FastAPI, Header, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
@@ -79,12 +79,13 @@ class SpeedRequest(ControlRequest):
 
 
 class InterventionRequest(ControlRequest):
-    kind: Literal["brush"]
+    # Validated against the substrate's declared intervention_types by the controller.
+    kind: Annotated[str, Field(pattern=r"^[a-z_]{1,32}$")]
     payload: dict[str, Any]
 
 
 class InterventionSpec(_Req):
-    kind: Literal["brush"]
+    kind: Annotated[str, Field(pattern=r"^[a-z_]{1,32}$")]
     payload: dict[str, Any]
 
 
@@ -518,7 +519,6 @@ def create_app(
         parts = [struct.pack(">I", len(frames))]
         for frame in frames:
             header = {k: v for k, v in frame.items() if k != "data"}
-            header["codec"] = "bitpack1"
             packed = _pack_frame(header, frame["data"])
             parts.append(struct.pack(">I", len(packed)))
             parts.append(packed)

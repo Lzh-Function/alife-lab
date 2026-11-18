@@ -108,7 +108,7 @@ def test_replay_matches_ground_truth_and_verifies(settings: Settings) -> None:
             bad = await c.verify_replay(a)
             assert not bad["ok"] and bad["status"] == "mismatch"
             failed = [s for s in bad["segments"] if not s["ok"]]
-            assert failed[0]["from_tick"] == 0 and failed[0]["differing_cells"] > 0
+            assert failed[0]["from_tick"] == 0 and failed[0]["distance"] > 0
         finally:
             await c.shutdown()
 
@@ -141,6 +141,23 @@ def test_fork_at_arbitrary_tick(settings: Settings) -> None:
                 np.testing.assert_array_equal(child_truth[tick], parent_frames[tick])
             with pytest.raises(ControllerError):
                 await c.fork_at_tick(parent, END + 50)
+        finally:
+            await c.shutdown()
+
+    arun(main)
+
+
+def test_replay_frame_provenance_counts_only_earlier_interventions(settings: Settings) -> None:
+    async def main() -> None:
+        c = Controller(settings, FakeExecutor())
+        await c.start()
+        try:
+            rid = await new_paused(c)
+            await scripted(c, rid, every_tick_checkpoint=False)
+            frames = {f["tick"]: f for f in await c.replay_frames(rid, 30, 10, 1)}
+            assert frames[36]["interventions_replayed"] == 0  # B1 is applied at tick 37
+            assert frames[37]["interventions_replayed"] == 1
+            assert all(f["codec"] == "bitpack1" for f in frames.values())
         finally:
             await c.shutdown()
 

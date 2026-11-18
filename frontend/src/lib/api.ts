@@ -92,7 +92,7 @@ export interface Preset {
   title_key: string;
   description_key: string;
   substrate: string;
-  spec: { experiment: Record<string, unknown> & { name: string; seed: number; world: { width: number; height: number; boundary: string }; runner: { max_steps: number; checkpoint_interval: number } } };
+  spec: { experiment: Record<string, unknown> & { name: string; mode: string; seed: number; world: { width: number; height: number; boundary: string }; runner: { max_steps: number; checkpoint_interval: number } } };
   spec_hash: string;
   expected_observation: string;
   negative_control: string | null;
@@ -145,7 +145,7 @@ export interface CommandResult {
 let cachedToken: string | null = null;
 
 export interface BrushIntervention {
-  kind: "brush";
+  kind: string;
   payload: Record<string, unknown>;
 }
 
@@ -161,14 +161,14 @@ export interface ComparisonSummary {
 
 export interface DivergencePoint {
   tick: number;
-  hamming_to_first: Array<number | null>;
+  distance_to_first: Array<number | null>;
   alive: number[];
   reasons: string[];
 }
 
 export interface ComparisonReport {
   comparison: ComparisonSummary;
-  divergence: { definition: string; common_ticks: number; sampled_ticks: number; shape_mismatch: boolean; points: DivergencePoint[] };
+  divergence: { metric: string | null; definition: string; common_ticks: number; sampled_ticks: number; shape_mismatch: boolean; points: DivergencePoint[] };
   metrics: Record<string, MetricRow[]>;
 }
 
@@ -196,7 +196,7 @@ export interface ReplayReport {
   status: "verified" | "mismatch" | "nothing_to_verify" | "partial";
   segments_checked: number;
   segments_total: number;
-  segments: Array<{ from_tick: number; to_tick: number; ok: boolean; differing_cells?: number; interventions_replayed?: number; reason?: string }>;
+  segments: Array<{ from_tick: number; to_tick: number; ok: boolean; distance_metric?: string; distance?: number | null; interventions_replayed?: number; reason?: string }>;
 }
 
 export function sessionToken(): string {
@@ -263,10 +263,10 @@ export const api = {
     request<CommandResult>("POST", `/experiments/${id}/${action}`, { command_id: newCommandId(), ...body }),
   speed: (id: string, tps: number) =>
     request<CommandResult>("POST", `/experiments/${id}/speed`, { command_id: newCommandId(), ticks_per_second: tps }),
-  intervene: (id: string, payload: Record<string, unknown>, requestedClock: number) =>
+  intervene: (id: string, kind: string, payload: Record<string, unknown>, requestedClock: number) =>
     request<CommandResult>("POST", `/experiments/${id}/interventions`, {
       command_id: newCommandId(),
-      kind: "brush",
+      kind,
       payload,
       requested_clock: requestedClock,
     }),
@@ -313,7 +313,16 @@ export const api = {
 };
 
 export interface Frame {
-  header: { tick: number; width: number; height: number; codec: string; dropped_previews?: number };
+  header: {
+    tick: number;
+    codec: string;
+    width?: number;
+    height?: number;
+    count?: number;
+    world_width?: number;
+    world_height?: number;
+    dropped_previews?: number;
+  };
   bits: Uint8Array;
 }
 

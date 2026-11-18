@@ -404,10 +404,9 @@ class Controller:
 
     def checkpoint_frame(self, run_id: str, checkpoint_id: str) -> tuple[dict[str, Any], bytes]:
         """Decode a checkpoint into a preview frame for display (not the research state)."""
-        import numpy as np
-
         from alife_lab.artifacts.store import decode_checkpoint
         from alife_lab.core.hashing import sha256_bytes
+        from alife_lab.substrates import get_adapter
 
         row = self.db.one(
             "SELECT * FROM checkpoints WHERE run_id=? AND id=?", (run_id, checkpoint_id)
@@ -417,15 +416,17 @@ class Controller:
         data = self.store.resolve(run_id, row["logical_path"]).read_bytes()
         if sha256_bytes(data) != row["sha256"]:
             raise Conflict("checkpoint checksum mismatch", "checksum_mismatch")
-        payload = decode_checkpoint(data)
-        grid = payload["arrays"]["grid"]
-        header = {
-            "tick": int(payload["meta"]["tick"]),
-            "width": int(grid.shape[1]),
-            "height": int(grid.shape[0]),
-            "codec": "bitpack1",
-        }
-        return header, np.packbits(grid.astype(np.uint8), axis=None).tobytes()
+        spec = self.run_spec(run_id)
+        adapter = get_adapter(spec.experiment.substrate)
+        state = adapter.deserialize_state(decode_checkpoint(data), spec)
+        header, frame = adapter.render(state)
+        return {"tick": int(state.tick), **header}, frame
+
+    def run_spec(self, run_id: str) -> ExperimentSpec:
+        row = self._run_row(run_id)
+        exp = self.db.one("SELECT spec_json FROM experiments WHERE id=?", (row["experiment_id"],))
+        assert exp is not None
+        return ExperimentSpec.model_validate_json(exp["spec_json"])
 
     def verify_run(self, run_id: str) -> dict[str, Any]:
         self._run_row(run_id)
@@ -1438,15 +1439,8 @@ class Controller:
                 },
             )
         elif kind == "preview":
-            preview = {
-                "type": "preview",
-                "run_id": run_id,
-                "tick": message["tick"],
-                "width": message["width"],
-                "height": message["height"],
-                "codec": message["codec"],
-                "data": message["data"],
-            }
+            preview = {k: v for k, v in message.items() if k not in ("job_id", "lease_token")}
+            preview["run_id"] = run_id
             job.latest_preview = preview
             for sub in self.subscribers.get(run_id, set()):
                 sub.push_preview(preview)

@@ -11,7 +11,7 @@ test("conway glider vertical slice survives a server restart", async ({ page }) 
     await page.goto(`${BASE}/#/catalog`);
     await page.getByTestId("preset-conway_glider").click();
     await page.getByTestId("input-name").fill("e2e_glider");
-    await page.getByTestId("input-max-steps").fill("100000");
+    await page.getByTestId("field-runner.max_steps").fill("100000");
     await page.getByTestId("input-profile").selectOption("cpu_dev");
     await page.getByTestId("input-tps").fill("20");
     await expect(page.getByTestId("validation")).toContainText("OK");

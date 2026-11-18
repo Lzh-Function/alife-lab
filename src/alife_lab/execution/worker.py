@@ -163,17 +163,8 @@ class _Worker:
         )
 
     def send_preview(self) -> None:
-        grid_shape = (self.spec.experiment.world.height, self.spec.experiment.world.width)
-        self.send(
-            {
-                "type": "preview",
-                "tick": self.tick,
-                "width": grid_shape[1],
-                "height": grid_shape[0],
-                "codec": "bitpack1",
-                "data": self.adapter.render_payload(self.state),
-            }
-        )
+        header, data = self.adapter.render(self.state)
+        self.send({"type": "preview", "tick": self.tick, **header, "data": data})
         self.dirty_preview = False
 
     def checkpoint(self, reason: str) -> dict[str, Any] | None:

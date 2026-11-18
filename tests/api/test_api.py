@@ -278,6 +278,7 @@ def test_timeline_replay_and_tick_fork_api(client: TestClient) -> None:
     frames = _unpack_many(raw)
     assert [h["tick"] for h, _ in frames] == list(range(26))
     assert frames[12][0]["source"] == "deterministic_replay"
+    assert frames[12][0]["codec"] == "bitpack1" and frames[12][0]["width"] == 128
     assert frames[12][0]["base_tick"] == 0  # one pass from the base at the start tick
     # Glider: 5 alive cells in every replayed frame.
     assert all(bin(int.from_bytes(p, "big")).count("1") == 5 for _, p in frames)
@@ -290,3 +291,27 @@ def test_timeline_replay_and_tick_fork_api(client: TestClient) -> None:
         f"/api/v1/experiments/{rid}/fork", json={"tick": 13, "checkpoint_id": "x"}, headers=H
     )
     assert r.status_code == 400
+
+
+def test_boids_replay_frames_keep_particle_codec(client: TestClient) -> None:
+    body = {
+        "preset_id": "boids_flocking",
+        "profile_id": "cpu_dev",
+        "ticks_per_second": 0,
+        "auto_start": True,
+        "start_paused": True,
+        "overrides": {"initialization": {"count": 50}, "runner": {"checkpoint_interval": 10}},
+    }
+    rid = data(client.post("/api/v1/experiments", json=body, headers=H))["id"]
+    wait_state(client, rid, "paused")
+    data(client.post(f"/api/v1/experiments/{rid}/step", json={"count": 15}, headers=H))
+    raw = client.get(f"/api/v1/experiments/{rid}/replay/frames?start=12&count=3").content
+    frames = _unpack_many(raw)
+    assert [h["codec"] for h, _ in frames] == ["particles_f32"] * 3
+    assert all(h["count"] == 50 and len(p) == 50 * 16 for h, p in frames)
+    r = client.post(
+        f"/api/v1/experiments/{rid}/interventions",
+        json={"kind": "brush", "payload": {"shape": "cells", "cells": [[0, 0]]}},
+        headers=H,
+    )
+    assert r.status_code == 400  # conway intervention kind is not offered by boids

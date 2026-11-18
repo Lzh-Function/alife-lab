@@ -70,7 +70,16 @@ class SubstrateAdapter(Protocol):
 
     def metrics(self, state: Any, spec: ExperimentSpec) -> dict[str, float]: ...
 
-    def render_payload(self, state: Any) -> bytes: ...
+    def render(self, state: Any) -> tuple[dict[str, Any], bytes]:
+        """Display payload: header (``codec`` + codec-specific dimensions) and bytes."""
+        ...
+
+    def state_distance(self, a: Any, b: Any) -> dict[str, Any]:
+        """Exact comparison of two states of the same spec.
+
+        Returns ``{"metric": str, "value": float | int | None, "exact_equal": bool, ...}``.
+        """
+        ...
 
     def apply_intervention(
         self, state: Any, spec: ExperimentSpec, kind: str, payload: dict[str, Any]

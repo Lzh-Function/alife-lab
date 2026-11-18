@@ -150,3 +150,5 @@ button.small { padding: 0.05rem 0.4rem; font-size: 0.85em; }
 .timeline .mark-cursor { background: var(--text); width: 2px; top: -2px; height: 20px; }
 .scrubber { width: 100%; }
 .ok-text { color: #127a63; }
+.substrate-group { margin-bottom: 1rem; }
+.substrate-group h3 { margin: 0.6rem 0 0.4rem; }

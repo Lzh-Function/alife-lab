@@ -10,7 +10,7 @@ test("timeline replay seeks, verifies and forks from an arbitrary tick", async (
     await page.goto(`${BASE}/#/catalog`);
     await page.getByTestId("preset-conway_glider").click();
     await page.getByTestId("input-name").fill("e2e_replay");
-    await page.getByTestId("input-max-steps").fill("100000");
+    await page.getByTestId("field-runner.max_steps").fill("100000");
     await page.getByTestId("input-profile").selectOption("cpu_dev");
     await page.getByTestId("input-tps").fill("40");
     await page.getByTestId("btn-create").click();

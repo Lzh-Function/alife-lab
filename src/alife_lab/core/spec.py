@@ -80,11 +80,15 @@ class ObservationSpec(_Frozen):
     metrics: tuple[KnownMetric, ...] = ("alive_cell_count",)
 
 
-class ExperimentBody(_Frozen):
-    name: Annotated[str, Field(min_length=1, max_length=120, pattern=r"^[A-Za-z0-9_.\- ]+$")]
+_NAME = Annotated[str, Field(min_length=1, max_length=120, pattern=r"^[A-Za-z0-9_.\- ]+$")]
+_SEED = Annotated[int, Field(ge=0, lt=2**63)]
+
+
+class ConwayExperiment(_Frozen):
+    name: _NAME
     mode: Literal["reference", "exploratory"] = "reference"
     substrate: Literal["conway"]
-    seed: Annotated[int, Field(ge=0, lt=2**63)]
+    seed: _SEED
     world: WorldSpec
     initialization: InitializationSpec = InitializationSpec()
     dynamics: DynamicsSpec = DynamicsSpec()
@@ -92,15 +96,90 @@ class ExperimentBody(_Frozen):
     observations: ObservationSpec = ObservationSpec()
 
     @model_validator(mode="after")
-    def _check_reference_rule(self) -> ExperimentBody:
+    def _check_reference_rule(self) -> ConwayExperiment:
         if self.mode == "reference" and self.dynamics.rule != "B3/S23":
             raise ValueError("reference mode for substrate 'conway' requires rule B3/S23")
         return self
 
 
+# Backwards-compatible name used by Phase 1 code.
+ExperimentBody = ConwayExperiment
+
+
+# --------------------------------------------------------------------------- #
+# Boids (continuous 2D particles)
+# --------------------------------------------------------------------------- #
+
+MAX_BOIDS = 10_000
+
+
+class ContinuousWorldSpec(_Frozen):
+    width: Annotated[float, Field(ge=10.0, le=100_000.0)]
+    height: Annotated[float, Field(ge=10.0, le=100_000.0)]
+    boundary: Literal["periodic", "reflect"] = "periodic"
+
+
+class BoidsInitialization(_Frozen):
+    count: Annotated[int, Field(ge=0, le=MAX_BOIDS)] = 300
+    # "random": uniform positions, uniformly random headings at the mean speed.
+    preset: Literal["random"] = "random"
+
+
+class BoidsDynamics(_Frozen):
+    clock_unit: Literal["tick"] = "tick"
+    numeric_policy: Literal["float64_cpu_deterministic"] = "float64_cpu_deterministic"
+    dt: Annotated[float, Field(gt=0.0, le=10.0)] = 1.0
+    perception_radius: Annotated[float, Field(gt=0.0, le=1_000.0)] = 10.0
+    separation_radius: Annotated[float, Field(gt=0.0, le=1_000.0)] = 3.0
+    separation_weight: Annotated[float, Field(ge=0.0, le=100.0)] = 0.05
+    alignment_weight: Annotated[float, Field(ge=0.0, le=100.0)] = 0.05
+    cohesion_weight: Annotated[float, Field(ge=0.0, le=100.0)] = 0.005
+    min_speed: Annotated[float, Field(ge=0.0, le=1_000.0)] = 0.5
+    max_speed: Annotated[float, Field(gt=0.0, le=1_000.0)] = 2.0
+    # Std-dev of Gaussian velocity noise per tick (0 = deterministic rules only).
+    noise: Annotated[float, Field(ge=0.0, le=100.0)] = 0.0
+
+    @model_validator(mode="after")
+    def _check(self) -> BoidsDynamics:
+        if self.min_speed > self.max_speed:
+            raise ValueError("min_speed must not exceed max_speed")
+        if self.separation_radius > self.perception_radius:
+            raise ValueError("separation_radius must not exceed perception_radius")
+        return self
+
+
+BoidsMetric = Literal["population", "polarization", "mean_speed", "mean_neighbor_count"]
+
+
+class BoidsObservation(_Frozen):
+    metrics: tuple[BoidsMetric, ...] = ("population", "polarization", "mean_speed")
+
+
+class BoidsExperiment(_Frozen):
+    name: _NAME
+    # No canonical numerical reference implementation exists: exploratory only.
+    mode: Literal["exploratory"] = "exploratory"
+    substrate: Literal["boids"]
+    seed: _SEED
+    world: ContinuousWorldSpec
+    initialization: BoidsInitialization = BoidsInitialization()
+    dynamics: BoidsDynamics = BoidsDynamics()
+    runner: RunnerSpec = RunnerSpec()
+    observations: BoidsObservation = BoidsObservation()
+
+    @model_validator(mode="after")
+    def _check_world(self) -> BoidsExperiment:
+        if self.dynamics.perception_radius * 3 > min(self.world.width, self.world.height):
+            raise ValueError("world must be at least 3 perception radii wide and high")
+        return self
+
+
+AnyExperiment = Annotated[ConwayExperiment | BoidsExperiment, Field(discriminator="substrate")]
+
+
 class ExperimentSpec(_Frozen):
     schema_version: Literal[1] = 1
-    experiment: ExperimentBody
+    experiment: AnyExperiment
 
     def digest(self) -> str:
         """SHA-256 of the canonical JSON of the fully-resolved scientific spec."""

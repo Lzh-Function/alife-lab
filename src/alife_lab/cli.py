@@ -438,7 +438,7 @@ def cmd_replay_verify(args: argparse.Namespace) -> int:
             status = "ok" if seg["ok"] else "MISMATCH"
             print(
                 f"[{status}] t={seg['from_tick']}->{seg['to_tick']} "
-                f"differing={seg.get('differing_cells')} "
+                f"{seg.get('distance_metric')}={seg.get('distance')} "
                 f"replayed={seg.get('interventions_replayed')}"
             )
         print(

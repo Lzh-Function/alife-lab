@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from alife_lab.substrates.base import PluginManifest, SubstrateAdapter
+from alife_lab.substrates.boids.boids import BOIDS_MANIFEST, BoidsAdapter
 from alife_lab.substrates.ca.conway import CONWAY_MANIFEST, ConwayAdapter
 
 _REGISTRY: dict[str, tuple[PluginManifest, type[SubstrateAdapter]]] = {
     "conway": (CONWAY_MANIFEST, ConwayAdapter),
+    "boids": (BOIDS_MANIFEST, BoidsAdapter),
 }
 
 

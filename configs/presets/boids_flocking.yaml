@@ -1,0 +1,9 @@
+preset:
+  id: boids_flocking
+  scenario: boids_flocking.yaml
+  title_key: preset.boids_flocking.title
+  description_key: preset.boids_flocking.description
+  expected_observation: >-
+    Polarization rises from the random-heading baseline (~sqrt(pi/(4N)) = 0.05 for N=300)
+    as local flocks form; several flocks with different headings may coexist.
+  negative_control: preset boids_no_alignment (alignment_weight = 0)

@@ -28,3 +28,12 @@ errors: `{"api_version": "v1", "error": {"code", "message"}}`. Interactive OpenA
 
 Binary frame: `uint32 BE header length` + JSON header (`tick,width,height,codec,
 dropped_previews`) + payload. Codec `bitpack1` = `numpy.packbits` (row-major, MSB first).
+
+## Substrate-specific payloads
+- Interventions (`POST /experiments/{id}/interventions`, `{kind, payload}`): `conway` → `brush`
+  (`{shape: "cells"|"circle", ...}`); `boids` → `spawn {x, y, radius, count}`,
+  `remove {x, y, radius}`. Kinds not declared by the substrate are rejected (400).
+- Frame codecs: `bitpack1` (`width`, `height`) for Conway; `particles_f32` (`count`,
+  `world_width`, `world_height`; float32 LE `[x, y, vx, vy]` per particle) for Boids.
+- Comparison reports: `divergence.metric` (`hamming` | `rms_position_distance`) and
+  `points[].distance_to_first`.

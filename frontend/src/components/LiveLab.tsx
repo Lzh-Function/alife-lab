@@ -3,7 +3,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, type Frame, type MetricRow, type RunEvent } from "../lib/api";
 import { useRunStream } from "../lib/stream";
 import { useT } from "../i18n";
-import { WorldCanvas, type WorldCanvasHandle } from "./WorldCanvas";
+import { ToolBar, WorldView, type WorldViewHandle } from "./WorldView";
+import { initialTool, type ToolState } from "../lib/substrates";
 import { Sparkline } from "./Sparkline";
 import { StateBadge } from "./StateBadge";
 import { Timeline } from "./Timeline";
@@ -14,7 +15,7 @@ const MAX_ROWS = 4000;
 export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComparison: (id: string) => void }) {
   const t = useT();
   const qc = useQueryClient();
-  const canvas = useRef<WorldCanvasHandle>(null);
+  const canvas = useRef<WorldViewHandle>(null);
   const [tick, setTick] = useState<number | null>(null);
   const [rows, setRows] = useState<MetricRow[]>([]);
   const [events, setEvents] = useState<RunEvent[]>([]);
@@ -22,8 +23,7 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
   const [uiFps, setUiFps] = useState(0);
   const [dropped, setDropped] = useState(0);
   const [worker, setWorker] = useState<{ rss: number | null; cpu: number | null }>({ rss: null, cpu: null });
-  const [brushMode, setBrushMode] = useState<"off" | "draw" | "erase">("off");
-  const [radius, setRadius] = useState(0);
+  const [tool, setTool] = useState<ToolState | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [speed, setSpeed] = useState<string>("");
@@ -124,15 +124,16 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
     }
   };
 
-  const onStroke = useCallback(
-    (cells: Array<[number, number]>, value: 0 | 1) => {
-      void act(() => api.intervene(runId, { shape: "cells", cells, value }, tick ?? 0));
+  const onIntervene = useCallback(
+    (kind: string, payload: Record<string, unknown>) => {
+      void act(() => api.intervene(runId, kind, payload, tick ?? 0));
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [runId, tick],
   );
 
   if (!summary) return <p>{run.isError ? t("common.error") : t("common.loading")}</p>;
+  const currentTool = tool ?? initialTool(summary.substrate);
   const world = summary.spec.experiment.world;
   const last = rows.length ? rows[rows.length - 1] : null;
   const metricIds = summary.spec.experiment.observations.metrics;
@@ -212,32 +213,17 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
             </button>
           </label>
         </div>
-        <div className="toolbar brush" role="group" aria-label={t("lab.brush")}>
-          <strong>{t("lab.brush")}:</strong>
-          {(["off", "draw", "erase"] as const).map((m) => (
-            <label key={m} className="inline">
-              <input type="radio" name="brush" data-testid={`brush-${m}`} checked={brushMode === m} disabled={!live} onChange={() => setBrushMode(m)} />
-              {t(`lab.brush.${m}`)}
-            </label>
-          ))}
-          <label className="inline">
-            {t("lab.brush.radius")}
-            <input type="range" min={0} max={8} value={radius} onChange={(e) => setRadius(Number(e.target.value))} />
-            {radius}
-          </label>
-          <small className="muted">{t("lab.brush.note")}</small>
-        </div>
+        <ToolBar substrate={summary.substrate} tool={currentTool} setTool={setTool} disabled={!live} />
         {error && <p className="error" role="alert">{t("common.error")}: {error}</p>}
         {summary.restorable && <p className="notice">{t("lab.restorable")}</p>}
         {!live && !summary.restorable && <p className="muted">{t("lab.not_live")}</p>}
         <div className="canvas-wrap">
-          <WorldCanvas
+          <WorldView
             ref={canvas}
-            width={world.width}
-            height={world.height}
-            brushMode={live && !replay ? brushMode : "off"}
-            brushRadius={radius}
-            onStroke={onStroke}
+            substrate={summary.substrate}
+            world={world}
+            tool={live && !replay ? currentTool : null}
+            onIntervene={onIntervene}
             onDisplayFps={setUiFps}
           />
         </div>

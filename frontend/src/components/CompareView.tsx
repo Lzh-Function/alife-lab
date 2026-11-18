@@ -4,6 +4,8 @@ import { api, ApiError } from "../lib/api";
 import { useT } from "../i18n";
 import { MultiLine, type Series } from "./MultiLine";
 import { RunPane } from "./RunPane";
+import { ToolBar } from "./WorldView";
+import { initialTool, type ToolState } from "../lib/substrates";
 
 const ARM_CLASSES = ["arm-a", "arm-b", "arm-c", "arm-d"];
 
@@ -11,8 +13,7 @@ export function CompareView({ comparisonId }: { comparisonId: string }) {
   const t = useT();
   const qc = useQueryClient();
   const [brushArm, setBrushArm] = useState<string | null>(null);
-  const [brushMode, setBrushMode] = useState<"draw" | "erase">("draw");
-  const [radius, setRadius] = useState(1);
+  const [toolState, setTool] = useState<ToolState | null>(null);
   const [stepCount, setStepCount] = useState(10);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +29,8 @@ export function CompareView({ comparisonId }: { comparisonId: string }) {
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
   const members = summary.data?.members ?? [];
+  const substrate = members[0]?.run.substrate ?? "conway";
+  const tool: ToolState = toolState ?? { ...initialTool(substrate), mode: substrate === "boids" ? "spawn" : "draw" };
   const all = async (fn: (runId: string) => Promise<unknown>) => {
     setBusy(true);
     setError(null);
@@ -48,15 +51,16 @@ export function CompareView({ comparisonId }: { comparisonId: string }) {
   const anyRunning = states.some((s) => s === "running" || s === "resuming");
   const div = report.data?.divergence;
 
-  const hammingSeries: Series[] = members.slice(1).map((m, i) => ({
+  const metricLabel = t(`compare.metric.${div?.metric ?? "none"}`);
+  const distanceSeries: Series[] = members.slice(1).map((m, i) => ({
     label: `${m.arm} vs ${members[0].arm}`,
     className: ARM_CLASSES[i + 1],
-    points: (div?.points ?? []).map((p) => [p.tick, p.hamming_to_first[i + 1]]),
+    points: (div?.points ?? []).map((p) => [p.tick, p.distance_to_first[i + 1]]),
   }));
   const aliveSeries: Series[] = members.map((m, i) => ({
     label: m.arm,
     className: ARM_CLASSES[i],
-    points: (report.data?.metrics[m.run.id] ?? []).map((r) => [r.tick, r.values.alive_cell_count ?? null]),
+    points: (report.data?.metrics[m.run.id] ?? []).map((r) => [r.tick, r.values.alive_cell_count ?? r.values.population ?? null]),
   }));
 
   return (
@@ -87,27 +91,19 @@ export function CompareView({ comparisonId }: { comparisonId: string }) {
         </button>
       </div>
       <div className="toolbar">
-        <strong>{t("lab.brush")}:</strong>
+        <strong>{t("compare.tool_target")}:</strong>
         <label className="inline">
-          <input type="radio" name="cmp-brush" checked={brushArm === null} onChange={() => setBrushArm(null)} />
+          <input type="radio" name="cmp-arm" checked={brushArm === null} onChange={() => setBrushArm(null)} />
           {t("lab.brush.off")}
         </label>
         {members.map((m) => (
           <label key={m.arm} className="inline">
-            <input type="radio" name="cmp-brush" data-testid={`brush-arm-${m.arm}`} checked={brushArm === m.arm} onChange={() => setBrushArm(m.arm)} />
+            <input type="radio" name="cmp-arm" data-testid={`brush-arm-${m.arm}`} checked={brushArm === m.arm} onChange={() => setBrushArm(m.arm)} />
             {m.arm}
           </label>
         ))}
-        <select value={brushMode} onChange={(e) => setBrushMode(e.target.value as "draw" | "erase")}>
-          <option value="draw">{t("lab.brush.draw")}</option>
-          <option value="erase">{t("lab.brush.erase")}</option>
-        </select>
-        <label className="inline">
-          {t("lab.brush.radius")}
-          <input type="range" min={0} max={8} value={radius} onChange={(e) => setRadius(Number(e.target.value))} />
-          {radius}
-        </label>
       </div>
+      {brushArm !== null && <ToolBar substrate={substrate} tool={tool} setTool={setTool} disabled={false} name="cmp-tool" />}
       {error && <p className="error" role="alert">{error}</p>}
       <div className="panes">
         {members.map((m) => (
@@ -115,8 +111,7 @@ export function CompareView({ comparisonId }: { comparisonId: string }) {
             key={m.run.id}
             runId={m.run.id}
             arm={m.arm}
-            brushMode={brushArm === m.arm ? brushMode : "off"}
-            brushRadius={radius}
+            tool={brushArm === m.arm ? tool : null}
             onCheckpoint={refreshReport}
           />
         ))}
@@ -125,17 +120,17 @@ export function CompareView({ comparisonId }: { comparisonId: string }) {
         <div className="panel">
           <h3>{t("compare.divergence")}</h3>
           <p className="muted small">{t("compare.divergence_note")}</p>
-          <MultiLine series={hammingSeries} testId="divergence-chart" />
+          <MultiLine series={distanceSeries} testId="divergence-chart" />
           <div className="table-wrap" style={{ maxHeight: "16rem", overflowY: "auto" }}>
             <table className="table small" data-testid="divergence-table">
               <thead>
                 <tr>
                   <th>tick</th>
                   {members.slice(1).map((m) => (
-                    <th key={m.arm}>Hamming {m.arm}</th>
+                    <th key={m.arm}>{metricLabel} {m.arm}</th>
                   ))}
                   {members.map((m) => (
-                    <th key={m.arm}>alive {m.arm}</th>
+                    <th key={m.arm}>{t("timeline.population")} {m.arm}</th>
                   ))}
                 </tr>
               </thead>
@@ -143,8 +138,8 @@ export function CompareView({ comparisonId }: { comparisonId: string }) {
                 {(div?.points ?? []).slice().reverse().map((p) => (
                   <tr key={p.tick}>
                     <td className="mono">{p.tick}</td>
-                    {p.hamming_to_first.slice(1).map((h, i) => (
-                      <td key={i} className="mono">{h ?? "—"}</td>
+                    {p.distance_to_first.slice(1).map((h, i) => (
+                      <td key={i} className="mono">{h === null ? "—" : Number.isInteger(h) ? h : h.toFixed(4)}</td>
                     ))}
                     {p.alive.map((a, i) => (
                       <td key={`a${i}`} className="mono">{a}</td>
@@ -159,7 +154,7 @@ export function CompareView({ comparisonId }: { comparisonId: string }) {
           </p>
         </div>
         <div className="panel">
-          <h3>{t("metric.alive_cell_count")}</h3>
+          <h3>{t("timeline.population")}</h3>
           <MultiLine series={aliveSeries} testId="alive-chart" />
           <button onClick={() => void qc.invalidateQueries({ queryKey: ["comparison-report", comparisonId] })}>{t("compare.refresh")}</button>
         </div>

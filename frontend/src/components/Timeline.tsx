@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api, ApiError, popcount, type ReplayFrame, type ReplayReport } from "../lib/api";
+import { api, ApiError, type ReplayFrame, type ReplayReport } from "../lib/api";
+import { framePopulation } from "../lib/substrates";
 import { useT } from "../i18n";
 
 interface Props {
@@ -39,7 +40,7 @@ export function Timeline({ runId, liveTick, active, onActiveChange, onFrame }: P
     (frame: ReplayFrame) => {
       onFrame(frame);
       setFrameInfo(frame.header);
-      setAlive(popcount(frame.bits));
+      setAlive(framePopulation(frame));
       setTick(frame.header.tick);
     },
     [onFrame],
@@ -216,7 +217,7 @@ export function Timeline({ runId, liveTick, active, onActiveChange, onFrame }: P
           </div>
           <p className="small" data-testid="replay-source" data-pending={pending ? "true" : "false"}>
             {pending && <span className="muted">{t("common.loading")} </span>}
-            <strong>t={frameInfo?.tick ?? "—"}</strong> · {t("metric.alive_cell_count")} {alive ?? "—"} ·{" "}
+            <strong>t={frameInfo?.tick ?? "—"}</strong> · {t("timeline.population")} {alive ?? "—"} ·{" "}
             {frameInfo
               ? frameInfo.source === "checkpoint_tick" && frameInfo.steps_from_base === 0
                 ? t("timeline.source.exact")

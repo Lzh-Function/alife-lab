@@ -1,0 +1,34 @@
+schema_version: 1
+experiment:
+  name: boids_flocking
+  mode: exploratory          # no canonical numerical reference implementation exists
+  substrate: boids
+  seed: 7
+  world:
+    width: 200
+    height: 200
+    boundary: periodic
+  initialization:
+    preset: random
+    count: 300
+  dynamics:
+    clock_unit: tick
+    numeric_policy: float64_cpu_deterministic
+    dt: 1.0
+    perception_radius: 10.0
+    separation_radius: 3.0
+    separation_weight: 0.05
+    alignment_weight: 0.05
+    cohesion_weight: 0.005
+    min_speed: 0.5
+    max_speed: 2.0
+    noise: 0.0
+  runner:
+    max_steps: 100000
+    checkpoint_interval: 200
+  observations:
+    metrics:
+      - population
+      - polarization
+      - mean_speed
+      - mean_neighbor_count

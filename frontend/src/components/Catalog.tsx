@@ -1,35 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, ApiError, type Preset } from "../lib/api";
+import { FORM_FIELDS, getPath, setPath, type FormField, type SubstrateId } from "../lib/substrates";
 import { useT } from "../i18n";
 
 interface FormState {
-  preset_id: string;
+  preset: Preset;
   name: string;
-  seed: number;
-  width: number;
-  height: number;
-  boundary: string;
-  max_steps: number;
-  checkpoint_interval: number;
+  values: Record<string, unknown>; // dotted path -> value (substrate-specific fields)
   profile_id: string;
   tps: number;
   start_paused: boolean;
 }
 
+function fieldsFor(substrate: string): FormField[] {
+  return FORM_FIELDS[(substrate as SubstrateId) in FORM_FIELDS ? (substrate as SubstrateId) : "conway"];
+}
+
 function fromPreset(p: Preset, prev?: FormState): FormState {
-  const e = p.spec.experiment;
+  const exp = p.spec.experiment as Record<string, unknown>;
+  const values: Record<string, unknown> = {};
+  for (const f of fieldsFor(p.substrate)) values[f.path] = getPath(exp, f.path);
   return {
-    preset_id: p.id,
-    name: e.name,
-    seed: e.seed,
-    width: e.world.width,
-    height: e.world.height,
-    boundary: e.world.boundary,
-    max_steps: e.runner.max_steps,
-    checkpoint_interval: e.runner.checkpoint_interval,
+    preset: p,
+    name: String(exp.name),
+    values,
     profile_id: prev?.profile_id ?? "local_interactive",
-    tps: prev?.tps ?? 10,
+    tps: prev?.tps ?? (p.substrate === "boids" ? 30 : 10),
     start_paused: prev?.start_paused ?? false,
   };
 }
@@ -53,16 +50,9 @@ export function Catalog({ onOpen }: { onOpen: (runId: string) => void }) {
 
   const body = useMemo(() => {
     if (!form) return null;
-    return {
-      preset_id: form.preset_id,
-      overrides: {
-        name: form.name,
-        seed: form.seed,
-        world: { width: form.width, height: form.height, boundary: form.boundary },
-        runner: { max_steps: form.max_steps, checkpoint_interval: form.checkpoint_interval },
-      },
-      profile_id: form.profile_id,
-    };
+    let overrides: Record<string, unknown> = { name: form.name };
+    for (const [path, value] of Object.entries(form.values)) overrides = setPath(overrides, path, value);
+    return { preset_id: form.preset.id, overrides, profile_id: form.profile_id };
   }, [form]);
 
   useEffect(() => {
@@ -91,84 +81,89 @@ export function Catalog({ onOpen }: { onOpen: (runId: string) => void }) {
     }
   };
 
-  const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((f) => (f ? { ...f, [key]: value } : f));
-  const num = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) => set(key, Number(e.target.value) as never);
+  const setValue = (path: string, value: unknown) =>
+    setForm((f) => (f ? { ...f, values: { ...f.values, [path]: value } } : f));
+
+  const bySubstrate = new Map<string, Preset[]>();
+  for (const p of presets.data ?? []) bySubstrate.set(p.substrate, [...(bySubstrate.get(p.substrate) ?? []), p]);
 
   return (
     <div className="catalog">
       <section>
         <h2>{t("catalog.presets")}</h2>
         {(substrates.data ?? []).map((s) => (
-          <p key={s.slug} className="muted">
-            <strong>{t(s.display_name_key)}</strong> · v{s.plugin_version} · {s.backends.join(", ")}
-          </p>
+          <div key={s.slug} className="substrate-group">
+            <h3>
+              {t(s.display_name_key)} <span className="muted small">v{s.plugin_version} · {s.backends.join(", ")}</span>
+            </h3>
+            <div className="cards">
+              {(bySubstrate.get(s.slug) ?? []).map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  data-testid={`preset-${p.id}`}
+                  className={`card ${form?.preset.id === p.id ? "selected" : ""}`}
+                  onClick={() => setForm(fromPreset(p, form ?? undefined))}
+                >
+                  <strong>{t(p.title_key)}</strong>
+                  <span>{t(p.description_key)}</span>
+                  <small className="muted">
+                    {t("catalog.expected")}: {p.expected_observation}
+                  </small>
+                  {p.negative_control && (
+                    <small className="muted">
+                      {t("catalog.negative_control")}: {p.negative_control}
+                    </small>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
         ))}
-        <div className="cards">
-          {(presets.data ?? []).map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              data-testid={`preset-${p.id}`}
-              className={`card ${form?.preset_id === p.id ? "selected" : ""}`}
-              onClick={() => setForm(fromPreset(p, form ?? undefined))}
-            >
-              <strong>{t(p.title_key)}</strong>
-              <span>{t(p.description_key)}</span>
-              <small className="muted">
-                {t("catalog.expected")}: {p.expected_observation}
-              </small>
-              {p.negative_control && (
-                <small className="muted">
-                  {t("catalog.negative_control")}: {p.negative_control}
-                </small>
-              )}
-            </button>
-          ))}
-        </div>
       </section>
       {form && (
         <section>
           <h2>{t("catalog.create")}</h2>
           <form className="form" onSubmit={submit} data-testid="create-form">
             <fieldset>
-              <legend>ExperimentSpec</legend>
+              <legend>
+                ExperimentSpec · {t(`substrate.${form.preset.substrate}`)} ·{" "}
+                <span className="mono">{String((form.preset.spec.experiment as Record<string, unknown>).mode)}</span>
+              </legend>
               <label>
                 {t("form.name")}
-                <input data-testid="input-name" value={form.name} onChange={(e) => set("name", e.target.value)} maxLength={120} />
+                <input data-testid="input-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} maxLength={120} />
               </label>
-              <label>
-                {t("form.seed")}
-                <input type="number" min={0} value={form.seed} onChange={num("seed")} />
-              </label>
-              <label>
-                {t("form.width")}
-                <input type="number" min={8} max={1024} value={form.width} onChange={num("width")} />
-              </label>
-              <label>
-                {t("form.height")}
-                <input type="number" min={8} max={1024} value={form.height} onChange={num("height")} />
-              </label>
-              <label>
-                {t("form.boundary")}
-                <select value={form.boundary} onChange={(e) => set("boundary", e.target.value)}>
-                  <option value="periodic">{t("form.boundary.periodic")}</option>
-                  <option value="dead">{t("form.boundary.dead")}</option>
-                </select>
-              </label>
-              <label>
-                {t("form.max_steps")}
-                <input data-testid="input-max-steps" type="number" min={1} value={form.max_steps} onChange={num("max_steps")} />
-              </label>
-              <label>
-                {t("form.checkpoint_interval")}
-                <input type="number" min={1} value={form.checkpoint_interval} onChange={num("checkpoint_interval")} />
-              </label>
+              {fieldsFor(form.preset.substrate).map((f) => (
+                <label key={f.path}>
+                  {t(f.labelKey)}
+                  {f.kind === "select" ? (
+                    <select data-testid={`field-${f.path}`} value={String(form.values[f.path])} onChange={(e) => setValue(f.path, e.target.value)}>
+                      {(f.options ?? []).map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {t(o.labelKey)}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="number"
+                      data-testid={`field-${f.path}`}
+                      min={f.min}
+                      max={f.max}
+                      step={f.kind === "int" ? 1 : "any"}
+                      value={String(form.values[f.path] ?? "")}
+                      onChange={(e) => setValue(f.path, e.target.value === "" ? "" : Number(e.target.value))}
+                    />
+                  )}
+                </label>
+              ))}
             </fieldset>
             <fieldset>
               <legend>ExecutionProfile</legend>
               <label>
                 {t("form.profile")}
-                <select data-testid="input-profile" value={form.profile_id} onChange={(e) => set("profile_id", e.target.value)}>
+                <select data-testid="input-profile" value={form.profile_id} onChange={(e) => setForm({ ...form, profile_id: e.target.value })}>
                   {(profiles.data ?? []).map((p) => (
                     <option key={p.id} value={p.id} disabled={!p.implemented}>
                       {p.id} ({p.role}){p.implemented ? "" : ` — ${t("form.profile.unimplemented")}`}
@@ -178,10 +173,10 @@ export function Catalog({ onOpen }: { onOpen: (runId: string) => void }) {
               </label>
               <label>
                 {t("form.tps")}
-                <input data-testid="input-tps" type="number" min={0} max={10000} step="any" value={form.tps} onChange={num("tps")} />
+                <input data-testid="input-tps" type="number" min={0} max={10000} step="any" value={form.tps} onChange={(e) => setForm({ ...form, tps: Number(e.target.value) })} />
               </label>
               <label className="inline">
-                <input data-testid="input-start-paused" type="checkbox" checked={form.start_paused} onChange={(e) => set("start_paused", e.target.checked)} />
+                <input data-testid="input-start-paused" type="checkbox" checked={form.start_paused} onChange={(e) => setForm({ ...form, start_paused: e.target.checked })} />
                 {t("form.start_paused")}
               </label>
             </fieldset>

@@ -10,7 +10,7 @@ test("paired fork with a treatment brush diverges from the control arm", async (
     await page.goto(`${BASE}/#/catalog`);
     await page.getByTestId("preset-conway_glider").click();
     await page.getByTestId("input-name").fill("e2e_fork_parent");
-    await page.getByTestId("input-max-steps").fill("100000");
+    await page.getByTestId("field-runner.max_steps").fill("100000");
     await page.getByTestId("input-profile").selectOption("cpu_dev");
     await page.getByTestId("input-start-paused").check();
     await expect(page.getByTestId("validation")).toContainText("OK");
@@ -34,6 +34,8 @@ test("paired fork with a treatment brush diverges from the control arm", async (
 
     // Intervene on the treatment arm only.
     await page.getByTestId("brush-arm-treatment").check();
+    // A disc (radius 2) persists; a 1-cell-wide line of isolated cells would just die out.
+    await page.getByRole("slider").fill("2");
     const box = (await page.getByTestId("canvas-treatment").boundingBox())!;
     await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.2);
     await page.mouse.down();

@@ -1,0 +1,12 @@
+preset:
+  id: boids_no_alignment
+  scenario: boids_flocking.yaml
+  title_key: preset.boids_no_alignment.title
+  description_key: preset.boids_no_alignment.description
+  overrides:
+    experiment:
+      name: boids_no_alignment
+      dynamics:
+        alignment_weight: 0.0
+  expected_observation: Polarization stays near the random baseline (~0.05 for N=300).
+  negative_control: null

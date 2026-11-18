@@ -53,3 +53,21 @@ checkpoints; it is single-threaded NumPy and is not a GPU number. No GPU code ra
 ~1 850 ticks/s sustained; worker RSS grew 1.1 MB over 4 min (no evidence of a leak at
 this duration; the spec's 30–60 min soak has **not** been run yet). Disk: metrics
 JSONL grows ~one row per tick (see limitation in ADR 0005).
+
+### Boids step throughput (CPU, NumPy, constant density 300 / 200², 2026-11-18)
+Adapter `step` only (cell-list neighbour search + steering), after 20 warm-up ticks:
+
+| N | world | ticks/s |
+|---|---|---|
+| 300 | 200² | 2 011 |
+| 1 000 | 365² | 1 202 |
+| 3 000 | 632² | 343 |
+| 10 000 | 1 155² | 121 |
+
+All numbers above are **single-core**: measured CPU time / wall time = 1.01 for both Boids
+(N=3000) and Conway (1024²) on this 24-logical-core machine; NumPy's thread pool exists but is
+idle for these element-wise/sort/bincount operations. Parallelism today is only across runs
+(one worker process per run, `ALIFE_MAX_ACTIVE_JOBS`, default 4). No GPU code runs.
+
+Browser E2E (200 boids, cpu_dev, paced at 60 ticks/s): 57.9 ticks/s measured, worker RSS
+53.3 MB.

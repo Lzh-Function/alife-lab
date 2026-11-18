@@ -19,7 +19,7 @@ import numpy as np
 import numpy.typing as npt
 
 from alife_lab import API_CONTRACT_VERSION
-from alife_lab.core.spec import ExperimentSpec
+from alife_lab.core.spec import ConwayExperiment, ExperimentSpec
 from alife_lab.substrates.base import Capabilities, MetricDefinition, PluginManifest
 
 Grid = npt.NDArray[np.uint8]
@@ -264,6 +264,13 @@ CONWAY_MANIFEST = PluginManifest(
 )
 
 
+def _conway(spec: ExperimentSpec) -> ConwayExperiment:
+    exp = spec.experiment
+    if not isinstance(exp, ConwayExperiment):
+        raise TypeError("conway adapter received a non-conway spec")
+    return exp
+
+
 def _place_pattern(grid: Grid, name: str, offset_x: int | None, offset_y: int | None) -> None:
     cells = PATTERNS[name]
     pw = max(x for x, _ in cells) + 1
@@ -283,7 +290,7 @@ class ConwayAdapter:
         return CONWAY_MANIFEST
 
     def initialize(self, spec: ExperimentSpec) -> ConwayState:
-        exp = spec.experiment
+        exp = _conway(spec)
         h, w = exp.world.height, exp.world.width
         grid: Grid = np.zeros((h, w), dtype=np.uint8)
         rng = np.random.Generator(np.random.PCG64(exp.seed))
@@ -297,7 +304,7 @@ class ConwayAdapter:
         return state
 
     def step(self, state: ConwayState, spec: ExperimentSpec) -> ConwayState:
-        exp = spec.experiment
+        exp = _conway(spec)
         grid = step_grid(state.grid, exp.dynamics.rule, exp.world.boundary)
         state.grid = grid
         state.tick += 1
@@ -308,13 +315,23 @@ class ConwayAdapter:
         tracker = state.tracker
         displacement = math.hypot(tracker.dx, tracker.dy) if tracker.valid else math.nan
         out: dict[str, float] = {"alive_cell_count": float(int(state.grid.sum()))}
-        for metric in spec.experiment.observations.metrics:
+        for metric in _conway(spec).observations.metrics:
             if metric in ("centroid_displacement", "glider_displacement"):
                 out[metric] = displacement
         return out
 
     def render_payload(self, state: ConwayState) -> bytes:
         return np.packbits(state.grid, axis=None).tobytes()
+
+    def render(self, state: ConwayState) -> tuple[dict[str, Any], bytes]:
+        h, w = state.grid.shape
+        return {"codec": "bitpack1", "width": int(w), "height": int(h)}, self.render_payload(state)
+
+    def state_distance(self, a: ConwayState, b: ConwayState) -> dict[str, Any]:
+        if a.grid.shape != b.grid.shape:
+            return {"metric": "hamming", "value": None, "exact_equal": False}
+        differing = int(np.count_nonzero(a.grid != b.grid))
+        return {"metric": "hamming", "value": differing, "exact_equal": differing == 0}
 
     def apply_intervention(
         self,
@@ -338,7 +355,7 @@ class ConwayAdapter:
         after = int(state.grid.sum())
         # The tracker is reset: displacement is measured from the edited state onwards.
         state.tracker = CentroidTracker()
-        state.tracker.update(state.grid, spec.experiment.world.boundary == "periodic")
+        state.tracker.update(state.grid, _conway(spec).world.boundary == "periodic")
         return state, {"cells_targeted": len(cells), "alive_before": before, "alive_after": after}
 
     def serialize_state(self, state: ConwayState) -> dict[str, Any]:
@@ -359,7 +376,8 @@ class ConwayAdapter:
         if meta["serialize_version"] != SERIALIZE_VERSION:
             raise ValueError("incompatible conway checkpoint serialize_version")
         grid = np.asarray(payload["arrays"]["grid"], dtype=np.uint8)
-        expected = (spec.experiment.world.height, spec.experiment.world.width)
+        world = _conway(spec).world
+        expected = (world.height, world.width)
         if grid.shape != expected:
             raise ValueError(f"checkpoint grid shape {grid.shape} != spec shape {expected}")
         if grid.size and int(grid.max()) > 1:

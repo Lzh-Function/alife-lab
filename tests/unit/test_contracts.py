@@ -135,3 +135,15 @@ def test_brush_intervention_and_serialization_roundtrip() -> None:
     assert restored.tick == state.tick
     with pytest.raises(ValueError):
         adapter.apply_intervention(state, spec, "poison", {})
+
+
+def test_conway_spec_hashes_are_stable_across_schema_changes() -> None:
+    """Spec hashes of existing runs must not change when new substrates are added."""
+    presets = load_presets(ROOT / "configs")
+    expected = {
+        "conway_glider": "6b5dc2a4b18c",
+        "conway_blinker": "67ae4015cc7e",
+        "conway_block": "8b969e1ac05b",
+        "conway_random_soup": "89daf47c92ef",
+    }
+    assert {k: presets[k].spec.digest()[:12] for k in expected} == expected
