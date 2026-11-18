@@ -76,3 +76,9 @@ plugins = ["pydantic.mypy"]
 # pyarrow ships without type information.
 module = ["pyarrow", "pyarrow.*", "brotli", "numba", "numba.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# The numba extra is optional: with it installed the JIT decorators are typed, without it
+# numba is Any. Keep both environments (local dev with `--extra fast`, CPU-only CI) clean.
+module = ["alife_lab.substrates.bff.vm_numba"]
+disable_error_code = ["untyped-decorator", "unused-ignore"]

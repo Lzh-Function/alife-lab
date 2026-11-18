@@ -13,7 +13,10 @@ import sys
 
 MAX_BYTES = 1_000_000
 FORBIDDEN_PATHS = re.compile(
-    r"(^|/)(runs|\.alife|artifacts|scratch|checkpoints|node_modules|dist|\.venv)/"
+    # Runtime directories live at the repository root (source packages such as
+    # src/alife_lab/artifacts must not match); build/vendor directories anywhere.
+    r"^(runs|\.alife|artifacts|scratch|outputs|checkpoints|logs)/"
+    r"|(^|/)(node_modules|dist|\.venv)/"
     r"|\.(sqlite3?|db|npz|npy|parquet|zarr|mp4|ckpt|pt|pth|safetensors|onnx|pem|key)$"
     r"|(^|/)\.env($|\.)(?!example$)|(^|/)id_(rsa|ed25519)"
 )
