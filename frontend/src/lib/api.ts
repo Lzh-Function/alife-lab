@@ -339,11 +339,13 @@ export const api = {
   comparisons: () => request<Array<Omit<ComparisonSummary, "members">>>("GET", "/comparisons"),
   comparison: (id: string) => request<ComparisonSummary>("GET", `/comparisons/${id}`),
   comparisonReport: (id: string) => request<ComparisonReport>("GET", `/comparisons/${id}/report?max_points=1000`),
-  inspect: (id: string, x: number, y: number, radius: number, tick?: number) =>
+  inspect: (id: string, x: number, y: number, radius: number, tick?: number, mode?: "trace_self" | "trace_next_epoch") =>
     request<import("../components/InspectorPanel").Inspection>(
       "GET",
-      `/experiments/${id}/inspect?x=${x}&y=${y}&radius=${radius}${tick === undefined ? "" : `&tick=${tick}`}`,
+      `/experiments/${id}/inspect?x=${x}&y=${y}&radius=${radius}${tick === undefined ? "" : `&tick=${tick}`}${mode ? `&mode=${mode}` : ""}`,
     ),
+  bffTrace: (body: { program_a: string; program_b: string; encoding: "text" | "hex"; variant: string; step_limit: number }) =>
+    request<import("../components/BffDebugger").BffTrace>("POST", "/tools/bff/trace", body),
   timeline: (id: string) => request<Timeline>("GET", `/experiments/${id}/timeline`),
   replayFrames: async (id: string, start: number, count = 1, stride = 1): Promise<ReplayFrame[]> => {
     const resp = await fetch(`/api/v1/experiments/${id}/replay/frames?start=${start}&count=${count}&stride=${stride}`);

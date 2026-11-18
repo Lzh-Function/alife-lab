@@ -76,3 +76,20 @@ No takeover by copies (every program stays distinct; no sharp entropy transition
 5000 epochs at this soup size. This is a null result for these two seeds only — the paper's
 transitions were reported for 2^17 programs, and the waiting time is stochastic. Execution
 activity (ops per pair) roughly tripled.
+
+## VM debugger (trace)
+`substrates/bff/trace.py` records every step of one pair evaluation (pc, instruction, heads at
+the start of the step, write address/old/new value, next pc, halt reason). It is a view of the
+oracle loop, not a second semantics:
+
+| Property (tests/reference/test_bff_trace.py) | Result |
+|---|---|
+| Final tape and ops == `evaluate_scalar` (300 Hypothesis tapes, both variants, limits 0..2000) | pass |
+| Replaying the write log from the initial tape reproduces the final tape; next_pc chains | pass |
+| Halt reasons: step limit, end of tape, unmatched `[`, unmatched `]` | pass |
+| `next_epoch_pair` tape (shuffle + per-pair mutation) traced == `run_epoch` result for that pair | pass |
+
+The "next-epoch pair" trace shows exactly the evaluation the next epoch performs for the
+selected program (including background mutation of that pair). The default program of the
+stand-alone debugger (`80c05b2e3e7d5d`, `bff` variant) is a hand-written 7-byte copier, not
+an evolved replicator.

@@ -11,3 +11,8 @@
   first min(N, 4096) programs.
 - Metrics: `h0_bits_per_byte`, `brotli_bits_per_byte`, `higher_order_entropy`, `ops_per_pair`,
   `unique_programs`, `top_program_fraction`, `mutated_bytes`.
+- Debugger: `GET /experiments/{id}/inspect?x&y&mode=trace_next_epoch|trace_self` adds a step
+  trace to the program inspection (live or replayed tick); `POST /tools/bff/trace`
+  `{program_a, program_b, encoding, variant, step_limit ≤ 8192}` traces a manual pair without a
+  run. The trace is columnar (`pc`, `cmd`, `head0`, `head1`, `write_addr`, `write_old`,
+  `write_new`, `next_pc`) plus `halt`, `ops`, initial/final tape and a summary.

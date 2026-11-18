@@ -9,6 +9,7 @@ import { Sparkline } from "./Sparkline";
 import { StateBadge } from "./StateBadge";
 import { Timeline } from "./Timeline";
 import { InspectorPanel, type Inspection } from "./InspectorPanel";
+import { BffDebugger, type BffTrace } from "./BffDebugger";
 
 const LIVE = new Set(["starting", "running", "pausing", "paused", "resuming"]);
 const MAX_ROWS = 4000;
@@ -137,10 +138,25 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
     [runId, tick],
   );
 
+  const lastInspect = useRef<{ x: number; y: number; r: number; tick: number | undefined } | null>(null);
+  const [trace, setTrace] = useState<BffTrace | null>(null);
+  const onTrace = (mode: "trace_next_epoch" | "trace_self") => {
+    const q = lastInspect.current;
+    if (!q) return;
+    api
+      .inspect(runId, q.x, q.y, q.r, q.tick, mode)
+      .then((d) => {
+        setTrace(d.trace ?? null);
+        setInspectError(null);
+      })
+      .catch((e) => setInspectError(e instanceof ApiError ? e.message : String(e)));
+  };
+
   const onInspect = (x: number, y: number) => {
     const tickArg = replay && shownReplayTick.current !== null ? shownReplayTick.current : undefined;
     const toolRadius = currentToolRef.current?.radius ?? 2;
     const r = summary?.substrate === "conway" ? Math.max(2, toolRadius) : toolRadius;
+    lastInspect.current = { x: Number(x.toFixed(3)), y: Number(y.toFixed(3)), r, tick: tickArg };
     api
       .inspect(runId, Number(x.toFixed(3)), Number(y.toFixed(3)), r, tickArg)
       .then((d) => {
@@ -257,10 +273,11 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
           onFrame={onReplayFrame}
           onShownTick={(v) => (shownReplayTick.current = v)}
         />
+        {trace && <BffDebugger trace={trace} onClose={() => setTrace(null)} />}
       </section>
 
       <aside className="lab-side">
-        <InspectorPanel data={inspection} error={inspectError} />
+        <InspectorPanel data={inspection} error={inspectError} onTrace={summary.substrate === "bff" ? onTrace : undefined} />
         <div className="panel">
           <h3>{t("lab.metrics")}</h3>
           <dl className="stats">

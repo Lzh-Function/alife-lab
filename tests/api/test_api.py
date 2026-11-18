@@ -351,3 +351,25 @@ def test_sweep_api(client: TestClient) -> None:
     bad = {**spec, "sweep": {**spec["sweep"], "seeds": [1, 1]}}
     assert client.post("/api/v1/sweeps/validate", json=bad, headers=H).status_code == 400
     assert client.get("/api/v1/sweeps/swp_nope").status_code == 404
+
+
+def test_bff_trace_tool_and_inspect_trace(client: TestClient) -> None:
+    body = {"program_a": "[[{.>]-]", "program_b": "", "step_limit": 4000}
+    tr = data(client.post("/api/v1/tools/bff/trace", json=body, headers=H))
+    assert tr["pairing"] == "manual" and tr["steps"] == len(tr["pc"]) > 0
+    assert len(bytes.fromhex(tr["final_tape"])) == 128
+    bad = client.post("/api/v1/tools/bff/trace", json={**body, "program_a": "x" * 65}, headers=H)
+    assert bad.status_code == 400
+    assert client.post("/api/v1/tools/bff/trace", json=body).status_code == 403  # no token
+
+    spec = {"preset_id": "bff_reference", "overrides": {"soup": {"num_programs": 64}},
+            "profile_id": "cpu_dev", "ticks_per_second": 0, "auto_start": True,
+            "start_paused": True}  # fmt: skip
+    rid = data(client.post("/api/v1/experiments", json=spec, headers=H))["id"]
+    wait_state(client, rid, "paused")
+    q = "x=3&y=0&mode=trace_next_epoch"
+    info = data(client.get(f"/api/v1/experiments/{rid}/inspect?{q}"))
+    assert info["index"] == 3 and info["trace"]["pairing"] == "next_epoch"
+    assert 3 in (info["trace"]["first"], info["trace"]["second"])
+    selfp = data(client.get(f"/api/v1/experiments/{rid}/inspect?x=3&y=0&mode=trace_self"))
+    assert selfp["trace"]["ops"] == selfp["self_pair_test"]["ops"]

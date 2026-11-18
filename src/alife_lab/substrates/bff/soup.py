@@ -113,13 +113,17 @@ def mutate_pairs(
     epoch: int,
     num_programs: int,
     mutation_prob: int,
+    pair_offset: int = 0,
 ) -> int:
-    """Apply CuBFF background mutation in place; returns the number of replaced bytes."""
+    """Apply CuBFF background mutation in place; returns the number of replaced bytes.
+
+    Row r of ``tapes`` is pair ``pair_offset + r`` of the epoch (used to mutate one pair).
+    """
     if mutation_prob <= 0:
         return 0
     seed_e = derived_seed(params_seed, epoch)
     pairs = tapes.shape[0]
-    k = np.arange(pairs, dtype=np.uint64)
+    k = np.arange(pairs, dtype=np.uint64) + np.uint64(pair_offset)
     i = np.arange(TAPE, dtype=np.uint64)
     with np.errstate(over="ignore"):
         base = (np.uint64((num_programs * seed_e) & MASK64) + k) * np.uint64(TAPE)

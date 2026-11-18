@@ -25,6 +25,7 @@ export interface Inspection {
   disassembly?: string;
   instruction_fraction?: number;
   exact_copies_in_soup?: number;
+  trace?: import("./BffDebugger").BffTrace;
   self_pair_test?: { description: string; ops: number; first_half_unchanged: boolean; second_half_equals_program: boolean };
   // particle_life
   type_counts_in_radius?: number[];
@@ -48,7 +49,15 @@ export interface Inspection {
 
 const f = (v: number, d = 3) => (Math.abs(v) >= 100 ? v.toFixed(1) : v.toPrecision(d));
 
-export function InspectorPanel({ data, error }: { data: Inspection | null; error: string | null }) {
+export function InspectorPanel({
+  data,
+  error,
+  onTrace,
+}: {
+  data: Inspection | null;
+  error: string | null;
+  onTrace?: (mode: "trace_next_epoch" | "trace_self") => void;
+}) {
   const t = useT();
   return (
     <div className="panel" data-testid="inspector">
@@ -118,6 +127,16 @@ export function InspectorPanel({ data, error }: { data: Inspection | null; error
                   <br />
                   <span className="muted">{t("inspector.self_pair_note")}</span>
                 </p>
+              )}
+              {onTrace && (
+                <div className="toolbar">
+                  <button data-testid="btn-trace-next" onClick={() => onTrace("trace_next_epoch")}>
+                    {t("debugger.trace_next")}
+                  </button>
+                  <button data-testid="btn-trace-self" onClick={() => onTrace("trace_self")}>
+                    {t("debugger.trace_self")}
+                  </button>
+                </div>
               )}
             </>
           )}

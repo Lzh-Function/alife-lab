@@ -1,5 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
 import type { Frame } from "../lib/api";
+import { OP_COLORS } from "../lib/bff";
 
 export interface SoupCanvasHandle {
   draw: (frame: Frame) => void;
@@ -7,18 +8,6 @@ export interface SoupCanvasHandle {
 
 // BFF soup: each 64-byte program is an 8x8 tile, tiles in a grid of `columns`.
 // Instruction bytes have distinct colours, NUL is black, other bytes are dim grey.
-const OP_COLORS: Record<number, [number, number, number]> = {
-  60: [80, 160, 255], // <
-  62: [40, 120, 230], // >
-  123: [180, 120, 255], // {
-  125: [140, 80, 230], // }
-  43: [60, 220, 120], // +
-  45: [30, 160, 90], // -
-  46: [255, 210, 60], // .
-  44: [255, 160, 40], // ,
-  91: [255, 90, 90], // [
-  93: [220, 50, 50], // ]
-};
 const PIX = 8; // program tile edge in bytes
 
 interface Props {

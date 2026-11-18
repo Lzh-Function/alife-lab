@@ -19,6 +19,7 @@ from alife_lab import API_CONTRACT_VERSION
 from alife_lab.core.spec import BFFExperiment, ExperimentSpec
 from alife_lab.substrates.base import Capabilities, MetricDefinition, PluginManifest
 from alife_lab.substrates.bff.soup import init_soup, run_epoch
+from alife_lab.substrates.bff.trace import next_epoch_pair, trace_scalar, trace_summary
 from alife_lab.substrates.bff.vm import HALF, TAPE, disassemble, evaluate_scalar
 
 SERIALIZE_VERSION = 1
@@ -181,7 +182,7 @@ BFF_MANIFEST = PluginManifest(
 )
 
 
-def _parse_program(text: Any, encoding: str) -> bytes:
+def parse_program(text: Any, encoding: str) -> bytes:
     if not isinstance(text, str):
         raise ValueError("program must be a string")
     if encoding == "hex":
@@ -275,7 +276,7 @@ class BFFAdapter:
         n = state.soup.shape[0]
         slots = _slots(payload, n)
         if kind == "inject_program":
-            program = _parse_program(payload.get("program"), str(payload.get("encoding", "text")))
+            program = parse_program(payload.get("program"), str(payload.get("encoding", "text")))
             state.soup[slots] = np.frombuffer(program, dtype=np.uint8)
             return state, {"slots": len(slots), "program_hex": program.hex()}
         if kind == "zero_programs":
@@ -296,7 +297,29 @@ class BFFAdapter:
         copies = int((state.soup == state.soup[index]).all(axis=1).sum())
         tape = bytearray(program + program)
         ops = evaluate_scalar(tape, exp.dynamics.step_limit, exp.dynamics.variant)
+        mode = query.get("mode", "summary")
+        trace: dict[str, Any] | None = None
+        if mode == "trace_self":
+            trace = {
+                "pairing": "self",
+                **trace_scalar(program + program, exp.dynamics.step_limit, exp.dynamics.variant),
+            }
+            trace["summary"] = trace_summary(trace, program, program)
+        elif mode == "trace_next_epoch":
+            pair = next_epoch_pair(
+                state.soup, exp.seed, state.tick, exp.dynamics.mutation_prob, index
+            )
+            tape_bytes = pair.pop("tape")
+            trace = {
+                "pairing": "next_epoch",
+                **pair,
+                **trace_scalar(tape_bytes, exp.dynamics.step_limit, exp.dynamics.variant),
+            }
+            trace["summary"] = trace_summary(trace, tape_bytes[:HALF], tape_bytes[HALF:])
+        elif mode != "summary":
+            raise ValueError("mode must be summary, trace_self or trace_next_epoch")
         return {
+            **({"trace": trace} if trace is not None else {}),
             "substrate": "bff",
             "tick": state.tick,
             "index": index,

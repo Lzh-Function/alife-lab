@@ -10,7 +10,7 @@ import re
 import struct
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import FastAPI, Header, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
@@ -31,6 +31,8 @@ from alife_lab.service.controller import Controller, ControllerError, Subscriber
 from alife_lab.service.settings import Settings
 from alife_lab.service.sweeps import deep_merge
 from alife_lab.substrates import get_manifest, has_substrate, list_substrates
+from alife_lab.substrates.bff.adapter import parse_program
+from alife_lab.substrates.bff.trace import trace_scalar, trace_summary
 
 API = "/api/v1"
 _IDEMPOTENCY_RE = re.compile(r"^[A-Za-z0-9_\-]{8,128}$")
@@ -121,6 +123,14 @@ class ComparisonRequest(_Req):
 class RestoreRequest(_Req):
     checkpoint_id: str = "latest"
     start_paused: bool = True
+
+
+class BFFTraceRequest(_Req):
+    program_a: str = Field(max_length=256)
+    program_b: str = Field(max_length=256)
+    encoding: Literal["text", "hex"] = "text"
+    variant: Literal["bff_noheads", "bff"] = "bff_noheads"
+    step_limit: int = Field(default=8192, ge=0, le=8192)
 
 
 _ALLOWED_OVERRIDE_KEYS = {
@@ -509,9 +519,27 @@ def create_app(
         y: Annotated[float, Query()],
         radius: Annotated[float, Query(ge=0, le=1000)] = 2,
         tick: Annotated[int | None, Query(ge=0)] = None,
+        mode: Annotated[Literal["summary", "trace_self", "trace_next_epoch"], Query()] = "summary",
     ) -> dict[str, Any]:
-        query = {"x": x, "y": y, "radius": radius}
+        query: dict[str, Any] = {"x": x, "y": y, "radius": radius}
+        if mode != "summary":
+            query["mode"] = mode
         return envelope(await ctl().inspect(run_id, query, tick))
+
+    # ------------------------------------------------------------------- tools
+
+    @app.post(f"{API}/tools/bff/trace")
+    async def bff_trace(body: BFFTraceRequest) -> dict[str, Any]:
+        """Stateless VM trace of two programs (no run involved; programs are data only)."""
+        try:
+            a = parse_program(body.program_a, body.encoding)
+            b = parse_program(body.program_b, body.encoding)
+            trace = trace_scalar(a + b, body.step_limit, body.variant)
+        except ValueError as exc:
+            raise ControllerError(str(exc)) from exc
+        trace["pairing"] = "manual"
+        trace["summary"] = trace_summary(trace, a, b)
+        return envelope(trace)
 
     @app.get(f"{API}/experiments/{{run_id}}/timeline")
     async def timeline(run_id: str) -> dict[str, Any]:

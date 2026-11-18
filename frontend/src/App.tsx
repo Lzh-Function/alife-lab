@@ -6,9 +6,10 @@ import { LiveLab } from "./components/LiveLab";
 import { Diagnostics } from "./components/Diagnostics";
 import { CompareView, ComparisonList } from "./components/CompareView";
 import { SweepDetail, SweepList } from "./components/Sweeps";
+import { BffDebuggerPage } from "./components/BffDebuggerPage";
 
-type View = "catalog" | "library" | "lab" | "compare" | "sweeps" | "diagnostics";
-const VIEWS = ["catalog", "library", "lab", "compare", "sweeps", "diagnostics"] as const;
+type View = "catalog" | "library" | "lab" | "compare" | "sweeps" | "debugger" | "diagnostics";
+const VIEWS = ["catalog", "library", "lab", "compare", "sweeps", "debugger", "diagnostics"] as const;
 
 function parseHash(): { view: View; runId: string | null; comparisonId: string | null; sweepId: string | null } {
   const parts = window.location.hash.replace(/^#\/?/, "").split("/");
@@ -77,6 +78,7 @@ export function App() {
           ))}
         {route.view === "sweeps" &&
           (route.sweepId ? <SweepDetail key={route.sweepId} sweepId={route.sweepId} /> : <SweepList onOpen={openSweep} />)}
+        {route.view === "debugger" && <BffDebuggerPage />}
         {route.view === "diagnostics" && <Diagnostics />}
       </main>
     </div>
