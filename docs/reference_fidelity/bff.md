@@ -93,3 +93,28 @@ The "next-epoch pair" trace shows exactly the evaluation the next epoch performs
 selected program (including background mutation of that pair). The default program of the
 stand-alone debugger (`80c05b2e3e7d5d`, `bff` variant) is a hand-written 7-byte copier, not
 an evolved replicator.
+
+## Replicator assay (`substrates/bff/assay.py`, assay_version 1)
+Passive test on *copies* of a program (the run is never modified). Pre-registered rule, stored
+with each result: `replicates_in_assay` iff in a strict majority of replicates the final exact
+copy count of P is ≥ growth_factor × copies (default 4 × 16) while the byte-scrambled control's
+is not; `inconclusive` if the scrambled program equals P or the control also grows; otherwise
+`no_evidence`. All conditions of a replicate share the same random background soup (paired).
+Defaults: soup 1024, 16 copies, 64 epochs, 3 replicates, mutation 0 for manual programs (a run's
+own variant/step limit/mutation rate when assaying a run program), 256 random pair partners.
+
+Measured 2026-11-18 (tests/reference/test_bff_assay.py, numba and numpy backends agree):
+
+| program | outcome | soup assay finals (P / scrambled), 3 replicates |
+|---|---|---|
+| top program of run_2fdbc1db12984e53 at epoch 4795 (99 copies in 131072) | replicates_in_assay | 75/4, 102/1, 179/3 (from 16) |
+| 2nd and 3rd most frequent programs (mutation 0) | replicates_in_assay | 164/0, 120/0, 109/0 · 206/3, 187/0, 117/1 |
+| 2nd program with the run's mutation rate | no_evidence | 72/0, 26/0, 12/0 (threshold 64) |
+| hand-written 7-byte copier (`bff` variant) | no_evidence | 0/0 in all replicates |
+| all-NUL program | inconclusive | scrambled == program |
+
+Observation (E1): the evolved programs do **not** copy themselves within a single pair
+evaluation — with random partners (exact and near copy rate 0 %), with an all-NUL partner, or
+with themselves (P+P leaves the second half at Hamming distance 62). Their growth in the soup
+therefore depends on multi-interaction dynamics with other soup programs. The mechanism has not
+been analysed; the debugger's next-epoch trace is the intended tool for that.

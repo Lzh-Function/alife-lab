@@ -53,10 +53,14 @@ export function InspectorPanel({
   data,
   error,
   onTrace,
+  onAssay,
+  assayPending = false,
 }: {
   data: Inspection | null;
   error: string | null;
   onTrace?: (mode: "trace_next_epoch" | "trace_self") => void;
+  onAssay?: () => void;
+  assayPending?: boolean;
 }) {
   const t = useT();
   return (
@@ -136,6 +140,11 @@ export function InspectorPanel({
                   <button data-testid="btn-trace-self" onClick={() => onTrace("trace_self")}>
                     {t("debugger.trace_self")}
                   </button>
+                  {onAssay && (
+                    <button data-testid="btn-assay" onClick={onAssay} disabled={assayPending}>
+                      {assayPending ? t("assay.running") : t("assay.run")}
+                    </button>
+                  )}
                 </div>
               )}
             </>

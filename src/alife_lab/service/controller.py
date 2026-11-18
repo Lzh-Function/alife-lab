@@ -48,6 +48,7 @@ from alife_lab.service.catalog import Preset, load_presets, load_profiles
 from alife_lab.service.settings import Settings
 from alife_lab.storage.db import Database
 from alife_lab.substrates import get_manifest
+from alife_lab.substrates.bff import assay as assay_mod
 
 log = logging.getLogger("alife_lab.controller")
 
@@ -1350,6 +1351,96 @@ class Controller:
         inp = self._replay_input(run_id, base)
         inspected: dict[str, Any] = await self._in_pool(replay_mod.inspect_at, inp, target, query)
         return inspected
+
+    async def bff_assay(
+        self,
+        params: dict[str, Any],
+        program_hex: str | None = None,
+        run_id: str | None = None,
+        index: int | None = None,
+        tick: int | None = None,
+    ) -> dict[str, Any]:
+        """Replicator assay on a copy of a program (manual, or taken from a BFF run).
+
+        Runs in the worker pool; never modifies the run. Run-linked results are published as
+        immutable artifacts and logged as ``assay_completed`` events.
+        """
+        base: dict[str, Any] = {}
+        source: dict[str, Any] = {"kind": "manual"}
+        if run_id is not None:
+            exp = self.run_spec(run_id).experiment
+            if exp.substrate != "bff":
+                raise ControllerError("the replicator assay is defined for bff runs only")
+            if index is None:
+                raise ControllerError("index is required when assaying a program of a run")
+            info = await self.inspect(run_id, {"x": 0, "y": 0, "index": index}, tick)
+            program_hex = str(info["program_hex"])
+            d = exp.dynamics
+            base = {
+                "variant": d.variant,
+                "step_limit": d.step_limit,
+                "mutation_prob": d.mutation_prob,
+            }
+            source = {
+                "kind": "run",
+                "run_id": run_id,
+                "index": index,
+                "epoch": int(info["tick"]),
+                "exact_copies_in_soup": info.get("exact_copies_in_soup"),
+                "inspection": info.get("source"),
+            }
+        elif program_hex is None:
+            raise ControllerError("provide program_hex or run_id + index")
+        merged = {**base, **params}
+        try:
+            assay_mod.BFFAssayParams.model_validate(merged)
+            program = bytes.fromhex(program_hex)
+        except ValueError as exc:  # pydantic ValidationError is a ValueError
+            raise ControllerError(f"invalid assay request: {exc}") from exc
+        if len(program) != 64:
+            raise ControllerError("program must be exactly 64 bytes")
+        result: dict[str, Any] = await self._in_pool(assay_mod.run_assay, program_hex, merged)
+        result["source"] = source
+        if run_id is not None:
+            path = f"assays/bff_{int(time.time() * 1000)}_{secrets.token_hex(4)}.json"
+            data = json.dumps(result, sort_keys=True).encode()
+            receipt = self.store.publish_bytes(run_id, path, data, "assay", "application/json")
+            self._record_artifact(receipt.to_json())
+            self._write_artifact_index(run_id)
+            self._emit_event(
+                run_id,
+                "assay_completed",
+                {
+                    "assay": "bff_replicator",
+                    "index": index,
+                    "epoch": source["epoch"],
+                    "outcome": result["verdict"]["outcome"],
+                    "artifact": path,
+                    "sha256": receipt.sha256,
+                },
+            )
+            result["artifact"] = {"logical_path": path, "sha256": receipt.sha256}
+        return result
+
+    def list_assays(self, run_id: str) -> list[dict[str, Any]]:
+        self._run_row(run_id)
+        out = []
+        for row in self.db.all(
+            "SELECT * FROM artifacts WHERE run_id=? AND kind='assay' ORDER BY created_at", (run_id,)
+        ):
+            doc = json.loads(self.store.resolve(run_id, row["logical_path"]).read_text())
+            out.append(
+                {
+                    "logical_path": row["logical_path"],
+                    "sha256": row["sha256"],
+                    "created_at": row["created_at"],
+                    "source": doc.get("source"),
+                    "program_hex": doc.get("program_hex"),
+                    "verdict": doc.get("verdict"),
+                    "params": doc.get("params"),
+                }
+            )
+        return out
 
     async def fork_at_tick(
         self,

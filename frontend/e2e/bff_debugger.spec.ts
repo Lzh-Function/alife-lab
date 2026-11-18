@@ -44,6 +44,33 @@ test("bff debugger: step through a copier and a next-epoch pair of a run", async
     await page.getByTestId("dbg-last").click();
     await expect(page.getByTestId("debugger-summary")).toBeVisible();
     await page.screenshot({ path: path.join(DATA, "91_bff_debugger_run.png"), fullPage: true });
+
+    // Replicator assay of the inspected program (stored as a run artifact).
+    await page.getByTestId("btn-assay").click();
+    await expect(page.getByTestId("assay-result")).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId("assay-result")).toContainText("assays/bff_");
+    await expect(page.getByTestId("event-list")).toContainText("assay_completed", { timeout: 10_000 });
+  } finally {
+    await stopServer(server);
+  }
+});
+
+test("bff assay: evolved program replicates, scrambled control does not", async ({ page }) => {
+  const server = startServer();
+  await waitHealthy();
+  try {
+    await page.goto(`${BASE}/#/debugger`);
+    // Most frequent program of a reference run after its transition (see test_bff_assay.py).
+    await page
+      .getByTestId("dbg-program-a")
+      .fill(
+        "5b5b732e5b5b3c2c242ee03d71bccc62bf242effffb4b4cfff7cffffa2ff2c79f1491068bcd27a657dc95a105d7cc77d2434bc3b531723e06f242c3c705b71ac",
+      );
+    await page.locator("select").nth(1).selectOption("bff_noheads");
+    await page.getByTestId("dbg-assay").click();
+    await expect(page.getByTestId("assay-outcome")).toHaveText(/このアッセイでは複製する|Replicates/, { timeout: 120_000 });
+    await expect(page.getByTestId("assay-finals").locator("tbody tr")).toHaveCount(3);
+    await page.getByTestId("assay-result").screenshot({ path: path.join(DATA, "92_bff_assay.png") });
   } finally {
     await stopServer(server);
   }

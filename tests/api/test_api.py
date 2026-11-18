@@ -373,3 +373,27 @@ def test_bff_trace_tool_and_inspect_trace(client: TestClient) -> None:
     assert 3 in (info["trace"]["first"], info["trace"]["second"])
     selfp = data(client.get(f"/api/v1/experiments/{rid}/inspect?x=3&y=0&mode=trace_self"))
     assert selfp["trace"]["ops"] == selfp["self_pair_test"]["ops"]
+
+
+def test_bff_assay_manual_and_run_linked(client: TestClient) -> None:
+    small = {"soup_size": 128, "copies": 4, "epochs": 8, "replicates": 1, "partners": 16}
+    body = {"program": "80c05b2e3e7d5d", "encoding": "hex", "params": {**small, "variant": "bff"}}
+    r = data(client.post("/api/v1/tools/bff/assay", json=body, headers=H))
+    assert r["source"] == {"kind": "manual"} and "artifact" not in r
+    assert r["verdict"]["outcome"] in {"no_evidence", "replicates_in_assay", "inconclusive"}
+    bad = {**body, "params": {"soup_size": 4096, "epochs": 512, "replicates": 7}}
+    assert client.post("/api/v1/tools/bff/assay", json=bad, headers=H).status_code == 400
+
+    spec = {"preset_id": "bff_reference", "overrides": {"soup": {"num_programs": 64}},
+            "profile_id": "cpu_dev", "ticks_per_second": 0, "auto_start": True,
+            "start_paused": True}  # fmt: skip
+    rid = data(client.post("/api/v1/experiments", json=spec, headers=H))["id"]
+    wait_state(client, rid, "paused")
+    linked = {"run_id": rid, "index": 5, "params": small}
+    res = data(client.post("/api/v1/tools/bff/assay", json=linked, headers=H))
+    assert res["source"]["kind"] == "run" and res["source"]["index"] == 5
+    assert res["params"]["mutation_prob"] == 262144  # inherited from the run
+    listed = data(client.get(f"/api/v1/experiments/{rid}/assays"))
+    assert len(listed) == 1 and listed[0]["sha256"] == res["artifact"]["sha256"]
+    events = data(client.get(f"/api/v1/experiments/{rid}/events"))
+    assert any(e["type"] == "assay_completed" for e in events)

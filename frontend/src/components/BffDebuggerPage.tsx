@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useT } from "../i18n";
 import { api, ApiError } from "../lib/api";
 import { BffDebugger, type BffTrace } from "./BffDebugger";
+import { AssayResult, type AssayResultData } from "./AssayResult";
 
 // Stand-alone BFF VM debugger: trace two programs without a run (programs are data only).
 export function BffDebuggerPage() {
@@ -15,6 +16,19 @@ export function BffDebuggerPage() {
   const [limit, setLimit] = useState(8192);
   const [trace, setTrace] = useState<BffTrace | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [assay, setAssay] = useState<AssayResultData | null>(null);
+  const [assayPending, setAssayPending] = useState(false);
+  const runAssay = () => {
+    setAssayPending(true);
+    api
+      .bffAssay({ program: a, encoding, params: { variant, step_limit: limit } })
+      .then((r) => {
+        setAssay(r);
+        setError(null);
+      })
+      .catch((e) => setError(e instanceof ApiError ? e.message : String(e)))
+      .finally(() => setAssayPending(false));
+  };
 
   const run = () =>
     api
@@ -61,10 +75,14 @@ export function BffDebuggerPage() {
           <button className="primary" data-testid="dbg-run" onClick={run}>
             {t("debugger.run")}
           </button>
+          <button data-testid="dbg-assay" onClick={runAssay} disabled={assayPending}>
+            {assayPending ? t("assay.running") : t("assay.run_a")}
+          </button>
         </div>
         {error && <p className="error">{error}</p>}
       </div>
       {trace && <BffDebugger trace={trace} />}
+      {assay && <AssayResult result={assay} onClose={() => setAssay(null)} />}
     </div>
   );
 }

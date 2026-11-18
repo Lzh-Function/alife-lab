@@ -125,6 +125,15 @@ class RestoreRequest(_Req):
     start_paused: bool = True
 
 
+class BFFAssayRequest(_Req):
+    program: str | None = Field(default=None, max_length=256)
+    encoding: Literal["text", "hex"] = "hex"
+    run_id: str | None = Field(default=None, pattern=r"^run_[0-9a-f]{16}$")
+    index: int | None = Field(default=None, ge=0)
+    tick: int | None = Field(default=None, ge=0)
+    params: dict[str, Any] = Field(default_factory=dict)
+
+
 class BFFTraceRequest(_Req):
     program_a: str = Field(max_length=256)
     program_b: str = Field(max_length=256)
@@ -527,6 +536,25 @@ def create_app(
         return envelope(await ctl().inspect(run_id, query, tick))
 
     # ------------------------------------------------------------------- tools
+
+    @app.post(f"{API}/tools/bff/assay")
+    async def bff_assay(body: BFFAssayRequest) -> dict[str, Any]:
+        """Replicator assay of a manual program or of program ``index`` of a BFF run."""
+        program_hex: str | None = None
+        if body.program is not None:
+            try:
+                program_hex = parse_program(body.program, body.encoding).hex()
+            except ValueError as exc:
+                raise ControllerError(str(exc)) from exc
+        result = await ctl().bff_assay(
+            body.params, program_hex=program_hex, run_id=body.run_id, index=body.index,
+            tick=body.tick,
+        )  # fmt: skip
+        return envelope(result)
+
+    @app.get(f"{API}/experiments/{{run_id}}/assays")
+    async def list_assays(run_id: str) -> dict[str, Any]:
+        return envelope(ctl().list_assays(run_id))
 
     @app.post(f"{API}/tools/bff/trace")
     async def bff_trace(body: BFFTraceRequest) -> dict[str, Any]:

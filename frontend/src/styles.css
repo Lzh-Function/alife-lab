@@ -181,3 +181,6 @@ pre.program { font-size: 12px; letter-spacing: 0.08em; background: var(--cell-de
 .bff-cell.written { background: rgba(250, 204, 21, 0.35); }
 .bff-cell.mutated { text-decoration: underline dotted #c084fc; }
 p.muted .bff-cell { width: auto; padding: 0 0.25em; background-color: var(--cell-dead); color: #e6e9ef; }
+.verdict.replicates_in_assay { color: #127a63; }
+.verdict.no_evidence { color: var(--muted); }
+.verdict.inconclusive { color: #b45309; }

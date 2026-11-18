@@ -290,9 +290,14 @@ class BFFAdapter:
         exp = _bff(spec)
         n = state.soup.shape[0]
         cols = display_columns(n)
-        index = int(query["y"]) * cols + int(query["x"])
-        if not 0 <= index < min(n, MAX_DISPLAY_PROGRAMS):
-            raise ValueError("no program at this position")
+        if "index" in query:  # explicit program index (any program, not only displayed ones)
+            index = int(query["index"])
+            if not 0 <= index < n:
+                raise ValueError("program index out of range")
+        else:
+            index = int(query["y"]) * cols + int(query["x"])
+            if not 0 <= index < min(n, MAX_DISPLAY_PROGRAMS):
+                raise ValueError("no program at this position")
         program = state.soup[index].tobytes()
         copies = int((state.soup == state.soup[index]).all(axis=1).sum())
         tape = bytearray(program + program)
