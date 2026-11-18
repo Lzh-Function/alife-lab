@@ -1,0 +1,20 @@
+schema_version: 1
+execution:
+  id: local_interactive
+  target_selector:
+    role: local_interactive
+    gpu_count: 1
+    backend: auto
+  memory:
+    policy: probe_available
+    max_fraction_of_available: 0.80
+    reserve_fraction: 0.15
+  scheduling:
+    max_active_gpu_jobs: 1
+    adaptive_microbatch: true
+  preview:
+    max_fps: 5
+    adaptive_quality: true
+  limits:
+    max_walltime_seconds: 3600
+    max_disk_mb: 4096

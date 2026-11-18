@@ -1,0 +1,18 @@
+preset:
+  id: conway_random_soup
+  scenario: conway_reference.yaml
+  title_key: preset.conway_random_soup.title
+  description_key: preset.conway_random_soup.description
+  overrides:
+    experiment:
+      name: conway_random_soup
+      initialization:
+        preset: random
+        density: 0.3
+      runner:
+        max_steps: 5000
+        checkpoint_interval: 500
+  expected_observation: >-
+    Seed-dependent transient followed by ash (still lifes, oscillators, gliders).
+    Visual curiosity only (E0); no claim is attached to this preset.
+  negative_control: null

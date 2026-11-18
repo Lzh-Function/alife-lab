@@ -1,0 +1,22 @@
+schema_version: 1
+experiment:
+  name: conway_reference
+  mode: reference
+  substrate: conway
+  seed: 42
+  world:
+    width: 128
+    height: 128
+    boundary: periodic
+  initialization:
+    preset: glider
+  dynamics:
+    clock_unit: tick
+    numeric_policy: exact_integer
+  runner:
+    max_steps: 1000
+    checkpoint_interval: 100
+  observations:
+    metrics:
+      - alive_cell_count
+      - glider_displacement

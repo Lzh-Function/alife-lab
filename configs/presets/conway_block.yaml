@@ -1,0 +1,12 @@
+preset:
+  id: conway_block
+  scenario: conway_reference.yaml
+  title_key: preset.conway_block.title
+  description_key: preset.conway_block.description
+  overrides:
+    experiment:
+      name: conway_block
+      initialization:
+        preset: block
+  expected_observation: Still life; the grid never changes.
+  negative_control: null

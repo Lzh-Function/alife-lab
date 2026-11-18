@@ -1,0 +1,22 @@
+schema_version: 1
+execution:
+  id: cluster_batch
+  target_selector:
+    role: cluster_batch
+    scheduler: slurm
+    require_explicit_target: true
+  scheduling:
+    mode: batch
+    checkpoint_and_exit: capability_dependent
+    job_arrays: capability_dependent
+  transport:
+    mode: ssh_or_site_approved
+    artifact_transfer: checksum_verified
+  limits:
+    max_walltime_seconds: 14400
+    max_disk_mb: 16384
+  site_policy:
+    account: null
+    partition: null
+    qos: null
+    notes: "Resolve from authorized site configuration, not defaults"

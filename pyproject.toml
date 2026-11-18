@@ -1,0 +1,67 @@
+[project]
+name = "alife-lab"
+version = "0.1.0"
+description = "Local-first, browser-operated artificial-life research platform"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+license = { text = "Proprietary (undecided)" }
+dependencies = [
+    "fastapi>=0.120",
+    "uvicorn[standard]>=0.38",
+    "pydantic>=2.12",
+    "numpy>=2.3",
+    "pyyaml>=6.0.2",
+    "psutil>=7.1",
+]
+
+[project.scripts]
+alife = "alife_lab.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4",
+    "hypothesis>=6.140",
+    "httpx>=0.28",
+    "ruff>=0.14",
+    "mypy>=1.18",
+    "types-pyyaml>=6.0",
+    "types-psutil>=7.0",
+]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/alife_lab"]
+
+[tool.uv]
+# Supply-chain guard: only resolve packages published at least ~2 weeks before
+# the lock was created. Bump deliberately when updating dependencies.
+exclude-newer = "2026-11-04T00:00:00Z"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: spawns worker processes or servers (CPU only)",
+    "e2e: browser end-to-end tests (requires built frontend and Playwright)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]
+ignore = ["S101", "S603", "S607", "RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "B011"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src/alife_lab"]
+plugins = ["pydantic.mypy"]

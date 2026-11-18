@@ -1,0 +1,12 @@
+preset:
+  id: conway_blinker
+  scenario: conway_reference.yaml
+  title_key: preset.conway_blinker.title
+  description_key: preset.conway_blinker.description
+  overrides:
+    experiment:
+      name: conway_blinker
+      initialization:
+        preset: blinker
+  expected_observation: Period-2 oscillator; alive_cell_count stays 3; centroid does not drift.
+  negative_control: null

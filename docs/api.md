@@ -1,0 +1,22 @@
+# API (v1, implemented subset)
+
+All JSON responses: `{"api_version": "v1", "server_version": "...", "data": ...}`;
+errors: `{"api_version": "v1", "error": {"code", "message"}}`. Interactive OpenAPI:
+`/api/v1/docs`. Non-GET requests require `X-ALife-Token`.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | /health, /system/capabilities, /system/resources | resources = live probe |
+| GET | /compute-targets, /execution-profiles | planned roles flagged `implemented: false` |
+| GET | /substrates, /substrates/{slug}/schema, /presets | |
+| POST | /experiments/validate | resolves preset+overrides, returns report + hashes |
+| POST | /experiments | `Idempotency-Key` header supported; `auto_start`, `start_paused` |
+| GET | /experiments, /experiments/{id} | `{id}` is the run id |
+| POST | /experiments/{id}/start, /pause, /resume, /step, /speed, /checkpoints, /interventions | body may carry `command_id` (UUID, idempotent), `expected_revision`, `requested_clock`; response contains the worker ack with `applied_clock` |
+| POST | /experiments/{id}/restore | latest checkpoint only (`fork_required` otherwise) |
+| POST | /experiments/{id}/cancel, /verify | verify = sha256 of every indexed artifact |
+| GET | /experiments/{id}/checkpoints, /checkpoints/{cid}/frame, /metrics, /events, /interventions, /provenance | frame = binary preview of a checkpoint |
+| WS | /stream/experiments/{id}?token=… | JSON: hello, run_state, metrics, event, command_ack, heartbeat, resync_required; binary preview frames |
+
+Binary frame: `uint32 BE header length` + JSON header (`tick,width,height,codec,
+dropped_previews`) + payload. Codec `bitpack1` = `numpy.packbits` (row-major, MSB first).

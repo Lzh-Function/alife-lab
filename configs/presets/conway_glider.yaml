@@ -1,0 +1,10 @@
+# UI preset: scientific content comes from the referenced scenario (+ overrides).
+preset:
+  id: conway_glider
+  scenario: conway_reference.yaml
+  title_key: preset.conway_glider.title
+  description_key: preset.conway_glider.description
+  expected_observation: >-
+    A single glider (period 4) translates by (+1, +1) cells every 4 ticks;
+    alive_cell_count stays 5 and centroid displacement grows by sqrt(2) per period.
+  negative_control: preset conway_block (still life; displacement stays 0)

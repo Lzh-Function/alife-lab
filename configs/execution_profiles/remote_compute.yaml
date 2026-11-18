@@ -1,0 +1,23 @@
+schema_version: 1
+execution:
+  id: remote_compute
+  target_selector:
+    role: remote_compute
+    backend: auto
+    require_explicit_target: true
+  memory:
+    policy: probe_available
+    max_fraction_of_available: 0.85
+    reserve_fraction: 0.10
+  scheduling:
+    adaptive_microbatch: true
+    max_active_gpu_jobs: 1
+  preview:
+    max_fps: 3
+    adaptive_quality: true
+  transport:
+    mode: authenticated_agent_or_ssh
+    artifact_transfer: checksum_verified
+  limits:
+    max_walltime_seconds: 14400
+    max_disk_mb: 16384
