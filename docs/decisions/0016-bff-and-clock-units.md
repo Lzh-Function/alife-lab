@@ -5,8 +5,8 @@
 
 ## Decision
 - Implement BFF from the CuBFF source semantics (see `docs/reference_fidelity/bff.md`),
-  including its stateless SplitMix64 randomness, so that a reference run is reproducible
-  bit-for-bit and can later be checked against a CuBFF binary byte-for-byte.
+  including its stateless SplitMix64 randomness. Verified byte-for-byte against a CuBFF CPU
+  binary at the pinned commit (fixture digests in `tests/fixtures/cubff_soups.json`).
 - Two implementations: a scalar oracle and a NumPy batch interpreter, tested for exact
   equality; the batch hands the last ≤ 512 running tapes to the scalar interpreter.
 - Clock units: the manifest's `clock_unit` (`tick` | `epoch` | …) is now used for run

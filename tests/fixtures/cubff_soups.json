@@ -1,0 +1,70 @@
+{
+  "source": "CuBFF bin/main built with `make CUDA=0` (g++, libbrotli 1.1.0) at commit f212e849027c98fcf4b242eccfb5fed435223e23 on 2026-11-18",
+  "command": "bin/main --lang <lang> --num <num> --seed <seed> --mutation_prob <p> --max_epochs 130 --checkpoint_dir <dir> --save_interval 64 --print_interval 64 --disable_output",
+  "note": "A save at CuBFF epoch e holds the soup after e+1 epochs; only SHA-256 digests are stored.",
+  "cases": [
+    {
+      "lang": "bff_noheads",
+      "num": 1024,
+      "seed": 7,
+      "mutation_prob_flag": 0.000244140625,
+      "mutation_prob_int": 262144,
+      "snapshots": [
+        {
+          "epochs_completed": 1,
+          "soup_sha256": "cf57bdeafb4d474ee239d7cfeca541bb459fce704fe79f9c649a1c409a0f269b"
+        },
+        {
+          "epochs_completed": 65,
+          "soup_sha256": "cc16066a58e94b6239b26733ae0fbf2e3c18c841b43c9733950b2bf310726e21"
+        }
+      ]
+    },
+    {
+      "lang": "bff",
+      "num": 512,
+      "seed": 3,
+      "mutation_prob_flag": 0.000244140625,
+      "mutation_prob_int": 262144,
+      "snapshots": [
+        {
+          "epochs_completed": 1,
+          "soup_sha256": "5a0fef05ddc2febae4fbffb2b54376d2c2d2c2378f8c7fc784c68adbf9fcb3e8"
+        },
+        {
+          "epochs_completed": 65,
+          "soup_sha256": "d72376991231de593d4acfd3cd7d70c86925cce3444bc488d665c12e5fdd9d0e"
+        },
+        {
+          "epochs_completed": 129,
+          "soup_sha256": "6617215b56791f36ac09b30140ef116fcab471991cf8d6c7db4d0b83c68c850e"
+        }
+      ]
+    },
+    {
+      "lang": "bff_noheads",
+      "num": 256,
+      "seed": 11,
+      "mutation_prob_flag": 0.01,
+      "mutation_prob_int": 10737418,
+      "snapshots": [
+        {
+          "epochs_completed": 1,
+          "soup_sha256": "6c316133c38066acbe9f683b8f5aafccde0ff24b6b73d3b093667fb4383fdb1b"
+        },
+        {
+          "epochs_completed": 65,
+          "soup_sha256": "e61fb6a5c3833ea7162e0b9a85f2df60eb561819c6a8f7349a5de76d1c45fd61"
+        },
+        {
+          "epochs_completed": 129,
+          "soup_sha256": "b39ea138a8e01c545f4e02f36214c5fd38384953f54c193155b377c82ddaf7e6"
+        },
+        {
+          "epochs_completed": 193,
+          "soup_sha256": "5091aeb06f94d9de7ff5d7aa005759fa9e2833cda430f1ef1631fc1a20237234"
+        }
+      ]
+    }
+  ]
+}
