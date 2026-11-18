@@ -10,7 +10,7 @@ export interface Inspection {
   source?: { method: string; base_tick?: number; interventions_replayed?: number };
   // conway
   cell?: { alive: boolean; live_neighbors: number; next_tick: string };
-  rule?: string;
+  rule?: string | { R: number; kernels: unknown[] }; // conway rule string / flow_lenia rule
   patch?: number[][];
   patch_live_neighbors?: Array<Array<number | null>>;
   patch_origin?: { x: number; y: number };
@@ -36,6 +36,14 @@ export interface Inspection {
   growth?: number;
   next_value?: number;
   patch_mass?: number;
+  // flow_lenia
+  channels?: Array<{
+    value: number;
+    affinity: number;
+    alpha: number;
+    flow: { x: number; y: number };
+    displacement: { x: number; y: number };
+  }>;
 }
 
 const f = (v: number, d = 3) => (Math.abs(v) >= 100 ? v.toFixed(1) : v.toPrecision(d));
@@ -65,7 +73,7 @@ export function InspectorPanel({ data, error }: { data: Inspection | null; error
                 <dt>{t("inspector.next")}</dt>
                 <dd data-testid="inspector-next">{t(`inspector.outcome.${data.cell.next_tick}`)}</dd>
                 <dt>rule</dt>
-                <dd className="mono">{data.rule}</dd>
+                <dd className="mono">{typeof data.rule === "string" ? data.rule : ""}</dd>
               </dl>
               <table className="patch" aria-label={t("inspector.patch")}>
                 <tbody>
@@ -167,6 +175,39 @@ export function InspectorPanel({ data, error }: { data: Inspection | null; error
                 {data.patch_mass?.toFixed(3)} (r = {data.query?.radius})
               </dd>
             </dl>
+          )}
+          {data.substrate === "flow_lenia" && data.channels && (
+            <>
+              <p className="small">
+                ({data.query?.x}, {data.query?.y}) · {t("inspector.patch_mass")} {data.patch_mass?.toFixed(3)} (r = {data.query?.radius}) · R ={" "}
+                {typeof data.rule === "object" ? data.rule.R.toFixed(2) : "—"} · {t("inspector.kernels")}{" "}
+                {typeof data.rule === "object" ? data.rule.kernels.length : "—"}
+              </p>
+              <table className="small mono" data-testid="inspector-channels">
+                <thead>
+                  <tr>
+                    <th>ch</th>
+                    <th>A</th>
+                    <th>{t("inspector.affinity")}</th>
+                    <th>α</th>
+                    <th>{t("inspector.displacement")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.channels.map((c, i) => (
+                    <tr key={i}>
+                      <td>{i}</td>
+                      <td>{c.value.toFixed(3)}</td>
+                      <td>{c.affinity.toFixed(3)}</td>
+                      <td>{c.alpha.toFixed(2)}</td>
+                      <td>
+                        ({c.displacement.x.toFixed(2)}, {c.displacement.y.toFixed(2)})
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
           )}
           {data.substrate === "boids" && (
             <>

@@ -5,8 +5,8 @@ export interface FieldCanvasHandle {
   draw: (frame: Frame) => void;
 }
 
-// Continuous scalar field (codec field_u8: one byte per cell, 0..255 = 0..1) drawn with a
-// perceptually ordered colormap. The bytes are a display quantisation, not the state.
+// Continuous field (codec field_u8: `channels` bytes per cell, 0..255 = 0..1). One channel is
+// drawn with a perceptually ordered colormap, several channels as RGB. The bytes are a display quantisation, not the state.
 const STOPS: Array<[number, [number, number, number]]> = [
   [0, [10, 10, 24]],
   [0.25, [59, 40, 120]],
@@ -69,12 +69,21 @@ export const FieldCanvas = forwardRef<FieldCanvasHandle, Props>(function FieldCa
     if (!octx) return;
     const img = octx.createImageData(w, h);
     const bytes = frame.bits;
-    for (let i = 0; i < w * h; i++) {
-      const v = bytes[i] * 3;
-      img.data[i * 4] = LUT[v];
-      img.data[i * 4 + 1] = LUT[v + 1];
-      img.data[i * 4 + 2] = LUT[v + 2];
-      img.data[i * 4 + 3] = 255;
+    const c = (frame.header as { channels?: number }).channels ?? 1;
+    if (c === 1) {
+      for (let i = 0; i < w * h; i++) {
+        const v = bytes[i] * 3;
+        img.data[i * 4] = LUT[v];
+        img.data[i * 4 + 1] = LUT[v + 1];
+        img.data[i * 4 + 2] = LUT[v + 2];
+        img.data[i * 4 + 3] = 255;
+      }
+    } else {
+      // Channels 0, 1, 2 -> red, green, blue (a 4th channel is not shown).
+      for (let i = 0; i < w * h; i++) {
+        for (let k = 0; k < 3; k++) img.data[i * 4 + k] = k < c ? bytes[i * c + k] : 0;
+        img.data[i * 4 + 3] = 255;
+      }
     }
     octx.putImageData(img, 0, 0);
     ctx.imageSmoothingEnabled = false;

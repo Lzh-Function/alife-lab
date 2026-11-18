@@ -232,7 +232,7 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
             </button>
           </label>
         </div>
-        <ToolBar substrate={summary.substrate} tool={currentTool} setTool={setTool} disabled={!live} />
+        <ToolBar substrate={summary.substrate} tool={currentTool} setTool={setTool} disabled={!live} channels={summary.spec.experiment.dynamics?.channels ?? 1} />
         {error && <p className="error" role="alert">{t("common.error")}: {error}</p>}
         {summary.restorable && <p className="notice">{t("lab.restorable")}</p>}
         {!live && !summary.restorable && <p className="muted">{t("lab.not_live")}</p>}

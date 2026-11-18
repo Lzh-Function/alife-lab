@@ -1,0 +1,29 @@
+# Flow-Lenia (Plantec et al. 2023) with the semantics of the authors' JAX code: 3 channels,
+# kernel connectivity of the official example (examples/example_fl.py), default Config
+# (dt 0.2, dd 5, sigma 0.65, wall border), random 40 x 40 block in a 128 x 128 world.
+# Kernel parameters are sampled from the official ranges with NumPy PCG64 seeded by `seed`
+# (JAX's RNG is not reproduced; the realised rule is recorded and shown by the inspector).
+schema_version: 1
+experiment:
+  name: flow_lenia_example
+  mode: reference
+  substrate: flow_lenia
+  seed: 0
+  world: {width: 128, height: 128, boundary: wall}
+  dynamics:
+    clock_unit: tick
+    numeric_policy: float64_numpy_cpu
+    channels: 3
+    dt: 0.2
+    dd: 5
+    sigma: 0.65
+    theta_A: null          # = channels, as in the official code
+    n: 2.0
+    rule:
+      R: null
+      kernels: null
+      connectivity: [[3, 1, 0], [0, 3, 1], [1, 0, 3]]
+  initialization: {preset: random, size: 40, density: 1.0}
+  runner: {max_steps: 100000, checkpoint_interval: 500}
+  observations:
+    metrics: [mass, mass_drift, alive_fraction, max_value, centroid_displacement]

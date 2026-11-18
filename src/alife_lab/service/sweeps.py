@@ -27,6 +27,7 @@ ALWAYS_COMPUTED = {
     "particle_life": {"population"},
     "bff": set(),
     "lenia": set(),
+    "flow_lenia": set(),
 }
 UNIT_NOTE = (
     "Unit of analysis: one independently seeded run per value. Time points within a run are not "

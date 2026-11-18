@@ -377,8 +377,130 @@ class LeniaExperiment(_Frozen):
         return self
 
 
+# --------------------------------------------------------------------------- #
+# Flow-Lenia (Plantec et al. 2023; semantics of erwanplantec/FlowLenia @ dce428c)
+# --------------------------------------------------------------------------- #
+
+MAX_FLOW_LENIA_CHANNELS = 4
+MAX_FLOW_LENIA_KERNELS = 32
+
+
+class FlowLeniaWorld(_Frozen):
+    width: Annotated[int, Field(ge=16, le=MAX_WORLD_SIDE)] = 128
+    height: Annotated[int, Field(ge=16, le=MAX_WORLD_SIDE)] = 128
+    # "wall": target positions are clipped inside the world; "torus": periodic transport.
+    # Kernel convolution is periodic (FFT) and the Sobel gradient zero-padded in both cases.
+    boundary: Literal["wall", "torus"] = "wall"
+
+
+_UNIT = Annotated[float, Field(ge=0.0, le=1.0)]
+_TRIPLE = Annotated[list[_UNIT], Field(min_length=3, max_length=3)]
+
+
+class FlowLeniaKernel(_Frozen):
+    source: Annotated[int, Field(ge=0, lt=MAX_FLOW_LENIA_CHANNELS)] = 0  # c0
+    target: Annotated[int, Field(ge=0, lt=MAX_FLOW_LENIA_CHANNELS)] = 0  # channel of c1
+    r: Annotated[float, Field(gt=0.0, le=1.0)]  # relative radius
+    m: Annotated[float, Field(ge=0.0, le=1.0)]  # growth centre
+    s: Annotated[float, Field(gt=0.0, le=1.0)]  # growth width
+    h: Annotated[float, Field(ge=0.0, le=1.0)]  # growth weight
+    a: _TRIPLE  # ring centres
+    b: _TRIPLE  # ring weights
+    w: Annotated[list[Annotated[float, Field(gt=0.0, le=1.0)]], Field(min_length=3, max_length=3)]
+
+
+class FlowLeniaRule(_Frozen):
+    # null => sampled from the experiment seed with the official parameter ranges.
+    R: Annotated[float, Field(ge=0.0, le=100.0)] | None = None
+    kernels: (
+        Annotated[list[FlowLeniaKernel], Field(min_length=1, max_length=MAX_FLOW_LENIA_KERNELS)]
+        | None
+    ) = None
+    # Used only when kernels are sampled: connectivity[s][t] = number of kernels from
+    # channel s to channel t (official conn_from_matrix). Default: [[10]].
+    connectivity: list[list[Annotated[int, Field(ge=0, le=MAX_FLOW_LENIA_KERNELS)]]] | None = None
+
+
+class FlowLeniaDynamics(_Frozen):
+    clock_unit: Literal["tick"] = "tick"
+    numeric_policy: Literal["float64_numpy_cpu"] = "float64_numpy_cpu"
+    channels: Annotated[int, Field(ge=1, le=MAX_FLOW_LENIA_CHANNELS)] = 1
+    dt: Annotated[float, Field(gt=0.0, le=10.0)] = 0.2
+    dd: Annotated[int, Field(ge=1, le=10)] = 5  # max transport distance (cells)
+    sigma: Annotated[float, Field(gt=0.0, le=5.0)] = 0.65  # half-size of the spread square
+    # Mass-dependent flow mixing alpha = clip((A / theta_A)^n, 0, 1); null => channels.
+    theta_A: Annotated[float, Field(gt=0.0, le=100.0)] | None = None
+    n: Annotated[float, Field(gt=0.0, le=10.0)] = 2.0
+    rule: FlowLeniaRule = FlowLeniaRule()
+
+
+class FlowLeniaInitialization(_Frozen):
+    # "random": uniform values in a centred square of side `size` in every channel.
+    preset: Literal["random", "empty"] = "random"
+    size: Annotated[int, Field(ge=1, le=MAX_WORLD_SIDE)] = 40
+    density: Annotated[float, Field(ge=0.0, le=1.0)] = 1.0
+
+
+FlowLeniaMetric = Literal[
+    "mass", "mass_drift", "alive_fraction", "max_value", "centroid_displacement"
+]
+
+
+class FlowLeniaObservation(_Frozen):
+    metrics: tuple[FlowLeniaMetric, ...] = (
+        "mass",
+        "mass_drift",
+        "alive_fraction",
+        "max_value",
+        "centroid_displacement",
+    )
+
+
+class FlowLeniaExperiment(_Frozen):
+    name: _NAME
+    mode: Literal["reference", "exploratory"] = "reference"
+    substrate: Literal["flow_lenia"]
+    seed: _SEED
+    world: FlowLeniaWorld = FlowLeniaWorld()
+    initialization: FlowLeniaInitialization = FlowLeniaInitialization()
+    dynamics: FlowLeniaDynamics = FlowLeniaDynamics()
+    runner: RunnerSpec = RunnerSpec()
+    observations: FlowLeniaObservation = FlowLeniaObservation()
+
+    @model_validator(mode="after")
+    def _check(self) -> FlowLeniaExperiment:
+        d = self.dynamics
+        c = d.channels
+        if 2 * d.dd + 1 > min(self.world.width, self.world.height):
+            raise ValueError("transport window 2*dd+1 must fit in the world")
+        if d.sigma >= d.dd:
+            raise ValueError("sigma must be smaller than dd")
+        rule = d.rule
+        if rule.kernels is not None:
+            for i, k in enumerate(rule.kernels):
+                if k.source >= c or k.target >= c:
+                    raise ValueError(f"kernel {i} uses a channel >= channels ({c})")
+            if rule.connectivity is not None:
+                raise ValueError("give either explicit kernels or a connectivity matrix")
+        if rule.connectivity is not None:
+            m = rule.connectivity
+            if len(m) != c or any(len(row) != c for row in m):
+                raise ValueError("connectivity must be a channels x channels matrix")
+            total = sum(map(sum, m))
+            if not 1 <= total <= MAX_FLOW_LENIA_KERNELS:
+                raise ValueError(f"connectivity must define 1..{MAX_FLOW_LENIA_KERNELS} kernels")
+        elif rule.kernels is None and c != 1:
+            raise ValueError("sampled rules with channels > 1 need a connectivity matrix")
+        return self
+
+
 AnyExperiment = Annotated[
-    ConwayExperiment | BoidsExperiment | ParticleLifeExperiment | BFFExperiment | LeniaExperiment,
+    ConwayExperiment
+    | BoidsExperiment
+    | ParticleLifeExperiment
+    | BFFExperiment
+    | LeniaExperiment
+    | FlowLeniaExperiment,
     Field(discriminator="substrate"),
 ]
 

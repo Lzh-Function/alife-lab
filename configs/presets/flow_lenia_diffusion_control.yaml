@@ -1,0 +1,15 @@
+preset:
+  id: flow_lenia_diffusion_control
+  scenario: flow_lenia_example.yaml
+  title_key: preset.flow_lenia_diffusion_control.title
+  description_key: preset.flow_lenia_diffusion_control.description
+  overrides:
+    experiment:
+      name: flow_lenia_diffusion_control
+      mode: exploratory
+      dynamics: {theta_A: 0.001}
+  expected_observation: >-
+    Negative control: theta_A = 0.001 makes alpha = 1 wherever mass exists, so the flow is
+    pure diffusion down the mass gradient (affinity ignored). Mass spreads (alive_fraction
+    0.12 -> 0.92, max 1.8 -> 0.11 by tick 600) and nothing condenses or moves.
+  negative_control: null
