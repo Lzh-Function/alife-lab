@@ -39,11 +39,14 @@ class ReplayInput:
     base_expected_spec_digest: str | None
     # [{"tick": int, "kind": str, "payload": dict, "intervention_id": str}], sorted
     interventions: list[dict[str, Any]]
+    backend: str = "numpy"
 
 
 def _load(inp: ReplayInput) -> tuple[ExperimentSpec, Any, Any]:
     spec = ExperimentSpec.model_validate(inp.spec)
     adapter = get_adapter(spec.experiment.substrate)
+    if hasattr(adapter, "set_backend"):
+        adapter.set_backend(inp.backend)
     if not adapter.manifest.capabilities.supports_deterministic_cpu:
         raise ReplayError("substrate does not support deterministic replay")
     data = Path(inp.base_path).read_bytes()

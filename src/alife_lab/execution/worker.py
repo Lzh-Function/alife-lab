@@ -68,6 +68,14 @@ class WorkerJob:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
+def _backend_version(backend: str) -> str | None:
+    if backend == "numba":
+        from importlib import metadata
+
+        return metadata.version("numba")
+    return str(np.__version__)
+
+
 def _json_safe(value: float) -> float | None:
     return None if math.isnan(value) or math.isinf(value) else value
 
@@ -80,6 +88,9 @@ class _Worker:
         self.profile = ExecutionProfile.model_validate(job.profile)
         self.spec_digest = self.spec.digest()
         self.adapter = get_adapter(self.spec.experiment.substrate)
+        self.backend = str(job.extra.get("backend") or "numpy")
+        if hasattr(self.adapter, "set_backend"):
+            self.adapter.set_backend(self.backend)
         self.store = LocalArtifactStore(Path(job.runs_root))
         self.run_dir = self.store.run_dir(job.run_id)
         self.running = not job.start_paused
@@ -189,8 +200,8 @@ class _Worker:
             "clock_unit": self.adapter.manifest.capabilities.clock_unit,
             "spec_digest": self.spec_digest,
             "substrate": self.spec.experiment.substrate,
-            "backend": "numpy",
-            "backend_version": np.__version__,
+            "backend": self.backend,
+            "backend_version": _backend_version(self.backend),
             "python": platform.python_version(),
             "created_at_unix": time.time(),
             "reason": reason,

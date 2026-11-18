@@ -37,7 +37,8 @@ test("inspector explains conway cells live and in replay without changing the ru
     await page.getByTestId("replay-tick-input").fill("0");
     await expect(page.getByTestId("replay-source").locator("strong")).toHaveText("t=0");
     await clickCell(page, 63, 62);
-    await expect(page.getByTestId("inspector-source")).toContainText("リプレイ");
+    // The replay process may need a cold start (spawn + imports) on the first request.
+    await expect(page.getByTestId("inspector-source")).toContainText("リプレイ", { timeout: 30_000 });
     await expect(page.getByTestId("inspector-source")).toContainText("t=0");
     await expect(page.getByTestId("inspector-next")).toHaveText("死亡");
 

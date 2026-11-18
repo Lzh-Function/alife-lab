@@ -16,6 +16,14 @@ jobs:
       - run: uv run mypy
       - run: uv run pytest -q
       - run: uv run alife doctor
+  python-fast-backend:
+    # Optional JIT backend: must stay bit-identical to the NumPy backend and CuBFF fixtures.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen --extra fast
+      - run: uv run pytest -q tests/reference/test_bff_numba.py tests/integration/test_bff_platform.py
   frontend:
     runs-on: ubuntu-24.04
     defaults:

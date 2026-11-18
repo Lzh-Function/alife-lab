@@ -25,7 +25,7 @@ _NVIDIA_QUERY = [
     "--format=csv,noheader,nounits",
 ]
 
-OPTIONAL_BACKENDS = ("jax", "jaxlib", "torch", "cupy", "mujoco", "warp-lang")
+OPTIONAL_BACKENDS = ("numba", "llvmlite", "jax", "jaxlib", "torch", "cupy", "mujoco", "warp-lang")
 CORE_PACKAGES = ("fastapi", "starlette", "uvicorn", "pydantic", "numpy", "pyyaml", "psutil")
 
 

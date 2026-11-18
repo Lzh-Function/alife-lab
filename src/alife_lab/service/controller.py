@@ -83,6 +83,15 @@ class ControllerLocked(RuntimeError):
     pass
 
 
+def _pkg_version(name: str) -> str | None:
+    from importlib import metadata
+
+    try:
+        return metadata.version(name)
+    except metadata.PackageNotFoundError:
+        return None
+
+
 def new_run_id() -> str:
     return "run_" + secrets.token_hex(8)
 
@@ -676,7 +685,14 @@ class Controller:
                 "profile_id": profile.execution.id,
                 "profile_sha256": profile.digest(),
                 "backend": report.resolved_backend,
-                "backend_versions": {"numpy": env["packages"].get("numpy")},
+                "backend_versions": {
+                    "numpy": env["packages"].get("numpy"),
+                    **(
+                        {"numba": _pkg_version("numba")}
+                        if report.resolved_backend == "numba"
+                        else {}
+                    ),
+                },
                 "target_capabilities": self.target.to_json()["capabilities"],
                 "validation_warnings": report.warnings,
             },
@@ -1139,6 +1155,7 @@ class Controller:
             base_tick=int(base["simulation_clock"]),
             base_expected_spec_digest=base["spec_hash"],
             interventions=interventions,
+            backend=row["backend"] or "numpy",
         )
 
     def _base_for(self, run_id: str, tick: int) -> dict[str, Any]:
@@ -1458,6 +1475,7 @@ class Controller:
             preview_fps=profile.execution.preview.max_fps,
             restore_from=restore_from,
             initial_commands=initial_commands,
+            extra={"backend": row["backend"] or "numpy"},
         )
         handle = self.executor.submit(job_spec)
         job = ActiveJob(

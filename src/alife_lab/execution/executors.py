@@ -8,6 +8,7 @@ reason instead of silently falling back to local execution.
 
 from __future__ import annotations
 
+import importlib.util
 import multiprocessing
 import threading
 from dataclasses import asdict, dataclass, field
@@ -20,6 +21,16 @@ from alife_lab.execution.worker import WorkerJob, worker_main
 from alife_lab.substrates import get_manifest, has_substrate
 
 IMPLEMENTED_ROLES = ("cpu_dev", "local_interactive")
+
+
+def available_backends() -> tuple[str, ...]:
+    """CPU backends usable by workers (checked without importing them here)."""
+    out = ["numpy"]
+    if importlib.util.find_spec("numba") is not None:
+        out.append("numba")
+    return tuple(out)
+
+
 PLANNED_ROLES = ("remote_compute", "multi_gpu", "cluster_batch")
 
 
@@ -165,7 +176,7 @@ class LocalExecutor:
                 interactive_preview=True,
                 remote_cancel=False,
                 multi_gpu=False,
-                backends=("numpy",),
+                backends=available_backends(),
             ),
             probe={"gpu": gpus},
         )
@@ -223,7 +234,7 @@ class FakeExecutor:
                 interactive_preview=True,
                 remote_cancel=False,
                 multi_gpu=False,
-                backends=("numpy",),
+                backends=available_backends(),
             ),
         )
 

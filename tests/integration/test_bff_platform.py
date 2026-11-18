@@ -137,3 +137,41 @@ def test_platform_epochs_equal_direct_procedure(settings: Settings) -> None:
             await c.shutdown()
 
     arun(main)
+
+
+@pytest.mark.skipif(
+    __import__("importlib.util").util.find_spec("numba") is None, reason="numba extra not installed"
+)
+def test_backend_choice_does_not_change_results(settings: Settings) -> None:
+    """auto -> numba; identical soups to the numpy backend; recorded in the manifest."""
+    from alife_lab.core.spec import ExecutionProfile
+
+    async def main() -> None:
+        c = Controller(settings, LocalExecutor())
+        await c.start()
+        try:
+            base = c.profiles["cpu_dev"].model_dump(mode="json")
+            base["execution"]["id"] = "cpu_auto"
+            base["execution"]["target_selector"]["backend"] = "auto"
+            c.profiles["cpu_auto"] = ExecutionProfile.model_validate(base)
+            sp = small(c, n=512)
+            runs = {}
+            for profile in ("cpu_auto", "cpu_dev"):
+                rid = c.create_run(sp, profile, 0)["id"]
+                await c.start_run(rid, start_paused=True)
+                await wait_for(lambda rid=rid: state_of(c, rid) == "paused", 30)
+                await c.control(rid, "step", {"count": 40})
+                runs[profile] = rid
+            assert c.run_summary(runs["cpu_auto"])["backend"] == "numba"
+            assert c.run_summary(runs["cpu_dev"])["backend"] == "numpy"
+            manifest = c.provenance(runs["cpu_auto"])["execution"]
+            assert manifest["backend"] == "numba" and manifest["backend_versions"]["numba"]
+            cmp = c.create_comparison([runs["cpu_dev"], runs["cpu_auto"]], name="backends")
+            points = c.comparison_report(cmp["id"])["divergence"]["points"]
+            assert [p["tick"] for p in points] == [0, 10, 20, 30, 40]
+            assert all(p["distance_to_first"] == [0, 0] for p in points)
+            assert (await c.verify_replay(runs["cpu_auto"]))["status"] == "verified"
+        finally:
+            await c.shutdown()
+
+    arun(main)

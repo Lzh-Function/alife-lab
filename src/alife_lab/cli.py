@@ -82,7 +82,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         "optional_backends",
         json.dumps(optional)
         if optional
-        else "none installed (JAX/PyTorch/CuPy/MuJoCo are Phase 3+)",
+        else "none installed (numba: uv sync --extra fast; GPU runtimes are later phases)",
         required=False,
     )
     git = git_info()

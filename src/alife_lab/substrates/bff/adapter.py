@@ -166,7 +166,8 @@ BFF_MANIFEST = PluginManifest(
         supports_deterministic_cpu=True,
         intervention_types=("inject_program", "zero_programs"),
     ),
-    backends=("numpy",),
+    # Order = preference for backend "auto"; both are bit-identical (tested).
+    backends=("numba", "numpy"),
     gpu_required=False,
     serialize_version=SERIALIZE_VERSION,
     metrics=_METRICS,
@@ -211,6 +212,14 @@ def _slots(payload: dict[str, Any], n: int) -> list[int]:
 
 
 class BFFAdapter:
+    backend: str = "numpy"
+
+    def set_backend(self, backend: str) -> None:
+        """Execution-only choice; never changes results (backends are bit-identical)."""
+        if backend not in BFF_MANIFEST.backends:
+            raise ValueError(f"unsupported bff backend {backend!r}")
+        self.backend = backend
+
     @property
     def manifest(self) -> PluginManifest:
         return BFF_MANIFEST
@@ -229,6 +238,7 @@ class BFFAdapter:
             exp.dynamics.mutation_prob,
             exp.dynamics.step_limit,
             exp.dynamics.variant,
+            backend=self.backend,
         )
         state.tick += 1
         return state

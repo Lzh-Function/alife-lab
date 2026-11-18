@@ -113,3 +113,7 @@ pyarrow loaded: worker ≈113 MB (was ≈53 MB), API process ≈103 MB (was ≈3
 600 particles, 4 types, 200² torus: ≈690–780 ticks/s (adapter step incl. cell-list search).
 Sweep `particle_life_sorting` (12 runs × 800 ticks, 4 runs in parallel): 6.9 s wall.
 Worker RSS with lazy pyarrow import, short interactive run: 53.5 MB.
+
+### BFF backends (2026-11-18)
+See ADR 0017: 4096 programs — NumPy 210 ms/epoch, Numba 4.7 ms (1 thread), CuBFF CPU 2.0 ms
+(1 thread); 131 072 programs — NumPy 8.3 s, Numba 184 ms (1 thread) / 119 ms (24 threads).

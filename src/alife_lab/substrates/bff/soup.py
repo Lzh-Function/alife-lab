@@ -64,15 +64,47 @@ def init_soup(params_seed: int, num_programs: int, zero: bool = False) -> npt.ND
     return (values & np.uint64(0xFF)).astype(np.uint8).reshape(num_programs, HALF)
 
 
-def shuffle_indices(params_seed: int, epoch: int, num_programs: int) -> npt.NDArray[np.int64]:
-    n = num_programs
-    seeds = np.array([derived_seed(params_seed, epoch * n + i) for i in range(n)], dtype=np.uint64)
-    js = splitmix64(seeds) % (np.arange(n, dtype=np.uint64) + np.uint64(1))
-    s = np.arange(n, dtype=np.int64)
-    for i in range(n - 1, -1, -1):  # sequential Fisher-Yates swaps (order matters)
+def derived_seeds(params_seed: int, xs: U64) -> U64:
+    """Vectorised ``seed(x) = SM(SM(params_seed) ^ SM(x))`` for an array of x."""
+    return splitmix64(np.uint64(splitmix64_int(params_seed)) ^ splitmix64(xs))
+
+
+def _fisher_yates(js: npt.NDArray[np.int64]) -> npt.NDArray[np.int64]:
+    s = np.arange(js.size, dtype=np.int64)
+    for i in range(js.size - 1, -1, -1):  # sequential swaps (order matters)
         j = int(js[i])
         s[i], s[j] = s[j], s[i]
     return s
+
+
+_FY_JIT: Any = None
+_FY_TRIED = False
+
+
+def _fisher_yates_fast(js: npt.NDArray[np.int64]) -> npt.NDArray[np.int64]:
+    """JIT-compiled swap loop if numba is installed (imported lazily, identical result)."""
+    global _FY_JIT, _FY_TRIED
+    if not _FY_TRIED:
+        _FY_TRIED = True
+        try:
+            from numba import njit
+
+            _FY_JIT = njit(cache=True)(_fisher_yates)
+        except ImportError:  # pragma: no cover
+            _FY_JIT = None
+    if _FY_JIT is None:
+        return _fisher_yates(js)
+    result: npt.NDArray[np.int64] = _FY_JIT(js)
+    return result
+
+
+def shuffle_indices(params_seed: int, epoch: int, num_programs: int) -> npt.NDArray[np.int64]:
+    n = num_programs
+    with np.errstate(over="ignore"):
+        xs = np.uint64((epoch * n) & MASK64) + np.arange(n, dtype=np.uint64)
+    seeds = derived_seeds(params_seed, xs)
+    js = (splitmix64(seeds) % (np.arange(n, dtype=np.uint64) + np.uint64(1))).astype(np.int64)
+    return _fisher_yates_fast(js)
 
 
 def mutate_pairs(
@@ -105,6 +137,7 @@ def run_epoch(
     mutation_prob: int,
     step_limit: int = STEP_LIMIT,
     variant: Variant = "bff_noheads",
+    backend: str = "numpy",
 ) -> dict[str, Any]:
     """One CuBFF epoch in place on ``soup`` (N, 64). Returns per-epoch statistics."""
     n = soup.shape[0]
@@ -114,7 +147,14 @@ def run_epoch(
     p1, p2 = s[0::2], s[1::2]
     tapes = np.concatenate([soup[p1], soup[p2]], axis=1)
     mutated = mutate_pairs(tapes, params_seed, epoch, n, mutation_prob)
-    ops = evaluate_batch(tapes, step_limit, variant)
+    if backend == "numba":
+        from alife_lab.substrates.bff.vm_numba import evaluate_batch_numba
+
+        ops = evaluate_batch_numba(tapes, step_limit, variant)
+    elif backend == "numpy":
+        ops = evaluate_batch(tapes, step_limit, variant)
+    else:
+        raise ValueError(f"unknown BFF backend {backend!r}")
     soup[p1] = tapes[:, :HALF]
     soup[p2] = tapes[:, HALF:]
     return {

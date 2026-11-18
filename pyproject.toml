@@ -16,6 +16,10 @@ dependencies = [
     "brotli>=1.1",
 ]
 
+[project.optional-dependencies]
+# Optional JIT backend for BFF (bit-identical to the NumPy backend; selected automatically).
+fast = ["numba>=0.68"]
+
 [project.scripts]
 alife = "alife_lab.cli:main"
 
@@ -70,5 +74,5 @@ plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
 # pyarrow ships without type information.
-module = ["pyarrow", "pyarrow.*", "brotli"]
+module = ["pyarrow", "pyarrow.*", "brotli", "numba", "numba.*"]
 ignore_missing_imports = true
