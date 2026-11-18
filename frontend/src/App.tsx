@@ -5,16 +5,18 @@ import { Library } from "./components/Library";
 import { LiveLab } from "./components/LiveLab";
 import { Diagnostics } from "./components/Diagnostics";
 import { CompareView, ComparisonList } from "./components/CompareView";
+import { SweepDetail, SweepList } from "./components/Sweeps";
 
-type View = "catalog" | "library" | "lab" | "compare" | "diagnostics";
-const VIEWS = ["catalog", "library", "lab", "compare", "diagnostics"] as const;
+type View = "catalog" | "library" | "lab" | "compare" | "sweeps" | "diagnostics";
+const VIEWS = ["catalog", "library", "lab", "compare", "sweeps", "diagnostics"] as const;
 
-function parseHash(): { view: View; runId: string | null; comparisonId: string | null } {
+function parseHash(): { view: View; runId: string | null; comparisonId: string | null; sweepId: string | null } {
   const parts = window.location.hash.replace(/^#\/?/, "").split("/");
   const view = VIEWS.find((v) => v === parts[0]) ?? "catalog";
   const runId = parts[1] && /^run_[0-9a-f]{16}$/.test(parts[1]) ? parts[1] : null;
   const comparisonId = parts[1] && /^cmp_[0-9a-f]{16}$/.test(parts[1]) ? parts[1] : null;
-  return { view, runId, comparisonId };
+  const sweepId = parts[1] && /^swp_[0-9a-f]{16}$/.test(parts[1]) ? parts[1] : null;
+  return { view, runId, comparisonId, sweepId };
 }
 
 export function App() {
@@ -35,6 +37,9 @@ export function App() {
   const open = (runId: string) => go("lab", runId);
   const openComparison = (id: string) => {
     window.location.hash = `/compare/${id}`;
+  };
+  const openSweep = (id: string) => {
+    window.location.hash = `/sweeps/${id}`;
   };
 
   return (
@@ -70,6 +75,8 @@ export function App() {
           ) : (
             <ComparisonList onOpen={openComparison} />
           ))}
+        {route.view === "sweeps" &&
+          (route.sweepId ? <SweepDetail key={route.sweepId} sweepId={route.sweepId} /> : <SweepList onOpen={openSweep} />)}
         {route.view === "diagnostics" && <Diagnostics />}
       </main>
     </div>

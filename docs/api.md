@@ -37,3 +37,12 @@ dropped_previews`) + payload. Codec `bitpack1` = `numpy.packbits` (row-major, MS
   `world_width`, `world_height`; float32 LE `[x, y, vx, vy]` per particle) for Boids.
 - Comparison reports: `divergence.metric` (`hamming` | `rms_position_distance`) and
   `points[].distance_to_first`.
+
+## Sweeps
+| Method | Path | Notes |
+|---|---|---|
+| POST | /sweeps/validate | body = SweepSpec; returns the plan (conditions, member spec hashes) |
+| POST | /sweeps | creates and queues all member runs; `Idempotency-Key` supported |
+| GET | /sweeps, /sweeps/{id} | progress by run state |
+| GET | /sweeps/{id}/report | per-condition summaries, comparisons (Δ mean, bootstrap CI, Cliff's δ, permutation p, Holm), per-run endpoint values, exclusions, time course, note codes |
+| POST | /sweeps/{id}/cancel | cancels non-terminal members |

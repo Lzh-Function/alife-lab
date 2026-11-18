@@ -24,6 +24,7 @@ from alife_lab.api.security import AccessPolicy, BodyTooLarge, SecurityMiddlewar
 from alife_lab.core.hashing import sha256_json
 from alife_lab.core.spec import ExperimentSpec
 from alife_lab.core.states import RunState
+from alife_lab.core.sweep import SweepSpec
 from alife_lab.execution.executors import Executor
 from alife_lab.execution.probe import probe_system
 from alife_lab.service.controller import Controller, ControllerError, Subscriber
@@ -527,6 +528,69 @@ def create_app(
     @app.post(f"{API}/experiments/{{run_id}}/replay/verify")
     async def replay_verify(run_id: str) -> dict[str, Any]:
         return envelope(await ctl().verify_replay(run_id))
+
+    # ------------------------------------------------------------- sweeps
+
+    def _sweep_spec(raw: dict[str, Any]) -> SweepSpec:
+        try:
+            return SweepSpec.model_validate(raw)
+        except ValidationError as exc:
+            raise ControllerError(_format_validation(exc), "invalid_sweep") from exc
+
+    def _plan_json(plan: dict[str, Any]) -> dict[str, Any]:
+        return {
+            **{k: v for k, v in plan.items() if k != "members"},
+            "members": [
+                {
+                    "condition_index": m["condition_index"],
+                    "condition_label": m["condition_label"],
+                    "seed": m["seed"],
+                    "spec_hash": m["spec"].digest(),
+                }
+                for m in plan["members"]
+            ],
+        }
+
+    @app.post(f"{API}/sweeps/validate")
+    async def sweep_validate(body: dict[str, Any]) -> dict[str, Any]:
+        return envelope(_plan_json(ctl().sweeps.plan(_sweep_spec(body))))
+
+    @app.post(f"{API}/sweeps", status_code=201)
+    async def sweep_create(
+        body: dict[str, Any],
+        idempotency_key: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        c = ctl()
+        spec = _sweep_spec(body)
+        request_hash = spec.digest()
+        if idempotency_key is not None:
+            if not _IDEMPOTENCY_RE.match(idempotency_key):
+                raise ControllerError("invalid Idempotency-Key")
+            previous = c.idempotency_lookup(idempotency_key, "sweep", request_hash)
+            if previous is not None:
+                return envelope(
+                    {**c.sweeps.summary(previous["sweep_id"]), "idempotent_replay": True}
+                )
+        result = await c.sweeps.create(spec, author="browser_or_api")
+        if idempotency_key is not None:
+            c.idempotency_store(idempotency_key, "sweep", request_hash, {"sweep_id": result["id"]})
+        return envelope(result)
+
+    @app.get(f"{API}/sweeps")
+    async def sweep_list() -> dict[str, Any]:
+        return envelope(ctl().sweeps.list_sweeps())
+
+    @app.get(f"{API}/sweeps/{{sweep_id}}")
+    async def sweep_get(sweep_id: str) -> dict[str, Any]:
+        return envelope(ctl().sweeps.summary(sweep_id))
+
+    @app.get(f"{API}/sweeps/{{sweep_id}}/report")
+    async def sweep_report(sweep_id: str) -> dict[str, Any]:
+        return envelope(await run_in_threadpool(ctl().sweeps.report, sweep_id))
+
+    @app.post(f"{API}/sweeps/{{sweep_id}}/cancel")
+    async def sweep_cancel(sweep_id: str) -> dict[str, Any]:
+        return envelope(await ctl().sweeps.cancel(sweep_id))
 
     @app.post(f"{API}/comparisons", status_code=201)
     async def create_comparison(body: ComparisonRequest) -> dict[str, Any]:

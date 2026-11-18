@@ -15,8 +15,7 @@ from typing import Any
 from alife_lab import __version__
 
 PLANNED_COMMANDS = (
-    "runs reproduce / report / export / sweep / discoveries / assays / benchmark "
-    "(planned, Phase 2+)"
+    "runs reproduce / report / export / discoveries / assays / benchmark (planned, Phase 2+)"
 )
 
 
@@ -477,6 +476,77 @@ def cmd_compare(args: argparse.Namespace) -> int:
 
 
 # --------------------------------------------------------------------------- #
+# sweep (headless)
+# --------------------------------------------------------------------------- #
+
+
+def cmd_sweep(args: argparse.Namespace) -> int:
+    import yaml
+
+    from alife_lab.core.sweep import SweepSpec
+    from alife_lab.execution.executors import LocalExecutor
+    from alife_lab.service.controller import Controller, ControllerError, ControllerLocked
+    from alife_lab.service.settings import load_settings
+
+    with Path(args.sweep).open("r", encoding="utf-8") as handle:
+        spec = SweepSpec.model_validate(yaml.safe_load(handle))
+
+    async def main() -> int:
+        try:
+            controller = Controller(load_settings(), LocalExecutor())
+        except ControllerLocked as exc:
+            print(f"{exc}. Use POST /api/v1/sweeps on the running server.", file=sys.stderr)
+            return 2
+        await controller.start()
+        try:
+            plan = controller.sweeps.plan(spec)
+            print(
+                f"sweep {spec.sweep.name!r} ({spec.digest()[:12]}): {plan['runs']} runs, "
+                f"{len(plan['conditions'])} conditions x {len(spec.sweep.seeds)} seeds, "
+                f"{plan['total_ticks']} ticks in total"
+            )
+            for c in plan["conditions"]:
+                print(f"  condition {c['index']}: {c['label']} {c['assignments']}")
+            if args.dry_run:
+                return 0
+            summary = await controller.sweeps.create(spec, author="cli")
+            sid = summary["id"]
+            while controller.sweeps.summary(sid)["state"] == "running":
+                await asyncio.sleep(0.5)
+            report = controller.sweeps.report(sid)
+            if args.json:
+                _print_json(report)
+                return 0
+            print(f"{sid}: {report['sweep']['state']}  endpoint {report['endpoint']}")
+            for cond in report["conditions"]:
+                s = cond["summary"]
+                ref = " (reference)" if cond["is_reference"] else ""
+                mean = "-" if s["mean"] is None else f"{s['mean']:.4g}"
+                sd = "-" if s["sd"] is None else f"{s['sd']:.3g}"
+                print(f"  {cond['label']}{ref}: n={s['n']} mean={mean} sd={sd}")
+            for comp in report["comparisons"]:
+                ci = comp["mean_difference_ci95"]
+                ci_s = f"[{ci[0]:.4g}, {ci[1]:.4g}]" if ci else "-"
+                print(
+                    f"  {comp['condition']} - {comp['reference']}: "
+                    f"diff={comp['mean_difference']:.4g} "
+                    f"CI95={ci_s} cliffs_delta={comp['cliffs_delta']:.3g} "
+                    f"p={comp['permutation']['p_value']:.4g} ({comp['permutation']['method']}) "
+                    f"p_holm={comp['p_value_holm']:.4g}"
+                )
+            for note in report["notes"]:
+                print(f"  note: {note['text']}")
+            return 0
+        except ControllerError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        finally:
+            await controller.shutdown()
+
+    return asyncio.run(main())
+
+
+# --------------------------------------------------------------------------- #
 # backup
 # --------------------------------------------------------------------------- #
 
@@ -575,6 +645,12 @@ def build_parser() -> argparse.ArgumentParser:
     rv.add_argument("run_id")
     rv.set_defaults(func=cmd_replay_verify)
     p.set_defaults(func=cmd_runs)
+
+    p = sub.add_parser("sweep", help="run conditions x seeds headless and report statistics")
+    p.add_argument("sweep", help="sweep YAML (configs/sweeps/*.yaml)")
+    p.add_argument("--dry-run", action="store_true", help="validate and show the plan only")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_sweep)
 
     p = sub.add_parser("backup", help="independent backup / verification / restore")
     bsub = p.add_subparsers(dest="backup_cmd", required=True)

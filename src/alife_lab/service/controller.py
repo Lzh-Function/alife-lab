@@ -156,6 +156,9 @@ class Controller:
         self.started_at = time.time()
         self.environment = environment_record()
         self.target = executor.probe()
+        from alife_lab.service.sweeps import SweepService
+
+        self.sweeps = SweepService(self)
         self._closed = False
         self._db_closed = False
         self._replay_pool: ProcessPoolExecutor | None = None

@@ -1,0 +1,20 @@
+# Ablation of the alignment rule (negative control for flocking order).
+schema_version: 1
+sweep:
+  name: boids_alignment_ablation
+  base_preset: boids_flocking
+  overrides:
+    initialization: {count: 300}
+    runner: {max_steps: 600, checkpoint_interval: 600}
+  seeds: [0, 1, 2, 3, 4, 5]
+  factors:
+    - path: dynamics.alignment_weight
+      values: [0.05, 0.0]
+      labels: [alignment, no_alignment]
+  reference_condition: 1
+  endpoint: {metric: polarization, at: final}
+  design: confirmatory
+  hypothesis: >-
+    With alignment_weight = 0.05, final polarization after 600 ticks is higher than with
+    alignment_weight = 0 (300 boids, 200x200 torus); one value per seeded run.
+  profile_id: cpu_dev

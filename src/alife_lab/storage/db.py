@@ -174,6 +174,30 @@ MIGRATIONS: list[tuple[int, str]] = [
         CREATE INDEX runs_parent ON runs(parent_run_id);
         """,
     ),
+    (
+        3,
+        """
+        CREATE TABLE sweeps (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            design TEXT NOT NULL,
+            spec_hash TEXT NOT NULL,
+            spec_json TEXT NOT NULL,
+            state TEXT NOT NULL,
+            created_at REAL NOT NULL,
+            finished_at REAL
+        );
+        CREATE TABLE sweep_members (
+            sweep_id TEXT NOT NULL REFERENCES sweeps(id),
+            run_id TEXT NOT NULL REFERENCES runs(id),
+            condition_index INTEGER NOT NULL,
+            condition_label TEXT NOT NULL,
+            seed INTEGER NOT NULL,
+            PRIMARY KEY (sweep_id, run_id)
+        );
+        CREATE INDEX sweep_members_run ON sweep_members(run_id);
+        """,
+    ),
 ]
 
 

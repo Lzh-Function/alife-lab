@@ -315,3 +315,39 @@ def test_boids_replay_frames_keep_particle_codec(client: TestClient) -> None:
         headers=H,
     )
     assert r.status_code == 400  # conway intervention kind is not offered by boids
+
+
+def test_sweep_api(client: TestClient) -> None:
+    spec = {
+        "schema_version": 1,
+        "sweep": {
+            "name": "api_sweep",
+            "base_preset": "conway_random_soup",
+            "overrides": {
+                "world": {"width": 32, "height": 32},
+                "runner": {"max_steps": 50, "checkpoint_interval": 50},
+            },
+            "seeds": [1, 2],
+            "factors": [{"path": "initialization.density", "values": [0.2, 0.4]}],
+            "endpoint": {"metric": "alive_cell_count"},
+        },
+    }
+    plan = data(client.post("/api/v1/sweeps/validate", json=spec, headers=H))
+    assert plan["runs"] == 4 and len(plan["members"]) == 4
+    assert len({m["spec_hash"] for m in plan["members"]}) == 4
+    key = {"Idempotency-Key": "sweep-" + uuid.uuid4().hex}
+    created = data(client.post("/api/v1/sweeps", json=spec, headers={**H, **key}))
+    again = data(client.post("/api/v1/sweeps", json=spec, headers={**H, **key}))
+    assert again["id"] == created["id"] and again["idempotent_replay"] is True
+    sid = created["id"]
+    end = time.time() + 30
+    while data(client.get(f"/api/v1/sweeps/{sid}"))["state"] == "running" and time.time() < end:
+        time.sleep(0.05)
+    report = data(client.get(f"/api/v1/sweeps/{sid}/report"))
+    assert report["sweep"]["state"] == "completed"
+    assert [c["summary"]["n"] for c in report["conditions"]] == [2, 2]
+    assert report["comparisons"][0]["permutation"]["method"] == "exact"
+    assert any(s["id"] == sid for s in data(client.get("/api/v1/sweeps")))
+    bad = {**spec, "sweep": {**spec["sweep"], "seeds": [1, 1]}}
+    assert client.post("/api/v1/sweeps/validate", json=bad, headers=H).status_code == 400
+    assert client.get("/api/v1/sweeps/swp_nope").status_code == 404

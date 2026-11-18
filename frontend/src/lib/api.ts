@@ -199,6 +199,60 @@ export interface ReplayReport {
   segments: Array<{ from_tick: number; to_tick: number; ok: boolean; distance_metric?: string; distance?: number | null; interventions_replayed?: number; reason?: string }>;
 }
 
+export interface SweepSummary {
+  id: string;
+  name: string;
+  design: "exploratory" | "confirmatory";
+  state: string;
+  spec_hash: string;
+  spec: { sweep: Record<string, unknown> & { hypothesis?: string | null; endpoint: { metric: string; at: string | number } } };
+  created_at: number;
+  finished_at: number | null;
+  progress: { total: number; by_state: Record<string, number> };
+  members: Array<{ run_id: string; condition_index: number; condition_label: string; seed: number; state: string; tick: number }>;
+}
+
+export interface SweepComparison {
+  condition_index: number;
+  condition: string;
+  reference: string;
+  mean_difference: number | null;
+  mean_difference_ci95: [number, number] | null;
+  cliffs_delta: number | null;
+  permutation: { p_value: number | null; method: string; permutations: number };
+  p_value_holm: number | null;
+  n_treatment: number;
+  n_reference: number;
+}
+
+export interface SweepReport {
+  sweep: { id: string; name: string; design: string; state: string; spec_hash: string; progress: SweepSummary["progress"] };
+  hypothesis: string | null;
+  endpoint: { metric: string; at: string | number };
+  conditions: Array<{
+    index: number;
+    label: string;
+    assignments: Record<string, unknown>;
+    is_reference: boolean;
+    summary: { n: number; mean: number | null; sd: number | null; median: number | null; min: number | null; max: number | null };
+    values: number[];
+  }>;
+  comparisons: SweepComparison[];
+  per_run: Array<{ run_id: string; condition_index: number; condition_label: string; seed: number; state: string; endpoint_value: number | null; endpoint_tick: number | null }>;
+  excluded: Array<{ run_id: string; reason: string }>;
+  timecourse: Array<{ condition_index: number; ticks: number[]; mean: Array<number | null>; sd: Array<number | null>; n: number[] }>;
+  notes: Array<{ code: string; text: string; count?: number }>;
+}
+
+export interface SweepPlan {
+  sweep_hash: string;
+  substrate: string;
+  runs: number;
+  total_ticks: number;
+  conditions: Array<{ index: number; label: string; assignments: Record<string, unknown> }>;
+  warnings: string[];
+}
+
 export function sessionToken(): string {
   if (cachedToken !== null) return cachedToken;
   const meta = document.querySelector('meta[name="alife-token"]');
@@ -251,7 +305,8 @@ export function newCommandId(): string {
 export const api = {
   presets: () => request<Preset[]>("GET", "/presets"),
   profiles: () => request<ProfileInfo[]>("GET", "/execution-profiles"),
-  substrates: () => request<Array<{ slug: string; plugin_version: string; display_name_key: string; backends: string[] }>>("GET", "/substrates"),
+  substrates: () =>
+    request<Array<{ slug: string; plugin_version: string; display_name_key: string; backends: string[]; metrics: Array<{ id: string; display_name_key: string; unit: string }> }>>("GET", "/substrates"),
   resources: () => request<Record<string, unknown>>("GET", "/system/resources"),
   capabilities: () => request<Record<string, unknown>>("GET", "/system/capabilities"),
   runs: () => request<RunListItem[]>("GET", "/experiments"),
@@ -301,6 +356,12 @@ export const api = {
   verifyReplay: (id: string) => request<ReplayReport>("POST", `/experiments/${id}/replay/verify`),
   forkAtTick: (id: string, tick: number) =>
     request<RunSummary>("POST", `/experiments/${id}/fork`, { tick, auto_start: true, start_paused: true }, { "Idempotency-Key": `fork-${newCommandId()}` }),
+  sweeps: () => request<Array<Pick<SweepSummary, "id" | "name" | "design" | "state" | "created_at" | "finished_at">>>("GET", "/sweeps"),
+  sweep: (id: string) => request<SweepSummary>("GET", `/sweeps/${id}`),
+  sweepReport: (id: string) => request<SweepReport>("GET", `/sweeps/${id}/report`),
+  validateSweep: (spec: unknown) => request<SweepPlan>("POST", "/sweeps/validate", spec),
+  createSweep: (spec: unknown) => request<SweepSummary>("POST", "/sweeps", spec, { "Idempotency-Key": `sweep-${newCommandId()}` }),
+  cancelSweep: (id: string) => request<SweepSummary>("POST", `/sweeps/${id}/cancel`),
   checkpoints: (id: string) => request<Checkpoint[]>("GET", `/experiments/${id}/checkpoints`),
   events: (id: string, sinceSeq = 0) => request<RunEvent[]>("GET", `/experiments/${id}/events?since_seq=${sinceSeq}`),
   metrics: (id: string) => request<{ rows: MetricRow[]; total_points: number; stride: number }>("GET", `/experiments/${id}/metrics?max_points=2000`),
