@@ -17,7 +17,8 @@ published later. JAX is also not a dependency of the CPU-only baseline.
 - Rules are explicit or sampled from the official ranges with NumPy PCG64; the realised rule is
   part of the checkpoint and is validated on load.
 - `field_u8` gains a `channels` header field; multi-channel fields are shown as RGB.
-- A JAX comparison is optional and runs only in a separate environment with the user's approval.
+- The JAX comparison runs only in a separate environment (`scripts/compare_flow_lenia_upstream.py`);
+  run with the user's approval on 2026-11-18: float64 agreement ≤ 1.1e-13 after 200 steps.
 
 ## Consequences
 - Results are reproducible on CPU without JAX but are not bitwise comparable with upstream runs.

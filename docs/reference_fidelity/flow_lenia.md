@@ -44,10 +44,26 @@
 | `conn_from_matrix` order; seeded rule sampling within the official ranges | pass |
 | Checkpoint round trip ⇒ bitwise identical continuation; checkpoint of another rule rejected | pass |
 | Worker restart + channel paint + replay verification across a periodic checkpoint | `verified` |
+| Official JAX code in float64, same rule and initial state (wall and torus, 200 steps) | max diff ≤ 1.1e-13 |
 
-**Not yet verified:** side-by-side comparison with the official JAX code (needs JAX, Equinox
-and jaxtyping in a separate environment and running the downloaded code — pending the user's
-approval). Expected outcome is agreement within float32 tolerance for the same explicit rule.
+## Upstream comparison (scripts/compare_flow_lenia_upstream.py, run 2026-11-18)
+The authors' JAX code (commit above, unmodified, only added to `sys.path`) was run in a separate
+environment (jax 0.12.0.1 CPU, equinox 0.13.8, jaxtyping 0.3.11, NumPy 2.5.4) with the rule
+realised by this adapter injected via `eqx.tree_at` and the same initial state. 64², 3 channels,
+official example connectivity (12 kernels), 200 steps, state compared every 10 steps:
+
+| boundary / seed | upstream precision | max abs difference (any tick) | at tick 200 | upstream relative mass change |
+|---|---|---|---|---|
+| wall / 0 | float64 (`jax_enable_x64`) | 1.0e-13 | 1.0e-13 | 1.6e-14 |
+| wall / 0 | float32 (default) | 3.2e-4 | 3.2e-4 | −3.0e-5 |
+| torus / 2 | float64 | 1.1e-13 | 1.1e-13 | 1.6e-14 |
+| torus / 2 | float32 | 4.1e-4 | 3.7e-4 | −3.0e-5 |
+
+With matching precision the implementations agree to rounding level (values up to ~1.5), which
+confirms the transcription of the update rule including the Sobel convention, α, clipping and
+the overlap formula. The float32 gap grows slowly with time (sensitivity of the dynamics to
+rounding) and float32 upstream loses ~3e-5 of the mass in 200 steps; float64 conserves it.
+Agreement is not bitwise (different FFT libraries and summation order).
 
 ## Negative control
 `flow_lenia_diffusion_control`: θ_A = 0.001 makes α = 1 wherever mass exists, so the flow is
