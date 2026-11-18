@@ -16,7 +16,7 @@
 
 | 区分 | 内容 |
 |---|---|
-| 実装済み | `alife doctor`／`alife serve`、Fork／ペア分岐（対照・処置）／状態比較（Hamming距離）、タイムライン（決定論的リプレイ・リプレイ検証・任意tickからの分岐）、FastAPI + SQLite（WAL、Controller単一ライター）、LocalExecutor（spawnワーカー）＋FakeExecutor、ArtifactStore（local_fs、sha256＋atomic publish）、CPU Conway（NumPy＋スカラーoracle）、Boids（cell-list近傍探索＋O(N²) oracle、exploratoryのみ）、React Web GUI（作成・観察・再生/一時停止・1 tick・ブラシ・チェックポイント・再起動後の復元） |
+| 実装済み | `alife doctor`／`alife serve`、サーバー強制終了からの復旧（staging隔離・未索引checkpointの報告）、バックアップ／検証／復元（`alife backup`）、Fork／ペア分岐（対照・処置）／状態比較（Hamming距離）、タイムライン（決定論的リプレイ・リプレイ検証・任意tickからの分岐）、FastAPI + SQLite（WAL、Controller単一ライター）、LocalExecutor（spawnワーカー）＋FakeExecutor、ArtifactStore（local_fs、sha256＋atomic publish）、CPU Conway（NumPy＋スカラーoracle）、Boids（cell-list近傍探索＋O(N²) oracle、exploratoryのみ）、React Web GUI（作成・観察・再生/一時停止・1 tick・ブラシ・チェックポイント・再起動後の復元） |
 | 部分実装 | CLI（`run`, `runs list/inspect/verify/fork/replay-verify`, `compare`, `targets`, `presets`, `substrates`）、メトリクスはJSONL（Parquetは未導入） |
 | 計画のみ | Particle Life、seed間の統計比較、remote/multi-GPU/cluster executor、Lenia/BFF等のPhase 3以降の基質、GPU backend |
 

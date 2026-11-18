@@ -71,3 +71,34 @@ idle for these element-wise/sort/bincount operations. Parallelism today is only 
 
 Browser E2E (200 boids, cpu_dev, paced at 60 ticks/s): 57.9 ticks/s measured, worker RSS
 53.3 MB.
+
+### Soak tests (2026-11-18, `scripts/soak.py`, isolated server, single core per worker)
+Two runs in parallel: Conway 512² random soup at unlimited speed and Boids 1000 (noise 0.15)
+paced at 60 ticks/s, `local_interactive` profile, one WebSocket client force-reconnected every
+60 s, resources sampled every 30 s. Other tests were running on the machine at times.
+
+**30 minutes** (60 samples):
+
+| t (s) | API server RSS | Conway ticks/s · worker RSS | Boids ticks/s · worker RSS | runs dir | WS reconnects |
+|---|---|---|---|---|---|
+| 30 | 69.8 MB | 512 · 56.9 MB | 59.6 · 53.5 MB | 2 MB | 1 |
+| 390 | 77.8 MB | 526 · 56.9 MB | 60.0 · 53.5 MB | 27 MB | 7 |
+| 570 | 110.3 MB | 531 · 56.9 MB | 60.3 · 53.5 MB | 39 MB | 10 |
+| 1650 | 110.8 MB | 532 · 56.9 MB | 59.8 · 53.7 MB | 114 MB | 28 |
+
+Workers flat; throughput flat; 30 forced reconnects with 0 `resync_required`. The API server
+RSS stepped from ~78 to ~110 MB between 390 s and 570 s and was then flat (+0.5 MB over 20
+min). **Cause not identified**; the step did not reproduce in the 10-minute run below (69.9 →
+71.1 MB). The end-of-run verification of this run failed only because the script's HTTP
+timeout (60 s) was shorter than replay verification (fixed in the script).
+
+**10 minutes** (with end-of-run verification, data kept):
+
+| Check | Conway 512² | Boids 1000 |
+|---|---|---|
+| Ticks / metric rows | 316 997 | 35 997 |
+| Full metrics read (JSONL scan) | 0.72 s | 0.06 s |
+| Artifact checksums | ok | ok |
+| Replay verification | 10/15 segments exact (`partial`: 200k-tick budget), 361.5 s | 5/5 exact (`verified`, incl. RNG noise), 28.5 s |
+
+Disk growth: ~0.21 MB per 1000 Conway ticks (dominated by metrics JSONL).

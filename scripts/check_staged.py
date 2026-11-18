@@ -1,7 +1,8 @@
 """Pre-commit gate: block staged secrets, runtime artifacts and oversized files.
 
 Usage: uv run python scripts/check_staged.py   (exit 1 on any finding)
-Install as a hook: printf '#!/bin/sh\nuv run python scripts/check_staged.py\n' > .git/hooks/pre-commit
+Install as a hook:
+  printf '#!/bin/sh\nuv run python scripts/check_staged.py\n' > .git/hooks/pre-commit
 """
 
 from __future__ import annotations

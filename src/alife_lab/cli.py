@@ -476,6 +476,45 @@ def cmd_compare(args: argparse.Namespace) -> int:
     return 0
 
 
+# --------------------------------------------------------------------------- #
+# backup
+# --------------------------------------------------------------------------- #
+
+
+def cmd_backup(args: argparse.Namespace) -> int:
+    from alife_lab.service.settings import load_settings
+    from alife_lab.storage.backup import (
+        BackupError,
+        create_backup,
+        restore_backup,
+        verify_backup,
+    )
+
+    settings = load_settings()
+    try:
+        if args.backup_cmd == "create":
+            result = create_backup(settings.db_path, settings.runs_root, Path(args.dest))
+            _print_json(result)
+            return 0
+        if args.backup_cmd == "verify":
+            report = verify_backup(Path(args.path))
+            _print_json(report)
+            return 0 if report["ok"] else 1
+        if args.backup_cmd == "restore":
+            result = restore_backup(Path(args.path), Path(args.home), Path(args.runs_dir))
+            _print_json(result)
+            print(
+                f"restored. Use it with: ALIFE_HOME={args.home} ALIFE_RUNS_DIR={args.runs_dir} "
+                "uv run alife serve",
+                file=sys.stderr,
+            )
+            return 0
+    except BackupError as exc:
+        print(f"backup error: {exc}", file=sys.stderr)
+        return 1
+    return 2
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="alife",
@@ -536,6 +575,18 @@ def build_parser() -> argparse.ArgumentParser:
     rv.add_argument("run_id")
     rv.set_defaults(func=cmd_replay_verify)
     p.set_defaults(func=cmd_runs)
+
+    p = sub.add_parser("backup", help="independent backup / verification / restore")
+    bsub = p.add_subparsers(dest="backup_cmd", required=True)
+    bc = bsub.add_parser("create", help="full backup of the DB and all run artifacts")
+    bc.add_argument("--dest", required=True, help="directory outside ALIFE_HOME and runs dir")
+    bv = bsub.add_parser("verify", help="re-hash every file and check DB references")
+    bv.add_argument("path")
+    br = bsub.add_parser("restore", help="restore into empty directories (verifies first)")
+    br.add_argument("path")
+    br.add_argument("--home", required=True)
+    br.add_argument("--runs-dir", required=True)
+    p.set_defaults(func=cmd_backup)
 
     p = sub.add_parser("compare", help="state divergence of runs at common checkpoint ticks")
     p.add_argument("run_ids", nargs="+")

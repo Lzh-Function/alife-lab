@@ -186,6 +186,71 @@ class Controller:
                 {"reason": "controller_restart", "previous_state": row["state"]},
                 severity="warning",
             )
+        self.integrity = self._startup_integrity_scan()
+
+    def _startup_integrity_scan(self) -> dict[str, Any]:
+        """Detect leftovers of an unclean stop (e.g. kill -9 / power loss).
+
+        * ``*.staging`` files (interrupted publication) are moved to ``<run>/quarantine/``.
+        * Published checkpoint files that the controller never indexed are reported only:
+          they may contain interventions whose acknowledgement was never recorded, so they
+          are not used for restore.
+        * SQLite ``PRAGMA quick_check`` result is recorded.
+        """
+        check = self.db.one("PRAGMA quick_check")
+        db_ok = check is not None and check[0] == "ok"
+        quarantined: list[str] = []
+        unindexed: list[str] = []
+        root = self.store.root
+        for run_dir in sorted(p for p in root.iterdir() if p.is_dir()) if root.exists() else []:
+            run_id = run_dir.name
+            if self.db.one("SELECT id FROM runs WHERE id=?", (run_id,)) is None:
+                continue
+            for staging in sorted(run_dir.rglob("*.staging")):
+                if "quarantine" in staging.relative_to(run_dir).parts:
+                    continue
+                target = run_dir / "quarantine" / f"{staging.name}.{int(time.time())}"
+                target.parent.mkdir(parents=True, exist_ok=True)
+                os.replace(staging, target)
+                rel = staging.relative_to(run_dir).as_posix()
+                quarantined.append(f"{run_id}/{rel}")
+                self._emit_event(
+                    run_id,
+                    "staging_quarantined",
+                    {"file": rel, "moved_to": target.relative_to(run_dir).as_posix()},
+                    severity="warning",
+                )
+            ckpt_dir = run_dir / "checkpoints"
+            if ckpt_dir.is_dir():
+                indexed = {
+                    r["logical_path"]
+                    for r in self.db.all(
+                        "SELECT logical_path FROM checkpoints WHERE run_id=?", (run_id,)
+                    )
+                }
+                for f in sorted(ckpt_dir.glob("*.npz")):
+                    rel = f"checkpoints/{f.name}"
+                    if rel not in indexed:
+                        unindexed.append(f"{run_id}/{rel}")
+                        self._emit_event(
+                            run_id,
+                            "unindexed_checkpoint_found",
+                            {
+                                "file": rel,
+                                "policy": "kept on disk, not used for restore (its receipt "
+                                "was never recorded by the controller)",
+                            },
+                            severity="warning",
+                        )
+        report = {
+            "db_quick_check": "ok" if db_ok else (check[0] if check else "unknown"),
+            "quarantined_staging_files": quarantined,
+            "unindexed_checkpoints": unindexed,
+            "scanned_at": time.time(),
+        }
+        if not db_ok:
+            log.error("SQLite quick_check failed: %s", report["db_quick_check"])
+        return report
 
     async def shutdown(self) -> None:
         """Ask every worker to checkpoint and exit at its next safe boundary."""
@@ -223,6 +288,7 @@ class Controller:
             "api_contract_version": API_CONTRACT_VERSION,
             "started_at": self.started_at,
             "db_schema_version": self.db.schema_version,
+            "startup_integrity": getattr(self, "integrity", None),
             "target": self.target.to_json(),
             "active_jobs": len([j for j in self.jobs.values() if not j.finished]),
             "max_active_jobs": self.settings.max_active_jobs,
