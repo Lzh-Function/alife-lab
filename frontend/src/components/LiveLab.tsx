@@ -287,7 +287,7 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
             </button>
           </label>
         </div>
-        <ToolBar substrate={summary.substrate} tool={currentTool} setTool={setTool} disabled={!live} channels={summary.spec.experiment.dynamics?.channels ?? 1} />
+        <ToolBar substrate={summary.substrate} tool={currentTool} setTool={setTool} disabled={!live} channels={summary.spec.experiment.dynamics?.channels ?? summary.spec.experiment.dynamics?.n_ncas ?? 1} />
         {error && <p className="error" role="alert">{t("common.error")}: {error}</p>}
         {summary.restorable && <p className="notice">{t("lab.restorable")}</p>}
         {!live && !summary.restorable && <p className="muted">{t("lab.not_live")}</p>}
@@ -313,6 +313,14 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
           onShownTick={(v) => (shownReplayTick.current = v)}
         />
         {summary.substrate === "reaction_network" && <SpeciesChart rows={rows} experiment={summary.spec.experiment as Record<string, unknown>} />}
+        {summary.substrate === "pd_nca" && (
+          <SpeciesChart
+            rows={rows}
+            experiment={summary.spec.experiment as Record<string, unknown>}
+            keys={["territory.sun", ...Array.from({ length: summary.spec.experiment.dynamics?.n_ncas ?? 0 }, (_, k) => `territory.nca_${k}`)]}
+            titleKey="lab.territories"
+          />
+        )}
         {trace && <BffDebugger trace={trace} onClose={() => setTrace(null)} />}
         {assay && <AssayResult result={assay} onClose={() => setAssay(null)} />}
       </section>

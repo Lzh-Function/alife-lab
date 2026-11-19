@@ -55,7 +55,7 @@ export interface RunSummary {
   profile_id: string;
   spec_hash: string;
   profile_hash: string;
-  spec: { experiment: { world?: { width: number; height: number; boundary: string }; dynamics?: { channels?: number; species?: unknown[] }; runner: { max_steps: number; checkpoint_interval: number }; observations: { metrics: string[] } } };
+  spec: { experiment: { world?: { width: number; height: number; boundary: string }; dynamics?: { channels?: number; species?: unknown[]; n_ncas?: number }; runner: { max_steps: number; checkpoint_interval: number }; observations: { metrics: string[] } } };
   clock: { unit: string; value: number };
   epoch: number;
   ticks_per_second: number;

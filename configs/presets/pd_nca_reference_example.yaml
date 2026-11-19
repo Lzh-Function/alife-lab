@@ -1,0 +1,21 @@
+preset:
+  id: pd_nca_reference_example
+  scenario: pd_nca_dish.yaml
+  title_key: preset.pd_nca_reference_example.title
+  description_key: preset.pd_nca_reference_example.description
+  overrides:
+    experiment:
+      name: pd_nca_reference_example
+      world: {width: 50, height: 50}
+      dynamics:
+        numeric_policy: float32_jax   # run with the local_gpu profile
+        n_ncas: 15
+        cell_state_dim: 64
+        cell_hidden_dim: 4
+        model: {hidden_dim: 64, n_hidden_layers: 1, kernel_size: 9}
+        optimizer: sgd
+        learning_rate: 0.03
+  expected_observation: >-
+    The reference repository's example configuration (15 NCAs, 50 x 50, 64 state channels,
+    9 x 9 kernels, one residual layer, SGD 0.03). Heavy: use the local_gpu profile.
+  negative_control: preset pd_nca_frozen

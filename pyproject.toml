@@ -87,5 +87,9 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 # The numba extra is optional: with it installed the JIT decorators are typed, without it
 # numba is Any. Keep both environments (local dev with `--extra fast`, CPU-only CI) clean.
-module = ["alife_lab.substrates.bff.vm_numba", "alife_lab.substrates.nca.model"]
+module = [
+    "alife_lab.substrates.bff.vm_numba",
+    "alife_lab.substrates.nca.model",
+    "alife_lab.substrates.pd_nca.model",
+]
 disable_error_code = ["untyped-decorator", "unused-ignore"]

@@ -1,0 +1,14 @@
+preset:
+  id: pd_nca_no_competition
+  scenario: pd_nca_dish.yaml
+  title_key: preset.pd_nca_no_competition.title
+  description_key: preset.pd_nca_no_competition.description
+  overrides:
+    experiment:
+      name: pd_nca_no_competition
+      dynamics: {competition: uniform}
+  expected_observation: >-
+    Control (no competition): equal strengths for all alive entities in a cell. All NCAs
+    persist and share the dish with the sun (~0.49); aliveness no longer depends on the
+    weights, so the learning gradient is exactly zero.
+  negative_control: null

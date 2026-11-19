@@ -61,6 +61,7 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
       if (tool.mode === "spawn" || ((tool.mode === "add" || tool.mode === "remove") && ROW_DISPLAY_SUBSTRATES.has(substrate))) payload.count = tool.count;
       if (tool.mode === "paint") payload.value = tool.value ?? 1;
       if ((tool.mode === "paint" || tool.mode === "erase") && tool.channel != null) payload.channel = tool.channel;
+      if (substrate === "pd_nca" && tool.mode === "seed") payload.agent = tool.channel ?? 0;
       onIntervene(tool.mode, payload);
     },
     [tool, onIntervene, onInspect, substrate],
@@ -220,13 +221,13 @@ export function ToolBar({
       )}
       {d.channelSelect && channels > 1 && (
         <label className="inline">
-          {t("lab.tool.channel")}
+          {t(d.channelLabelKey ?? "lab.tool.channel")}
           <select
             data-testid="tool-channel"
             value={tool.channel == null ? "all" : String(tool.channel)}
             onChange={(e) => setTool({ ...tool, channel: e.target.value === "all" ? null : Number(e.target.value) })}
           >
-            <option value="all">{t("lab.tool.channel_all")}</option>
+            {!d.channelLabelKey && <option value="all">{t("lab.tool.channel_all")}</option>}
             {Array.from({ length: channels }, (_, i) => (
               <option key={i} value={i}>
                 {i}

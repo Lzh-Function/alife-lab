@@ -1,0 +1,32 @@
+# Petri Dish NCA (Sakana AI): four NCAs seeded at random cells of a 48 x 48 dish compete for
+# space against each other and the "sun" background while each keeps learning online to
+# maximise its own territory. Reimplementation in JAX (CPU by default).
+schema_version: 1
+experiment:
+  name: pd_nca_dish
+  mode: exploratory
+  substrate: pd_nca
+  seed: 0
+  world: {width: 48, height: 48, boundary: zero_pad}
+  dynamics:
+    clock_unit: epoch
+    numeric_policy: float32_jax_cpu
+    n_ncas: 4
+    n_seeds: 1
+    cell_state_dim: 16
+    cell_hidden_dim: 4
+    model: {hidden_dim: 32, n_hidden_layers: 0, kernel_size: 3, per_hid_upd: 1.0, alive_visible: true}
+    alive_threshold: 0.4
+    softmax_temp: 1.0
+    competition: cosine
+    learning: online
+    optimizer: sgd
+    learning_rate: 0.03
+    grad_clip_norm: 1.0
+    steps_before_update: 0
+    steps_per_update: 1
+    revert_on_extinction: false
+  runner: {max_steps: 100000, checkpoint_interval: 200}
+  observations:
+    metrics: [territory_loss, grad_norm, alive_ncas, territory_entropy, sun_fraction, reverted]
+    record_territories: true

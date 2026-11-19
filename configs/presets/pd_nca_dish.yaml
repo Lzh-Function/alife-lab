@@ -1,0 +1,10 @@
+preset:
+  id: pd_nca_dish
+  scenario: pd_nca_dish.yaml
+  title_key: preset.pd_nca_dish.title
+  description_key: preset.pd_nca_dish.description
+  overrides: {}
+  expected_observation: >-
+    Online learning: NCAs that survive the first steps expand and coexist (seeds 0-2, epoch
+    300: 3-4 NCAs alive, sun share 0.34-0.45, effective number of NCAs 2.9-3.8).
+  negative_control: preset pd_nca_frozen

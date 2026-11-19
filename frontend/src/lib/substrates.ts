@@ -4,12 +4,12 @@
 import type { Frame } from "./api";
 import { popcount } from "./api";
 
-export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network" | "nca_train" | "nca";
+export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network" | "nca_train" | "nca" | "pd_nca";
 
 /** Substrates rendered as continuous particles (vs. grids). */
 export const PARTICLE_SUBSTRATES = new Set(["boids", "particle_life"]);
 /** Substrates rendered as a continuous scalar field (codec field_u8). */
-export const FIELD_SUBSTRATES = new Set(["lenia", "flow_lenia", "gray_scott", "physarum", "reaction_network", "nca_train", "nca"]);
+export const FIELD_SUBSTRATES = new Set(["lenia", "flow_lenia", "gray_scott", "physarum", "reaction_network", "nca_train", "nca", "pd_nca"]);
 /** Non-spatial substrates whose display is a species x time image (rows = species). */
 export const ROW_DISPLAY_SUBSTRATES = new Set(["reaction_network"]);
 
@@ -45,6 +45,7 @@ export interface ToolDescriptor {
   count?: { min: number; max: number; initial: number };
   value?: { initial: number };
   channelSelect?: boolean;
+  channelLabelKey?: string; // label of the channel/agent selector
   noteKey: string;
 }
 
@@ -93,6 +94,13 @@ export const TOOLS: Record<SubstrateId, ToolDescriptor> = {
     radius: { min: 0, max: 0, step: 1, initial: 0 },
     count: { min: 1, max: 100000, initial: 100 },
     noteKey: "lab.tool.reaction_network_note",
+  },
+  pd_nca: {
+    modes: ["off", "inspect", "seed", "erase"],
+    radius: { min: 0, max: 16, step: 1, initial: 2 },
+    channelSelect: true,
+    channelLabelKey: "lab.tool.agent",
+    noteKey: "lab.tool.pd_nca_note",
   },
   nca_train: {
     modes: ["off", "inspect"],
@@ -290,6 +298,32 @@ export const FORM_FIELDS: Record<SubstrateId, FormField[]> = {
     ...RUNNER,
   ],
   nca: [{ path: "seed", labelKey: "form.seed", kind: "int", min: 0 }, ...RUNNER],
+  pd_nca: [
+    { path: "seed", labelKey: "form.seed", kind: "int", min: 0 },
+    { path: "world.width", labelKey: "form.width", kind: "int", min: 8, max: 256 },
+    { path: "world.height", labelKey: "form.height", kind: "int", min: 8, max: 256 },
+    { path: "dynamics.n_ncas", labelKey: "form.pd_nca.n_ncas", kind: "int", min: 1, max: 16 },
+    {
+      path: "dynamics.learning",
+      labelKey: "form.pd_nca.learning",
+      kind: "select",
+      options: [
+        { value: "online", labelKey: "form.pd_nca.learning.online" },
+        { value: "frozen", labelKey: "form.pd_nca.learning.frozen" },
+      ],
+    },
+    {
+      path: "dynamics.competition",
+      labelKey: "form.pd_nca.competition",
+      kind: "select",
+      options: [
+        { value: "cosine", labelKey: "form.pd_nca.competition.cosine" },
+        { value: "uniform", labelKey: "form.pd_nca.competition.uniform" },
+      ],
+    },
+    { path: "dynamics.learning_rate", labelKey: "form.nca.lr", kind: "float", min: 0.00001, max: 10, step: 0.001 },
+    ...RUNNER,
+  ],
   particle_life: [
     { path: "seed", labelKey: "form.seed", kind: "int", min: 0 },
     { path: "initialization.count", labelKey: "form.particles.count", kind: "int", min: 0, max: 10000 },

@@ -1,0 +1,13 @@
+preset:
+  id: pd_nca_frozen
+  scenario: pd_nca_dish.yaml
+  title_key: preset.pd_nca_frozen.title
+  description_key: preset.pd_nca_frozen.description
+  overrides:
+    experiment:
+      name: pd_nca_frozen
+      dynamics: {learning: frozen}
+  expected_observation: >-
+    Control (frozen weights): the same initial NCAs without learning; survivors vary strongly
+    with the seed (seeds 0-2, epoch 300: 0, 1 and 3 NCAs alive).
+  negative_control: null

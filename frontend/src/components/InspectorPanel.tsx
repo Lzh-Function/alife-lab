@@ -62,6 +62,11 @@ export interface Inspection {
   target_rgba?: number[] | null;
   last_step?: { loss?: number; steps?: number; lr?: number };
   parameter_count?: number;
+  // pd_nca
+  aliveness?: number[];
+  dominant?: number;
+  territories?: number[];
+  interaction?: Array<Array<number | null>>;
   // reaction_network
   time?: number;
   species?: Array<{ name: string; count: number; constant: boolean }>;
@@ -236,6 +241,36 @@ export function InspectorPanel({
                 {data.patch_mass?.toFixed(3)} (r = {data.query?.radius})
               </dd>
             </dl>
+          )}
+          {data.substrate === "pd_nca" && data.aliveness && (
+            <div data-testid="inspector-pdnca">
+              <p className="small">
+                ({data.query?.x}, {data.query?.y}) · {t("inspector.dominant")}: {data.dominant === 0 ? t("inspector.sun") : `NCA ${(data.dominant ?? 1) - 1}`}
+              </p>
+              <p className="small mono">
+                {t("inspector.aliveness")}: {data.aliveness.map((v) => v.toFixed(2)).join(" ")}
+              </p>
+              <p className="small mono">
+                {t("inspector.territories")}: {(data.territories ?? []).map((v) => (v * 100).toFixed(1) + "%").join(" ")}
+              </p>
+              {data.interaction && (
+                <table className="matrix small" data-testid="inspector-interaction">
+                  <caption className="muted">{t("inspector.interaction")}</caption>
+                  <tbody>
+                    {data.interaction.map((row, a) => (
+                      <tr key={a}>
+                        <th>{a === 0 ? "☀" : a - 1}</th>
+                        {row.map((v, b) => (
+                          <td key={b} style={{ background: v == null ? undefined : v >= 0 ? `rgba(18,122,99,${Math.abs(v)})` : `rgba(194,65,12,${Math.abs(v)})` }}>
+                            {v == null ? "·" : v.toFixed(2)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
           )}
           {(data.substrate === "nca" || data.substrate === "nca_train") && data.rgba && (
             <dl className="stats small" data-testid="inspector-nca">

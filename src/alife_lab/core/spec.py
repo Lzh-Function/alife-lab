@@ -866,6 +866,87 @@ class NCAExperiment(_Frozen):
         return self
 
 
+# --------------------------------------------------------------------------- #
+# Petri Dish NCA (Sakana AI): competing NCAs with online learning
+# --------------------------------------------------------------------------- #
+
+
+class PDNCAWorld(_Frozen):
+    width: Annotated[int, Field(ge=8, le=256)] = 48
+    height: Annotated[int, Field(ge=8, le=256)] = 48
+    boundary: Literal["zero_pad"] = "zero_pad"  # convolutions use zero padding
+
+
+class PDNCAModel(_Frozen):
+    hidden_dim: Annotated[int, Field(ge=4, le=256)] = 32
+    n_hidden_layers: Annotated[int, Field(ge=0, le=4)] = 0
+    kernel_size: Annotated[int, Field(ge=1, le=9)] = 3
+    # Fraction of the hidden channels each NCA may write (offset by its index).
+    per_hid_upd: Annotated[float, Field(gt=0.0, le=1.0)] = 1.0
+    alive_visible: bool = True  # NCAs see the aliveness channels
+
+
+class PDNCADynamics(_Frozen):
+    clock_unit: Literal["epoch"] = "epoch"
+    numeric_policy: Literal["float32_jax_cpu", "float32_jax"] = "float32_jax_cpu"
+    n_ncas: Annotated[int, Field(ge=1, le=16)] = 4
+    n_seeds: Annotated[int, Field(ge=1, le=16)] = 1
+    cell_state_dim: Annotated[int, Field(ge=2, le=128, multiple_of=2)] = 16  # attack | defense
+    cell_hidden_dim: Annotated[int, Field(ge=0, le=32)] = 4
+    model: PDNCAModel = PDNCAModel()
+    alive_threshold: Annotated[float, Field(gt=0.0, lt=1.0)] = 0.4
+    softmax_temp: Annotated[float, Field(gt=0.0, le=100.0)] = 1.0
+    # Controls: "uniform" removes the attack/defence contest (equal strengths among the
+    # alive entities of a cell); "frozen" never updates the weights.
+    competition: Literal["cosine", "uniform"] = "cosine"
+    learning: Literal["online", "frozen"] = "online"
+    optimizer: Literal["sgd", "rmsprop", "adam"] = "sgd"
+    learning_rate: Annotated[float, Field(gt=0.0, le=10.0)] = 0.03
+    grad_clip_norm: Annotated[float, Field(gt=0.0, le=1e6)] = 1.0
+    steps_before_update: Annotated[int, Field(ge=0, le=256)] = 0
+    steps_per_update: Annotated[int, Field(ge=1, le=64)] = 1
+    # The reference training loop keeps the previous world if any NCA went extinct in the epoch
+    # (off by default: observed to freeze the world once an NCA dies every epoch).
+    revert_on_extinction: bool = False
+
+
+PDNCAMetric = Literal[
+    "territory_loss", "grad_norm", "alive_ncas", "territory_entropy", "sun_fraction", "reverted"
+]
+
+
+class PDNCAObservation(_Frozen):
+    metrics: tuple[PDNCAMetric, ...] = (
+        "territory_loss",
+        "grad_norm",
+        "alive_ncas",
+        "territory_entropy",
+        "sun_fraction",
+        "reverted",
+    )
+    record_territories: bool = True  # adds `territory.sun` and `territory.nca_<k>`
+
+
+class PDNCAExperiment(_Frozen):
+    name: _NAME
+    mode: Literal["reference", "exploratory"] = "exploratory"
+    substrate: Literal["pd_nca"]
+    seed: _SEED
+    world: PDNCAWorld = PDNCAWorld()
+    dynamics: PDNCADynamics = PDNCADynamics()
+    runner: RunnerSpec = RunnerSpec(max_steps=100_000, checkpoint_interval=200)
+    observations: PDNCAObservation = PDNCAObservation()
+
+    @model_validator(mode="after")
+    def _check(self) -> PDNCAExperiment:
+        d = self.dynamics
+        if d.n_ncas * d.n_seeds > self.world.width * self.world.height:
+            raise ValueError("n_ncas * n_seeds exceeds the number of cells")
+        if d.model.kernel_size % 2 == 0:
+            raise ValueError("kernel_size must be odd")
+        return self
+
+
 AnyExperiment = Annotated[
     ConwayExperiment
     | BoidsExperiment
@@ -877,7 +958,8 @@ AnyExperiment = Annotated[
     | PhysarumExperiment
     | ReactionNetworkExperiment
     | NCATrainExperiment
-    | NCAExperiment,
+    | NCAExperiment
+    | PDNCAExperiment,
     Field(discriminator="substrate"),
 ]
 
