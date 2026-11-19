@@ -1,0 +1,27 @@
+# Jones (2010) Physarum-inspired agents: 200 x 200 periodic lattice, 15 % of cells occupied,
+# SA = RA = 45 deg, SO = 9, SS = 1, depT = 5, 3 x 3 mean diffusion, decay 0.1, exclusion.
+# A phenomenological transport-network model (not a biological slime-mould simulation).
+schema_version: 1
+experiment:
+  name: physarum_jones
+  mode: reference
+  substrate: physarum
+  seed: 0
+  world: {width: 200, height: 200, boundary: periodic}
+  dynamics:
+    clock_unit: tick
+    numeric_policy: float64_sequential_agents
+    sensor_angle_deg: 45.0
+    rotation_angle_deg: 45.0
+    sensor_offset: 9.0
+    step_size: 1.0
+    deposit: 5.0
+    decay: 0.1
+    p_random_turn: 0.0
+    collisions: exclusion
+    sensing: true
+    food: []
+  initialization: {population_fraction: 0.15}
+  runner: {max_steps: 1000000, checkpoint_interval: 500}
+  observations:
+    metrics: [trail_mean, trail_coverage, trail_contrast, heading_order, blocked_fraction]

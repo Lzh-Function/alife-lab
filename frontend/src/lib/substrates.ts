@@ -4,12 +4,12 @@
 import type { Frame } from "./api";
 import { popcount } from "./api";
 
-export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott";
+export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum";
 
 /** Substrates rendered as continuous particles (vs. grids). */
 export const PARTICLE_SUBSTRATES = new Set(["boids", "particle_life"]);
 /** Substrates rendered as a continuous scalar field (codec field_u8). */
-export const FIELD_SUBSTRATES = new Set(["lenia", "flow_lenia", "gray_scott"]);
+export const FIELD_SUBSTRATES = new Set(["lenia", "flow_lenia", "gray_scott", "physarum"]);
 
 export interface ToolState {
   mode: string; // "off" or an intervention mode
@@ -63,6 +63,11 @@ export const TOOLS: Record<SubstrateId, ToolDescriptor> = {
     modes: ["off", "inspect", "seed", "erase"],
     radius: { min: 1, max: 40, step: 1, initial: 6 },
     noteKey: "lab.tool.gray_scott_note",
+  },
+  physarum: {
+    modes: ["off", "inspect", "attract", "erase"],
+    radius: { min: 1, max: 30, step: 1, initial: 4 },
+    noteKey: "lab.tool.physarum_note",
   },
   particle_life: {
     modes: ["off", "inspect", "spawn", "remove"],
@@ -191,6 +196,27 @@ export const FORM_FIELDS: Record<SubstrateId, FormField[]> = {
     { path: "dynamics.F", labelKey: "form.gray_scott.F", kind: "float", min: 0, max: 1, step: 0.0001 },
     { path: "dynamics.k", labelKey: "form.gray_scott.k", kind: "float", min: 0, max: 1, step: 0.0001 },
     { path: "dynamics.dt", labelKey: "form.gray_scott.dt", kind: "float", min: 0.001, step: 0.1 },
+    ...RUNNER,
+  ],
+  physarum: [
+    { path: "seed", labelKey: "form.seed", kind: "int", min: 0 },
+    { path: "world.width", labelKey: "form.width", kind: "int", min: 16, max: 1024 },
+    { path: "world.height", labelKey: "form.height", kind: "int", min: 16, max: 1024 },
+    { path: "initialization.population_fraction", labelKey: "form.physarum.population", kind: "float", min: 0.001, max: 1, step: 0.01 },
+    { path: "dynamics.sensor_angle_deg", labelKey: "form.physarum.sa", kind: "float", min: 0, max: 180, step: 1 },
+    { path: "dynamics.rotation_angle_deg", labelKey: "form.physarum.ra", kind: "float", min: 0, max: 180, step: 1 },
+    { path: "dynamics.sensor_offset", labelKey: "form.physarum.so", kind: "float", min: 0.1, max: 64, step: 0.5 },
+    { path: "dynamics.deposit", labelKey: "form.physarum.deposit", kind: "float", min: 0, step: 0.5 },
+    { path: "dynamics.decay", labelKey: "form.physarum.decay", kind: "float", min: 0, max: 1, step: 0.01 },
+    {
+      path: "dynamics.sensing",
+      labelKey: "form.physarum.sensing",
+      kind: "select",
+      options: [
+        { value: "true", labelKey: "form.on" },
+        { value: "false", labelKey: "form.off_control" },
+      ],
+    },
     ...RUNNER,
   ],
   particle_life: [

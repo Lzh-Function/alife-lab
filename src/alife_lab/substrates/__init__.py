@@ -13,6 +13,7 @@ from alife_lab.substrates.particle_life.particle_life import (
     PARTICLE_LIFE_MANIFEST,
     ParticleLifeAdapter,
 )
+from alife_lab.substrates.physarum.physarum import PHYSARUM_MANIFEST, PhysarumAdapter
 
 _REGISTRY: dict[str, tuple[PluginManifest, type[SubstrateAdapter]]] = {
     "conway": (CONWAY_MANIFEST, ConwayAdapter),
@@ -22,6 +23,7 @@ _REGISTRY: dict[str, tuple[PluginManifest, type[SubstrateAdapter]]] = {
     "lenia": (LENIA_MANIFEST, LeniaAdapter),
     "flow_lenia": (FLOW_LENIA_MANIFEST, FlowLeniaAdapter),
     "gray_scott": (GRAY_SCOTT_MANIFEST, GrayScottAdapter),
+    "physarum": (PHYSARUM_MANIFEST, PhysarumAdapter),
 }
 
 

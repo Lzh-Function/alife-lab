@@ -1,0 +1,14 @@
+preset:
+  id: physarum_no_sensing
+  scenario: physarum_jones.yaml
+  title_key: preset.physarum_no_sensing.title
+  description_key: preset.physarum_no_sensing.description
+  overrides:
+    experiment:
+      name: physarum_no_sensing
+      mode: exploratory
+      dynamics: {sensing: false}
+  expected_observation: >-
+    Negative control: identical agents and deposition, but the trail is never sensed, so
+    agents walk straight lines; the trail stays nearly uniform (contrast ~0.21, coverage 1.0).
+  negative_control: null

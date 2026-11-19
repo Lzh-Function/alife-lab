@@ -1,0 +1,14 @@
+preset:
+  id: physarum_no_deposit
+  scenario: physarum_jones.yaml
+  title_key: preset.physarum_no_deposit.title
+  description_key: preset.physarum_no_deposit.description
+  overrides:
+    experiment:
+      name: physarum_no_deposit
+      mode: exploratory
+      dynamics: {deposit: 0.0}
+  expected_observation: >-
+    Negative control: agents sense but nothing is deposited (environment-mediated
+    interaction removed); no trail exists and no network forms.
+  negative_control: null

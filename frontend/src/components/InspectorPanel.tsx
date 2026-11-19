@@ -45,6 +45,16 @@ export interface Inspection {
   reaction_uvv?: number;
   du_dt?: number;
   dv_dt?: number;
+  // physarum
+  trail?: number;
+  agents_in_radius?: number;
+  nearest_agent?: {
+    id: number;
+    heading_deg: number;
+    distance: number;
+    sensors: { front: number; left: number; right: number };
+    decision: string;
+  } | null;
   // flow_lenia
   channels?: Array<{
     value: number;
@@ -210,6 +220,31 @@ export function InspectorPanel({
               <dd className="mono">
                 {data.patch_mass?.toFixed(3)} (r = {data.query?.radius})
               </dd>
+            </dl>
+          )}
+          {data.substrate === "physarum" && data.trail !== undefined && (
+            <dl className="stats small" data-testid="inspector-physarum">
+              <dt>{t("inspector.trail")}</dt>
+              <dd className="mono">{data.trail.toFixed(3)}</dd>
+              <dt>{t("inspector.in_radius")}</dt>
+              <dd className="mono">{data.agents_in_radius}</dd>
+              {data.nearest_agent && (
+                <>
+                  <dt>{t("inspector.nearest_agent")}</dt>
+                  <dd className="mono">
+                    #{data.nearest_agent.id} · {data.nearest_agent.heading_deg.toFixed(0)}° · d={data.nearest_agent.distance.toFixed(1)}
+                  </dd>
+                  <dt>{t("inspector.sensors")}</dt>
+                  <dd className="mono">
+                    L {data.nearest_agent.sensors.left.toFixed(2)} · F {data.nearest_agent.sensors.front.toFixed(2)} · R{" "}
+                    {data.nearest_agent.sensors.right.toFixed(2)}
+                  </dd>
+                  <dt>{t("inspector.decision")}</dt>
+                  <dd className="mono" data-testid="inspector-decision">
+                    {t(`inspector.decision.${data.nearest_agent.decision}`)}
+                  </dd>
+                </>
+              )}
             </dl>
           )}
           {data.substrate === "gray_scott" && data.u !== undefined && (

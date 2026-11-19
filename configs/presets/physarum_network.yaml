@@ -1,0 +1,10 @@
+preset:
+  id: physarum_network
+  scenario: physarum_jones.yaml
+  title_key: preset.physarum_network.title
+  description_key: preset.physarum_network.description
+  overrides: {}
+  expected_observation: >-
+    A dynamic network of trails self-organises from uniform random agents; trail_contrast
+    rises (0.87 at tick 100 -> 1.40 at tick 1000 for seed 0) and coverage falls (0.78 -> 0.45).
+  negative_control: preset physarum_no_sensing

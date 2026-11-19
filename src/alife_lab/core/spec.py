@@ -564,6 +564,87 @@ class GrayScottExperiment(_Frozen):
         return self
 
 
+# --------------------------------------------------------------------------- #
+# Physarum-inspired stigmergy (Jones 2010 agent model)
+# --------------------------------------------------------------------------- #
+
+MAX_PHYSARUM_AGENTS = 200_000
+MAX_FOOD_SOURCES = 32
+
+
+class PhysarumWorld(_Frozen):
+    width: Annotated[int, Field(ge=16, le=MAX_WORLD_SIDE)] = 200
+    height: Annotated[int, Field(ge=16, le=MAX_WORLD_SIDE)] = 200
+    boundary: Literal["periodic"] = "periodic"
+
+
+class FoodSource(_Frozen):
+    x: Annotated[int, Field(ge=0, lt=MAX_WORLD_SIDE)]
+    y: Annotated[int, Field(ge=0, lt=MAX_WORLD_SIDE)]
+    radius: Annotated[int, Field(ge=0, le=32)] = 2
+    amount: Annotated[float, Field(ge=0.0, le=1_000.0)] = 10.0  # added to the trail per tick
+
+
+class PhysarumDynamics(_Frozen):
+    clock_unit: Literal["tick"] = "tick"
+    numeric_policy: Literal["float64_sequential_agents"] = "float64_sequential_agents"
+    sensor_angle_deg: Annotated[float, Field(ge=0.0, le=180.0)] = 45.0  # SA
+    rotation_angle_deg: Annotated[float, Field(ge=0.0, le=180.0)] = 45.0  # RA
+    sensor_offset: Annotated[float, Field(gt=0.0, le=64.0)] = 9.0  # SO (cells)
+    step_size: Annotated[float, Field(gt=0.0, le=8.0)] = 1.0  # SS (cells per tick)
+    deposit: Annotated[float, Field(ge=0.0, le=1_000.0)] = 5.0  # depT
+    decay: Annotated[float, Field(ge=0.0, le=1.0)] = 0.1  # fraction removed per tick
+    p_random_turn: Annotated[float, Field(ge=0.0, le=1.0)] = 0.0  # pCD
+    # "exclusion": one agent per cell, blocked agents pick a random heading (Jones);
+    # "none": agents never block each other (common fast variant, exploratory only).
+    collisions: Literal["exclusion", "none"] = "exclusion"
+    sensing: bool = True  # False: control, agents ignore the trail (straight walks)
+    food: Annotated[list[FoodSource], Field(max_length=MAX_FOOD_SOURCES)] = []
+
+
+class PhysarumInitialization(_Frozen):
+    population_fraction: Annotated[float, Field(gt=0.0, le=1.0)] = 0.15  # %p of cells
+
+
+PhysarumMetric = Literal[
+    "trail_mean", "trail_coverage", "trail_contrast", "heading_order", "blocked_fraction"
+]
+
+
+class PhysarumObservation(_Frozen):
+    metrics: tuple[PhysarumMetric, ...] = (
+        "trail_mean",
+        "trail_coverage",
+        "trail_contrast",
+        "heading_order",
+        "blocked_fraction",
+    )
+
+
+class PhysarumExperiment(_Frozen):
+    name: _NAME
+    mode: Literal["reference", "exploratory"] = "reference"
+    substrate: Literal["physarum"]
+    seed: _SEED
+    world: PhysarumWorld = PhysarumWorld()
+    initialization: PhysarumInitialization = PhysarumInitialization()
+    dynamics: PhysarumDynamics = PhysarumDynamics()
+    runner: RunnerSpec = RunnerSpec()
+    observations: PhysarumObservation = PhysarumObservation()
+
+    @model_validator(mode="after")
+    def _check(self) -> PhysarumExperiment:
+        cells = self.world.width * self.world.height
+        if round(cells * self.initialization.population_fraction) > MAX_PHYSARUM_AGENTS:
+            raise ValueError(f"at most {MAX_PHYSARUM_AGENTS} agents")
+        for f in self.dynamics.food:
+            if f.x >= self.world.width or f.y >= self.world.height:
+                raise ValueError("food source outside the world")
+        if self.mode == "reference" and self.dynamics.collisions != "exclusion":
+            raise ValueError("reference mode uses Jones' exclusion rule (collisions: exclusion)")
+        return self
+
+
 AnyExperiment = Annotated[
     ConwayExperiment
     | BoidsExperiment
@@ -571,7 +652,8 @@ AnyExperiment = Annotated[
     | BFFExperiment
     | LeniaExperiment
     | FlowLeniaExperiment
-    | GrayScottExperiment,
+    | GrayScottExperiment
+    | PhysarumExperiment,
     Field(discriminator="substrate"),
 ]
 

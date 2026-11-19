@@ -1,0 +1,21 @@
+preset:
+  id: physarum_food
+  scenario: physarum_jones.yaml
+  title_key: preset.physarum_food.title
+  description_key: preset.physarum_food.description
+  overrides:
+    experiment:
+      name: physarum_food
+      mode: exploratory
+      initialization: {population_fraction: 0.05}
+      dynamics:
+        food:
+          - {x: 50, y: 50, radius: 3, amount: 10}
+          - {x: 150, y: 60, radius: 3, amount: 10}
+          - {x: 100, y: 150, radius: 3, amount: 10}
+          - {x: 40, y: 140, radius: 3, amount: 10}
+          - {x: 160, y: 160, radius: 3, amount: 10}
+  expected_observation: >-
+    Exploratory: five food sources inject chemoattractant every tick; a sparse population
+    (5 %) forms trails between and around them. Network geometry is an observation (E0).
+  negative_control: preset physarum_no_sensing
