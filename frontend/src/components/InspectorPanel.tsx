@@ -55,6 +55,13 @@ export interface Inspection {
     sensors: { front: number; left: number; right: number };
     decision: string;
   } | null;
+  // nca / nca_train
+  rgba?: number[];
+  hidden?: number[];
+  alive?: boolean;
+  target_rgba?: number[] | null;
+  last_step?: { loss?: number; steps?: number; lr?: number };
+  parameter_count?: number;
   // reaction_network
   time?: number;
   species?: Array<{ name: string; count: number; constant: boolean }>;
@@ -228,6 +235,32 @@ export function InspectorPanel({
               <dd className="mono">
                 {data.patch_mass?.toFixed(3)} (r = {data.query?.radius})
               </dd>
+            </dl>
+          )}
+          {(data.substrate === "nca" || data.substrate === "nca_train") && data.rgba && (
+            <dl className="stats small" data-testid="inspector-nca">
+              <dt>{t("inspector.cell")}</dt>
+              <dd className="mono">
+                ({data.query?.x}, {data.query?.y}) · {data.alive ? t("inspector.alive") : t("inspector.dead")}
+              </dd>
+              <dt>RGBA</dt>
+              <dd className="mono">{data.rgba.map((v) => v.toFixed(2)).join(" ")}</dd>
+              {data.target_rgba && (
+                <>
+                  <dt>{t("inspector.target")}</dt>
+                  <dd className="mono">{data.target_rgba.map((v) => v.toFixed(2)).join(" ")}</dd>
+                </>
+              )}
+              <dt>{t("inspector.hidden")}</dt>
+              <dd className="mono">{(data.hidden ?? []).map((v) => v.toFixed(1)).join(" ")}</dd>
+              {data.last_step?.loss !== undefined && (
+                <>
+                  <dt>{t("metric.loss")}</dt>
+                  <dd className="mono">
+                    {data.last_step.loss.toExponential(3)} ({data.last_step.steps} steps) · {data.parameter_count} params
+                  </dd>
+                </>
+              )}
             </dl>
           )}
           {data.substrate === "reaction_network" && data.reactions && (

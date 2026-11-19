@@ -192,3 +192,5 @@ p.muted .bff-cell { width: auto; padding: 0 0.25em; background-color: var(--cell
 .legend-item.sp-5 { color: #db2777; }
 .legend-item.sp-6 { color: #4d7c0f; }
 .legend-item.sp-7 { color: #475569; }
+.target-editor { border: 1px dashed var(--border); padding: 0.5rem; border-radius: 6px; margin-top: 0.5rem; }
+.target-canvas { cursor: crosshair; max-width: 100%; image-rendering: pixelated; border: 1px solid var(--border); }

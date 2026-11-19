@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api, ApiError, type Preset } from "../lib/api";
 import { FORM_FIELDS, getPath, setPath, type FormField, type SubstrateId } from "../lib/substrates";
 import { useT } from "../i18n";
+import { TargetEditor } from "./TargetEditor";
 
 interface FormState {
   preset: Preset;
@@ -158,6 +159,21 @@ export function Catalog({ onOpen }: { onOpen: (runId: string) => void }) {
                   )}
                 </label>
               ))}
+              {form.preset.substrate === "nca_train" && (
+                <TargetEditor
+                  size={Number(form.values["target.size"]) || 40}
+                  active={form.values.target !== undefined}
+                  onChange={(target) =>
+                    setForm((f) => {
+                      if (!f) return f;
+                      const values = { ...f.values };
+                      if (target) values.target = target;
+                      else delete values.target;
+                      return { ...f, values };
+                    })
+                  }
+                />
+              )}
             </fieldset>
             <fieldset>
               <legend>ExecutionProfile</legend>

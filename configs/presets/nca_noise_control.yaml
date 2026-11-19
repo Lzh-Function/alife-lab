@@ -1,0 +1,13 @@
+preset:
+  id: nca_noise_control
+  scenario: nca_heart_untrained.yaml
+  title_key: preset.nca_noise_control.title
+  description_key: preset.nca_noise_control.description
+  overrides:
+    experiment:
+      name: nca_noise_control
+      dynamics: {weights_kind: noise}
+  expected_observation: >-
+    Negative control: random output weights. Whatever grows is not organised towards the
+    target (target_mse does not approach trained values).
+  negative_control: null

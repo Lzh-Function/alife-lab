@@ -9,6 +9,8 @@ from alife_lab.substrates.ca.conway import CONWAY_MANIFEST, ConwayAdapter
 from alife_lab.substrates.flow_lenia.flow_lenia import FLOW_LENIA_MANIFEST, FlowLeniaAdapter
 from alife_lab.substrates.gray_scott.gray_scott import GRAY_SCOTT_MANIFEST, GrayScottAdapter
 from alife_lab.substrates.lenia.lenia import LENIA_MANIFEST, LeniaAdapter
+from alife_lab.substrates.nca.nca_adapter import NCA_MANIFEST, NCAAdapter
+from alife_lab.substrates.nca.train_adapter import NCA_TRAIN_MANIFEST, NCATrainAdapter
 from alife_lab.substrates.particle_life.particle_life import (
     PARTICLE_LIFE_MANIFEST,
     ParticleLifeAdapter,
@@ -29,6 +31,8 @@ _REGISTRY: dict[str, tuple[PluginManifest, type[SubstrateAdapter]]] = {
     "gray_scott": (GRAY_SCOTT_MANIFEST, GrayScottAdapter),
     "physarum": (PHYSARUM_MANIFEST, PhysarumAdapter),
     "reaction_network": (REACTION_NETWORK_MANIFEST, ReactionNetworkAdapter),
+    "nca_train": (NCA_TRAIN_MANIFEST, NCATrainAdapter),
+    "nca": (NCA_MANIFEST, NCAAdapter),
 }
 
 

@@ -1,0 +1,28 @@
+# Growing NCA training (Mordvintsev et al. 2020) on a procedurally drawn 40 x 40 heart, padded
+# by 8 cells (56 x 56 world), 16 channels, 128 hidden units, fire rate 0.5, rollouts of 64-96
+# steps, Adam 2e-3 -> 2e-4 at step 2000, per-variable gradient normalisation. Optimisation run
+# with an explicit objective (MSE to the target); one tick = one optimizer step (JAX CPU).
+schema_version: 1
+experiment:
+  name: nca_train_heart
+  mode: reference
+  substrate: nca_train
+  seed: 0
+  target: {kind: preset, preset: heart, size: 40}
+  dynamics:
+    clock_unit: optimizer_step
+    numeric_policy: float32_jax_cpu
+    experiment: persistent
+    architecture: {channels: 16, hidden: 128, fire_rate: 0.5, alive_threshold: 0.1}
+    pad: 8
+    batch_size: 8
+    pool_size: 256
+    damaged_per_batch: 3
+    steps_min: 64
+    steps_max: 96
+    learning_rate: 0.002
+    lr_decay_step: 2000
+    lr_decay_factor: 0.1
+  runner: {max_steps: 4000, checkpoint_interval: 250}
+  observations:
+    metrics: [loss, log10_loss, learning_rate, grad_norm]

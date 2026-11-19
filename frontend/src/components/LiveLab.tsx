@@ -169,6 +169,23 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
       .catch((e) => setInspectError(e instanceof ApiError ? e.message : String(e)));
   };
 
+  // nca_train: checkpoint the current weights, export them into an nca spec and start a run.
+  const runTrainedModel = async () => {
+    try {
+      const current = tick ?? summary?.clock.value ?? 0;
+      if (live) await api.control(runId, "checkpoints");
+      let exported = await api.exportNca(runId);
+      for (let i = 0; i < 20 && live && exported.checkpoint.tick < current; i++) {
+        await new Promise((r) => window.setTimeout(r, 250));
+        exported = await api.exportNca(runId);
+      }
+      const run = await api.create({ spec: exported.spec, profile_id: "local_interactive", ticks_per_second: 20, auto_start: true });
+      window.location.hash = `/lab/${run.id}`;
+    } catch (e) {
+      setInspectError(e instanceof ApiError ? e.message : String(e));
+    }
+  };
+
   const onInspect = (x: number, y: number) => {
     const tickArg = replay && shownReplayTick.current !== null ? shownReplayTick.current : undefined;
     const toolRadius = currentToolRef.current?.radius ?? 2;
@@ -221,6 +238,11 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
           <button data-testid="btn-checkpoint" disabled={busy || !live} onClick={() => act(() => api.control(runId, "checkpoints"))}>
             💾 {t("lab.checkpoint")}
           </button>
+          {summary.substrate === "nca_train" && (
+            <button data-testid="btn-run-model" disabled={busy} onClick={() => void runTrainedModel()}>
+              🌱 {t("lab.nca.run_model")}
+            </button>
+          )}
           <button
             data-testid="btn-paired-fork"
             title={t("lab.paired_fork_note")}

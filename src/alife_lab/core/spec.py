@@ -726,6 +726,144 @@ class ReactionNetworkExperiment(_Frozen):
         return self
 
 
+# --------------------------------------------------------------------------- #
+# Growing Neural Cellular Automata (Mordvintsev et al. 2020)
+# --------------------------------------------------------------------------- #
+
+MAX_NCA_TARGET = 64
+MAX_NCA_PAD = 32
+_B64 = Annotated[str, Field(max_length=200_000, pattern=r"^[A-Za-z0-9+/=]*$")]
+
+
+class NCAArchitecture(_Frozen):
+    channels: Annotated[int, Field(ge=4, le=32)] = 16  # RGBA + hidden
+    hidden: Annotated[int, Field(ge=8, le=256)] = 128
+    fire_rate: Annotated[float, Field(gt=0.0, le=1.0)] = 0.5  # stochastic cell update
+    alive_threshold: Annotated[float, Field(ge=0.0, le=1.0)] = 0.1
+
+
+class NCATarget(_Frozen):
+    # "preset": procedurally drawn built-in shape; "custom": RGBA bytes (base64, row-major,
+    # premultiplied-free straight alpha) of size x size, e.g. drawn in the browser.
+    kind: Literal["preset", "custom"] = "preset"
+    preset: Literal["disc", "ring", "heart", "letter_a"] = "heart"
+    size: Annotated[int, Field(ge=8, le=MAX_NCA_TARGET)] = 40
+    rgba_b64: _B64 | None = None
+
+    @model_validator(mode="after")
+    def _check(self) -> NCATarget:
+        if self.kind == "custom":
+            import base64
+
+            if self.rgba_b64 is None:
+                raise ValueError("custom targets need rgba_b64")
+            if len(base64.b64decode(self.rgba_b64)) != self.size * self.size * 4:
+                raise ValueError("rgba_b64 must decode to size * size * 4 bytes")
+        return self
+
+
+class NCATrainDynamics(_Frozen):
+    clock_unit: Literal["optimizer_step"] = "optimizer_step"
+    numeric_policy: Literal["float32_jax_cpu"] = "float32_jax_cpu"
+    # Mordvintsev et al. experiments: 1 = growing, 2 = persistent (pool), 3 = regenerating.
+    experiment: Literal["growing", "persistent", "regenerating"] = "persistent"
+    architecture: NCAArchitecture = NCAArchitecture()
+    pad: Annotated[int, Field(ge=0, le=MAX_NCA_PAD)] = 8
+    batch_size: Annotated[int, Field(ge=1, le=64)] = 8
+    pool_size: Annotated[int, Field(ge=1, le=1024)] = 256
+    damaged_per_batch: Annotated[int, Field(ge=0, le=64)] = 3
+    steps_min: Annotated[int, Field(ge=1, le=512)] = 64
+    steps_max: Annotated[int, Field(ge=1, le=512)] = 96
+    learning_rate: Annotated[float, Field(gt=0.0, le=1.0)] = 2e-3
+    lr_decay_step: Annotated[int, Field(ge=1, le=10**6)] = 2000
+    lr_decay_factor: Annotated[float, Field(gt=0.0, le=1.0)] = 0.1
+
+
+NCATrainMetric = Literal["loss", "log10_loss", "learning_rate", "grad_norm"]
+
+
+class NCATrainObservation(_Frozen):
+    metrics: tuple[NCATrainMetric, ...] = ("loss", "log10_loss", "learning_rate", "grad_norm")
+
+
+class NCATrainExperiment(_Frozen):
+    """Optimisation run: explicit external objective (MSE to a target image)."""
+
+    name: _NAME
+    mode: Literal["reference", "exploratory"] = "reference"
+    substrate: Literal["nca_train"]
+    seed: _SEED
+    target: NCATarget = NCATarget()
+    dynamics: NCATrainDynamics = NCATrainDynamics()
+    runner: RunnerSpec = RunnerSpec(max_steps=2000, checkpoint_interval=250)
+    observations: NCATrainObservation = NCATrainObservation()
+
+    @model_validator(mode="after")
+    def _check(self) -> NCATrainExperiment:
+        d = self.dynamics
+        if d.steps_min > d.steps_max:
+            raise ValueError("steps_min must be <= steps_max")
+        if d.experiment != "growing" and d.pool_size < d.batch_size:
+            raise ValueError("pool_size must be >= batch_size")
+        if d.damaged_per_batch > d.batch_size:
+            raise ValueError("damaged_per_batch must be <= batch_size")
+        return self
+
+
+class NCAWeights(_Frozen):
+    # float32 little-endian w1 (3C x hidden), b1 (hidden), w2 (hidden x C), concatenated.
+    data_b64: _B64
+    sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    source: dict[str, Any] = {}  # informational provenance, e.g. training run id and step
+
+
+class NCADynamics(_Frozen):
+    clock_unit: Literal["tick"] = "tick"
+    numeric_policy: Literal["float32_jax_cpu"] = "float32_jax_cpu"
+    architecture: NCAArchitecture = NCAArchitecture()
+    # "trained": the given weights; "untrained": control with freshly initialised weights
+    # (zero output layer => nothing grows), "noise": control with random output weights.
+    weights_kind: Literal["trained", "untrained", "noise"] = "trained"
+    weights: NCAWeights | None = None
+
+
+NCAMetric = Literal["alive_fraction", "alpha_mass", "target_mse"]
+
+
+class NCAObservation(_Frozen):
+    metrics: tuple[NCAMetric, ...] = ("alive_fraction", "alpha_mass", "target_mse")
+
+
+class NCAExperiment(_Frozen):
+    name: _NAME
+    mode: Literal["reference", "exploratory"] = "exploratory"
+    substrate: Literal["nca"]
+    seed: _SEED
+    target: NCATarget = NCATarget()
+    pad: Annotated[int, Field(ge=0, le=MAX_NCA_PAD)] = 8
+    dynamics: NCADynamics = NCADynamics()
+    runner: RunnerSpec = RunnerSpec(max_steps=100_000, checkpoint_interval=200)
+    observations: NCAObservation = NCAObservation()
+
+    @model_validator(mode="after")
+    def _check(self) -> NCAExperiment:
+        d = self.dynamics
+        if d.weights_kind == "trained" and d.weights is None:
+            raise ValueError("weights_kind 'trained' needs weights")
+        if d.weights is not None:
+            import base64
+            import hashlib
+
+            raw = base64.b64decode(d.weights.data_b64)
+            a = d.architecture
+            expected = 4 * (3 * a.channels * a.hidden + a.hidden + a.hidden * a.channels)
+            if len(raw) != expected:
+                raise ValueError(f"weights must be {expected} bytes for this architecture")
+            if hashlib.sha256(raw).hexdigest() != d.weights.sha256:
+                raise ValueError("weights sha256 does not match the data")
+        return self
+
+
 AnyExperiment = Annotated[
     ConwayExperiment
     | BoidsExperiment
@@ -735,7 +873,9 @@ AnyExperiment = Annotated[
     | FlowLeniaExperiment
     | GrayScottExperiment
     | PhysarumExperiment
-    | ReactionNetworkExperiment,
+    | ReactionNetworkExperiment
+    | NCATrainExperiment
+    | NCAExperiment,
     Field(discriminator="substrate"),
 ]
 

@@ -1,0 +1,10 @@
+preset:
+  id: nca_untrained_control
+  scenario: nca_heart_untrained.yaml
+  title_key: preset.nca_untrained_control.title
+  description_key: preset.nca_untrained_control.description
+  overrides: {}
+  expected_observation: >-
+    Negative control: untrained weights (zero output layer). The single seed cell stays as it
+    is; alive_fraction and alpha_mass do not grow; target_mse stays at its initial value.
+  negative_control: null

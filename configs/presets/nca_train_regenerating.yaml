@@ -1,0 +1,13 @@
+preset:
+  id: nca_train_regenerating
+  scenario: nca_train_heart.yaml
+  title_key: preset.nca_train_regenerating.title
+  description_key: preset.nca_train_regenerating.description
+  overrides:
+    experiment:
+      name: nca_train_regenerating
+      dynamics: {experiment: regenerating}
+  expected_observation: >-
+    Optimisation run (regenerating): the loss decreases over optimizer steps; export the weights
+    with "run this model" and test growth / persistence / regeneration in an nca run.
+  negative_control: preset nca_untrained_control

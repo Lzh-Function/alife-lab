@@ -474,6 +474,36 @@ class Controller:
         result: dict[str, Any] = json.loads(manifest.read_text(encoding="utf-8"))
         return result
 
+    def export_nca_spec(self, run_id: str, checkpoint_id: str = "latest") -> dict[str, Any]:
+        """Spec for an ``nca`` run with the weights of an ``nca_train`` checkpoint.
+
+        Reads the checkpoint with NumPy only (no JAX in the API process) after verifying its
+        SHA-256; the weights are embedded in the returned spec with their own hash and the
+        training run/checkpoint recorded as provenance.
+        """
+        from alife_lab.artifacts.store import decode_checkpoint
+        from alife_lab.core.hashing import sha256_bytes
+        from alife_lab.core.spec import NCATrainExperiment
+        from alife_lab.substrates.nca.export import nca_spec_from_training
+
+        train = self.run_spec(run_id).experiment
+        if not isinstance(train, NCATrainExperiment):
+            raise ControllerError("only nca_train runs can be exported as NCA models")
+        if checkpoint_id == "latest":
+            row = self.latest_checkpoint(run_id)
+        else:
+            found = self.db.one(
+                "SELECT * FROM checkpoints WHERE run_id=? AND id=?", (run_id, checkpoint_id)
+            )
+            row = dict(found) if found else None
+        if row is None:
+            raise NotFound("checkpoint not found")
+        data = self.store.resolve(run_id, row["logical_path"]).read_bytes()
+        if sha256_bytes(data) != row["sha256"]:
+            raise Conflict("checkpoint checksum mismatch", "checksum_mismatch")
+        spec = nca_spec_from_training(train, decode_checkpoint(data), run_id, row["sha256"])
+        return {"spec": spec, "checkpoint": {"id": row["id"], "tick": row["simulation_clock"]}}
+
     def checkpoint_frame(self, run_id: str, checkpoint_id: str) -> tuple[dict[str, Any], bytes]:
         """Decode a checkpoint into a preview frame for display (not the research state)."""
         from alife_lab.artifacts.store import decode_checkpoint

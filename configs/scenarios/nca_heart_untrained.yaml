@@ -1,0 +1,18 @@
+# NCA dynamics with freshly initialised (untrained) weights: the zero-initialised output layer
+# produces no updates, so the seed cell never grows. Negative control for trained models.
+schema_version: 1
+experiment:
+  name: nca_untrained_control
+  mode: exploratory
+  substrate: nca
+  seed: 0
+  target: {kind: preset, preset: heart, size: 40}
+  pad: 8
+  dynamics:
+    clock_unit: tick
+    numeric_policy: float32_jax_cpu
+    architecture: {channels: 16, hidden: 128, fire_rate: 0.5, alive_threshold: 0.1}
+    weights_kind: untrained
+  runner: {max_steps: 100000, checkpoint_interval: 200}
+  observations:
+    metrics: [alive_fraction, alpha_mass, target_mse]

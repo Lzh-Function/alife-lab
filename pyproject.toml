@@ -22,6 +22,8 @@ fast = ["numba>=0.68"]
 # Optional CUDA backend (CuPy with pip-installed CUDA 13 toolkit libraries, ~1.9 GB).
 # Results: BFF bit-identical to the CPU oracle; Lenia/Flow-Lenia within documented tolerances.
 gpu = ["cupy-cuda13x[ctk]>=14.2"]
+# Optional autodiff runtime for Neural Cellular Automata training (CPU build of JAX).
+nca = ["jax>=0.8"]
 
 [project.scripts]
 alife = "alife_lab.cli:main"
@@ -77,11 +79,11 @@ plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
 # pyarrow ships without type information.
-module = ["pyarrow", "pyarrow.*", "brotli", "numba", "numba.*", "cupy", "cupy.*"]
+module = ["pyarrow", "pyarrow.*", "brotli", "numba", "numba.*", "cupy", "cupy.*", "jax", "jax.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 # The numba extra is optional: with it installed the JIT decorators are typed, without it
 # numba is Any. Keep both environments (local dev with `--extra fast`, CPU-only CI) clean.
-module = ["alife_lab.substrates.bff.vm_numba"]
+module = ["alife_lab.substrates.bff.vm_numba", "alife_lab.substrates.nca.model"]
 disable_error_code = ["untyped-decorator", "unused-ignore"]

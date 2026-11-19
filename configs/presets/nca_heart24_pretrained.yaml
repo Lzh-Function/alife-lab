@@ -1,0 +1,10 @@
+preset:
+  id: nca_heart24_pretrained
+  scenario: nca_heart24_pretrained.yaml
+  title_key: preset.nca_heart24_pretrained.title
+  description_key: preset.nca_heart24_pretrained.description
+  overrides: {}
+  expected_observation: >-
+    Grows a 24 x 24 heart from one seed (target_mse ~0.005 at tick 200, seed 0) and regrows
+    after damage (radius-6 disc at tick 200: 0.042 -> 0.005 within 50 ticks).
+  negative_control: preset nca_untrained_control

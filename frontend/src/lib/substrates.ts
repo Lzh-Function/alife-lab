@@ -4,12 +4,12 @@
 import type { Frame } from "./api";
 import { popcount } from "./api";
 
-export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network";
+export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network" | "nca_train" | "nca";
 
 /** Substrates rendered as continuous particles (vs. grids). */
 export const PARTICLE_SUBSTRATES = new Set(["boids", "particle_life"]);
 /** Substrates rendered as a continuous scalar field (codec field_u8). */
-export const FIELD_SUBSTRATES = new Set(["lenia", "flow_lenia", "gray_scott", "physarum", "reaction_network"]);
+export const FIELD_SUBSTRATES = new Set(["lenia", "flow_lenia", "gray_scott", "physarum", "reaction_network", "nca_train", "nca"]);
 /** Non-spatial substrates whose display is a species x time image (rows = species). */
 export const ROW_DISPLAY_SUBSTRATES = new Set(["reaction_network"]);
 
@@ -17,6 +17,12 @@ export const ROW_DISPLAY_SUBSTRATES = new Set(["reaction_network"]);
 export function displayWorld(substrate: string, experiment: Record<string, unknown>): { width: number; height: number } {
   const world = experiment.world as { width: number; height: number } | undefined;
   if (world) return world;
+  if (substrate === "nca_train" || substrate === "nca") {
+    const target = experiment.target as { size?: number } | undefined;
+    const pad = (substrate === "nca" ? experiment.pad : (experiment.dynamics as { pad?: number } | undefined)?.pad) as number | undefined;
+    const side = (target?.size ?? 40) + 2 * (pad ?? 8);
+    return { width: side, height: side };
+  }
   if (substrate === "reaction_network") {
     const species = ((experiment.dynamics as { species?: unknown[] } | undefined)?.species ?? []).length;
     return { width: 256, height: Math.max(1, species) };
@@ -87,6 +93,16 @@ export const TOOLS: Record<SubstrateId, ToolDescriptor> = {
     radius: { min: 0, max: 0, step: 1, initial: 0 },
     count: { min: 1, max: 100000, initial: 100 },
     noteKey: "lab.tool.reaction_network_note",
+  },
+  nca_train: {
+    modes: ["off", "inspect"],
+    radius: { min: 0, max: 0, step: 1, initial: 0 },
+    noteKey: "lab.tool.nca_train_note",
+  },
+  nca: {
+    modes: ["off", "inspect", "damage", "seed"],
+    radius: { min: 1, max: 24, step: 1, initial: 6 },
+    noteKey: "lab.tool.nca_note",
   },
   particle_life: {
     modes: ["off", "inspect", "spawn", "remove"],
@@ -243,6 +259,37 @@ export const FORM_FIELDS: Record<SubstrateId, FormField[]> = {
     { path: "dynamics.time_per_tick", labelKey: "form.reaction_network.time_per_tick", kind: "float", min: 0.000001, step: 0.001 },
     ...RUNNER,
   ],
+  nca_train: [
+    { path: "seed", labelKey: "form.seed", kind: "int", min: 0 },
+    {
+      path: "dynamics.experiment",
+      labelKey: "form.nca.experiment",
+      kind: "select",
+      options: [
+        { value: "growing", labelKey: "form.nca.experiment.growing" },
+        { value: "persistent", labelKey: "form.nca.experiment.persistent" },
+        { value: "regenerating", labelKey: "form.nca.experiment.regenerating" },
+      ],
+    },
+    {
+      path: "target.preset",
+      labelKey: "form.nca.target",
+      kind: "select",
+      options: [
+        { value: "heart", labelKey: "form.nca.target.heart" },
+        { value: "disc", labelKey: "form.nca.target.disc" },
+        { value: "ring", labelKey: "form.nca.target.ring" },
+        { value: "letter_a", labelKey: "form.nca.target.letter_a" },
+      ],
+    },
+    { path: "target.size", labelKey: "form.nca.target_size", kind: "int", min: 8, max: 64 },
+    { path: "dynamics.batch_size", labelKey: "form.nca.batch_size", kind: "int", min: 1, max: 64 },
+    { path: "dynamics.steps_min", labelKey: "form.nca.steps_min", kind: "int", min: 1, max: 512 },
+    { path: "dynamics.steps_max", labelKey: "form.nca.steps_max", kind: "int", min: 1, max: 512 },
+    { path: "dynamics.learning_rate", labelKey: "form.nca.lr", kind: "float", min: 0.00001, max: 1, step: 0.0001 },
+    ...RUNNER,
+  ],
+  nca: [{ path: "seed", labelKey: "form.seed", kind: "int", min: 0 }, ...RUNNER],
   particle_life: [
     { path: "seed", labelKey: "form.seed", kind: "int", min: 0 },
     { path: "initialization.count", labelKey: "form.particles.count", kind: "int", min: 0, max: 10000 },

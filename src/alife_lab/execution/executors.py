@@ -31,6 +31,8 @@ def available_backends(gpu_count: int = 0) -> tuple[str, ...]:
     out = ["numpy"]
     if importlib.util.find_spec("numba") is not None:
         out.append("numba")
+    if importlib.util.find_spec("jax") is not None:
+        out.append("jax")  # CPU platform (forced in the NCA model module)
     if gpu_count > 0 and importlib.util.find_spec("cupy") is not None:
         out.append("cupy")
     return tuple(out)

@@ -31,6 +31,8 @@ ALWAYS_COMPUTED = {
     "gray_scott": set(),
     "physarum": set(),
     "reaction_network": set(),
+    "nca_train": set(),
+    "nca": set(),
 }
 UNIT_NOTE = (
     "Unit of analysis: one independently seeded run per value. Time points within a run are not "

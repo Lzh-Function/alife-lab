@@ -1,0 +1,13 @@
+preset:
+  id: nca_train_growing
+  scenario: nca_train_heart.yaml
+  title_key: preset.nca_train_growing.title
+  description_key: preset.nca_train_growing.description
+  overrides:
+    experiment:
+      name: nca_train_growing
+      dynamics: {experiment: growing}
+  expected_observation: >-
+    Optimisation run (growing): the loss decreases over optimizer steps; export the weights
+    with "run this model" and test growth / persistence / regeneration in an nca run.
+  negative_control: preset nca_untrained_control

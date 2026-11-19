@@ -144,6 +144,8 @@ class BFFTraceRequest(_Req):
 
 _ALLOWED_OVERRIDE_KEYS = {
     "soup",
+    "target",
+    "pad",
     "name",
     "seed",
     "mode",
@@ -536,6 +538,11 @@ def create_app(
         return envelope(await ctl().inspect(run_id, query, tick))
 
     # ------------------------------------------------------------------- tools
+
+    @app.post(f"{API}/experiments/{{run_id}}/nca/export")
+    async def export_nca(run_id: str, checkpoint_id: str = "latest") -> dict[str, Any]:
+        """Spec (with embedded weights) for running a trained NCA; the client creates the run."""
+        return envelope(ctl().export_nca_spec(run_id, checkpoint_id))
 
     @app.post(f"{API}/tools/bff/assay")
     async def bff_assay(body: BFFAssayRequest) -> dict[str, Any]:
