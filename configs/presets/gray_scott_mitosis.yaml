@@ -1,0 +1,10 @@
+preset:
+  id: gray_scott_mitosis
+  scenario: gray_scott_pearson.yaml
+  title_key: preset.gray_scott_mitosis.title
+  description_key: preset.gray_scott_mitosis.description
+  overrides: {}
+  expected_observation: >-
+    F = 0.0367, k = 0.0649: spots that grow and divide ("mitosis"), filling the domain over
+    tens of thousands of ticks. v_area_fraction rises from ~0.006 (tick 1000) to ~0.10 (10000).
+  negative_control: preset gray_scott_diffusion_control

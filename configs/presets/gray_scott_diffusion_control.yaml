@@ -1,0 +1,15 @@
+preset:
+  id: gray_scott_diffusion_control
+  scenario: gray_scott_pearson.yaml
+  title_key: preset.gray_scott_diffusion_control.title
+  description_key: preset.gray_scott_diffusion_control.description
+  overrides:
+    experiment:
+      name: gray_scott_diffusion_control
+      mode: exploratory
+      dynamics: {reaction: false}
+  expected_observation: >-
+    Negative control: the same initial square with the reaction terms removed (pure
+    diffusion). The perturbation smooths out, no pattern forms, and total_u_plus_v stays
+    constant up to rounding.
+  negative_control: null

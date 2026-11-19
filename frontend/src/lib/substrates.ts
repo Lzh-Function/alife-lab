@@ -4,12 +4,12 @@
 import type { Frame } from "./api";
 import { popcount } from "./api";
 
-export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia";
+export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott";
 
 /** Substrates rendered as continuous particles (vs. grids). */
 export const PARTICLE_SUBSTRATES = new Set(["boids", "particle_life"]);
 /** Substrates rendered as a continuous scalar field (codec field_u8). */
-export const FIELD_SUBSTRATES = new Set(["lenia", "flow_lenia"]);
+export const FIELD_SUBSTRATES = new Set(["lenia", "flow_lenia", "gray_scott"]);
 
 export interface ToolState {
   mode: string; // "off" or an intervention mode
@@ -58,6 +58,11 @@ export const TOOLS: Record<SubstrateId, ToolDescriptor> = {
     value: { initial: 1 },
     channelSelect: true,
     noteKey: "lab.tool.flow_lenia_note",
+  },
+  gray_scott: {
+    modes: ["off", "inspect", "seed", "erase"],
+    radius: { min: 1, max: 40, step: 1, initial: 6 },
+    noteKey: "lab.tool.gray_scott_note",
   },
   particle_life: {
     modes: ["off", "inspect", "spawn", "remove"],
@@ -176,6 +181,16 @@ export const FORM_FIELDS: Record<SubstrateId, FormField[]> = {
     { path: "initialization.size", labelKey: "form.flow_lenia.init_size", kind: "int", min: 1, max: 1024 },
     { path: "dynamics.dt", labelKey: "form.flow_lenia.dt", kind: "float", min: 0.001, max: 10, step: 0.01 },
     { path: "dynamics.sigma", labelKey: "form.flow_lenia.sigma", kind: "float", min: 0.01, max: 5, step: 0.05 },
+    ...RUNNER,
+  ],
+  gray_scott: [
+    { path: "seed", labelKey: "form.seed", kind: "int", min: 0 },
+    { path: "world.width", labelKey: "form.gray_scott.size", kind: "int", min: 16, max: 1024 },
+    { path: "world.height", labelKey: "form.gray_scott.size_h", kind: "int", min: 16, max: 1024 },
+    { path: "world.length", labelKey: "form.gray_scott.length", kind: "float", min: 0.01, step: 0.01 },
+    { path: "dynamics.F", labelKey: "form.gray_scott.F", kind: "float", min: 0, max: 1, step: 0.0001 },
+    { path: "dynamics.k", labelKey: "form.gray_scott.k", kind: "float", min: 0, max: 1, step: 0.0001 },
+    { path: "dynamics.dt", labelKey: "form.gray_scott.dt", kind: "float", min: 0.001, step: 0.1 },
     ...RUNNER,
   ],
   particle_life: [

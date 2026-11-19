@@ -37,6 +37,14 @@ export interface Inspection {
   growth?: number;
   next_value?: number;
   patch_mass?: number;
+  // gray_scott
+  u?: number;
+  v?: number;
+  laplacian_u?: number;
+  laplacian_v?: number;
+  reaction_uvv?: number;
+  du_dt?: number;
+  dv_dt?: number;
   // flow_lenia
   channels?: Array<{
     value: number;
@@ -201,6 +209,28 @@ export function InspectorPanel({
               <dt>{t("inspector.patch_mass")}</dt>
               <dd className="mono">
                 {data.patch_mass?.toFixed(3)} (r = {data.query?.radius})
+              </dd>
+            </dl>
+          )}
+          {data.substrate === "gray_scott" && data.u !== undefined && (
+            <dl className="stats small" data-testid="inspector-gray-scott">
+              <dt>{t("inspector.cell")}</dt>
+              <dd className="mono">
+                ({data.query?.x}, {data.query?.y})
+              </dd>
+              <dt>u / v</dt>
+              <dd className="mono">
+                {data.u.toFixed(5)} / {data.v?.toFixed(5)}
+              </dd>
+              <dt>∇²u / ∇²v</dt>
+              <dd className="mono">
+                {data.laplacian_u?.toExponential(3)} / {data.laplacian_v?.toExponential(3)}
+              </dd>
+              <dt>uv²</dt>
+              <dd className="mono">{data.reaction_uvv?.toExponential(3)}</dd>
+              <dt>du/dt / dv/dt</dt>
+              <dd className="mono" data-testid="inspector-rates">
+                {data.du_dt?.toExponential(3)} / {data.dv_dt?.toExponential(3)}
               </dd>
             </dl>
           )}

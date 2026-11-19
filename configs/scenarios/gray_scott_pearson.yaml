@@ -1,0 +1,23 @@
+# Gray-Scott reaction-diffusion with Pearson's (1993) setup: periodic 2.5 x 2.5 domain on
+# 256 x 256 points, Du = 2e-5, Dv = 1e-5, forward Euler dt = 1, 5-point Laplacian, u = 1, v = 0
+# with a centred 20 x 20 square of u = 1/2, v = 1/4 and +-1 % noise. (F, k) chooses the regime.
+schema_version: 1
+experiment:
+  name: gray_scott_pearson
+  mode: reference
+  substrate: gray_scott
+  seed: 0
+  world: {width: 256, height: 256, boundary: periodic, length: 2.5}
+  dynamics:
+    clock_unit: tick
+    numeric_policy: float64_explicit_euler
+    Du: 2.0e-5
+    Dv: 1.0e-5
+    F: 0.0367
+    k: 0.0649
+    dt: 1.0
+    reaction: true
+  initialization: {preset: pearson, size: 20, noise: 0.01}
+  runner: {max_steps: 1000000, checkpoint_interval: 2000}
+  observations:
+    metrics: [mean_u, mean_v, v_area_fraction, v_std, total_u_plus_v]

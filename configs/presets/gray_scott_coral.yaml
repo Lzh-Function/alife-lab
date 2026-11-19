@@ -1,0 +1,13 @@
+preset:
+  id: gray_scott_coral
+  scenario: gray_scott_pearson.yaml
+  title_key: preset.gray_scott_coral.title
+  description_key: preset.gray_scott_coral.description
+  overrides:
+    experiment:
+      name: gray_scott_coral
+      dynamics: {F: 0.0545, k: 0.062}
+  expected_observation: >-
+    F = 0.0545, k = 0.062: branching, coral-like stripes that invade the domain
+    (v_area_fraction ~0.61 by tick 10000).
+  negative_control: preset gray_scott_diffusion_control

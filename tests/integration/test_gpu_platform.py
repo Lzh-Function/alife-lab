@@ -27,7 +27,7 @@ def _spec(c: Controller, preset: str) -> ExperimentSpec:
     return ExperimentSpec.model_validate(raw)
 
 
-@pytest.mark.parametrize("preset", ["lenia_orbium", "flow_lenia_example"])
+@pytest.mark.parametrize("preset", ["lenia_orbium", "flow_lenia_example", "gray_scott_mitosis"])
 def test_gpu_run_replays_and_stays_close_to_cpu(settings: Settings, preset: str) -> None:
     async def main() -> None:
         c = Controller(settings, LocalExecutor())

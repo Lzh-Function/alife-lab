@@ -494,13 +494,84 @@ class FlowLeniaExperiment(_Frozen):
         return self
 
 
+# --------------------------------------------------------------------------- #
+# Gray-Scott reaction-diffusion (Pearson 1993 parameterisation)
+# --------------------------------------------------------------------------- #
+
+
+class GrayScottWorld(_Frozen):
+    width: Annotated[int, Field(ge=16, le=MAX_WORLD_SIDE)] = 256
+    height: Annotated[int, Field(ge=16, le=MAX_WORLD_SIDE)] = 256
+    boundary: Literal["periodic"] = "periodic"
+    # Physical side length of the square domain (Pearson: 2.5 for 256 x 256 cells).
+    length: Annotated[float, Field(gt=0.0, le=1_000.0)] = 2.5
+
+
+class GrayScottDynamics(_Frozen):
+    clock_unit: Literal["tick"] = "tick"
+    numeric_policy: Literal["float64_explicit_euler"] = "float64_explicit_euler"
+    Du: Annotated[float, Field(gt=0.0, le=10.0)] = 2e-5
+    Dv: Annotated[float, Field(gt=0.0, le=10.0)] = 1e-5
+    F: Annotated[float, Field(ge=0.0, le=1.0)] = 0.0367
+    k: Annotated[float, Field(ge=0.0, le=1.0)] = 0.0649
+    dt: Annotated[float, Field(gt=0.0, le=100.0)] = 1.0
+    reaction: bool = True  # False: diffusion-only control (no u v^2 term, no feed/kill)
+
+
+class GrayScottInitialization(_Frozen):
+    # "pearson": u = 1, v = 0 with a centred square (side `size`) of u = 0.5, v = 0.25,
+    # both perturbed by +-`noise` relative uniform noise (Pearson used 1 %).
+    preset: Literal["pearson", "uniform"] = "pearson"
+    size: Annotated[int, Field(ge=1, le=MAX_WORLD_SIDE)] = 20
+    noise: Annotated[float, Field(ge=0.0, le=0.5)] = 0.01
+
+
+GrayScottMetric = Literal["mean_u", "mean_v", "v_area_fraction", "v_std", "total_u_plus_v"]
+
+
+class GrayScottObservation(_Frozen):
+    metrics: tuple[GrayScottMetric, ...] = (
+        "mean_u",
+        "mean_v",
+        "v_area_fraction",
+        "v_std",
+        "total_u_plus_v",
+    )
+
+
+class GrayScottExperiment(_Frozen):
+    name: _NAME
+    mode: Literal["reference", "exploratory"] = "reference"
+    substrate: Literal["gray_scott"]
+    seed: _SEED
+    world: GrayScottWorld = GrayScottWorld()
+    initialization: GrayScottInitialization = GrayScottInitialization()
+    dynamics: GrayScottDynamics = GrayScottDynamics()
+    runner: RunnerSpec = RunnerSpec()
+    observations: GrayScottObservation = GrayScottObservation()
+
+    @model_validator(mode="after")
+    def _check(self) -> GrayScottExperiment:
+        w = self.world
+        if w.width != w.height:
+            raise ValueError("gray_scott uses a square domain (width == height)")
+        dx = w.length / w.width
+        limit = dx * dx / (4 * max(self.dynamics.Du, self.dynamics.Dv))
+        if self.dynamics.dt > limit:
+            raise ValueError(
+                f"explicit Euler is unstable: dt={self.dynamics.dt} > dx^2/(4 max D)={limit:.4g}"
+            )
+        return self
+
+
 AnyExperiment = Annotated[
     ConwayExperiment
     | BoidsExperiment
     | ParticleLifeExperiment
     | BFFExperiment
     | LeniaExperiment
-    | FlowLeniaExperiment,
+    | FlowLeniaExperiment
+    | GrayScottExperiment,
     Field(discriminator="substrate"),
 ]
 
