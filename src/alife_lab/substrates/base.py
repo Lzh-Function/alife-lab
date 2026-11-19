@@ -43,6 +43,8 @@ class PluginManifest:
     metrics: tuple[MetricDefinition, ...]
     reference: dict[str, Any] = field(default_factory=dict)
     licence: str = "project"
+    # Backends that only accept some numeric policies (e.g. GPU float32 differs from the CPU).
+    backend_numeric_policies: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

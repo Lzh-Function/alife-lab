@@ -1,0 +1,20 @@
+preset:
+  id: nca_train_paper_regenerating
+  scenario: nca_train_heart.yaml
+  title_key: preset.nca_train_paper_regenerating.title
+  description_key: preset.nca_train_paper_regenerating.description
+  overrides:
+    experiment:
+      name: nca_train_paper_regenerating
+      target: {size: 40}
+      dynamics:
+        numeric_policy: float32_jax   # device-agnostic: run with the local_gpu profile
+        experiment: regenerating
+        pad: 16                       # 40 + 2 x 16 = 72 cells, as in the article
+        pool_size: 1024
+      runner: {max_steps: 8000, checkpoint_interval: 1000}
+  expected_observation: >-
+    Article-scale regenerating training (72 x 72, pool 1024, 8000 optimizer steps; ~0.16 s per
+    step on an RTX 5070 with jax_cuda, ~21 min). Use the local_gpu profile; on the CPU a step
+    takes ~1.1 s.
+  negative_control: preset nca_untrained_control

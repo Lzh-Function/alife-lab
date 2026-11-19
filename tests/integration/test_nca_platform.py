@@ -64,3 +64,39 @@ def test_train_export_run_replay(settings: Settings) -> None:
             await c.shutdown()
 
     arun(main)
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("jax_cuda13_plugin") is None, reason="JAX CUDA build not installed"
+)
+def test_gpu_profile_runs_nca_on_jax_cuda_and_replays(settings: Settings) -> None:
+    async def main() -> None:
+        c = Controller(settings, LocalExecutor())
+        await c.start()
+        try:
+            if "jax_cuda" not in c.target.capabilities.backends:
+                pytest.skip("no CUDA device")
+            sp = c.presets["nca_heart24_pretrained"].spec
+            # The CPU-only numeric policy is rejected on the GPU (never silently changed).
+            with pytest.raises(Exception, match="numeric_policy"):
+                c.create_run(sp, "local_gpu", 0)
+            raw = sp.model_dump(mode="json")
+            raw["experiment"]["dynamics"]["numeric_policy"] = "float32_jax"
+            raw["experiment"]["runner"]["checkpoint_interval"] = 20
+            rid = c.create_run(ExperimentSpec.model_validate(raw), "local_gpu", 0)["id"]
+            await c.start_run(rid, start_paused=True)
+            await wait_for(lambda: state_of(c, rid) == "paused", 120)
+            await c.control(rid, "step", {"count": 30})
+            assert c.run_summary(rid)["backend"] == "jax_cuda"
+            versions = c.provenance(rid)["execution"]["backend_versions"]
+            assert versions["jax-cuda13-plugin"] and versions["gpu"]
+            report = await c.verify_replay(rid)
+            assert report["status"] == "verified", report["segments"]
+            await wait_for(
+                lambda: (c.run_summary(rid)["live"] or {}).get("gpu_memory") is not None, 15
+            )
+            assert c.run_summary(rid)["live"]["gpu_memory"]["peak_pool_held_bytes"] > 0
+        finally:
+            await c.shutdown()
+
+    arun(main)

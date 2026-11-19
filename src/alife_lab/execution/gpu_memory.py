@@ -15,11 +15,22 @@ MIB = 2**20
 
 
 class GpuMemoryTracker:
-    def __init__(self) -> None:
+    def __init__(self, backend: str = "cupy") -> None:
+        self.backend = backend
         self.peak_pool_bytes = 0
 
     def _cupy(self) -> Any:
-        return sys.modules.get("cupy")
+        return sys.modules.get("cupy") if self.backend == "cupy" else None
+
+    def _jax_stats(self) -> dict[str, Any] | None:
+        jax = sys.modules.get("jax") if self.backend == "jax_cuda" else None
+        if jax is None:
+            return None
+        try:
+            stats: dict[str, Any] = jax.devices("cuda")[0].memory_stats() or {}
+        except RuntimeError:
+            return None
+        return stats
 
     def update(self) -> None:
         """Cheap; call after every step to keep the pool peak."""
@@ -30,6 +41,21 @@ class GpuMemoryTracker:
             )
 
     def snapshot(self) -> dict[str, Any] | None:
+        stats = self._jax_stats()
+        if stats is not None:  # XLA allocator statistics (preallocation disabled)
+            in_use = int(stats.get("bytes_in_use", 0))
+            peak = int(stats.get("peak_bytes_in_use", in_use))
+            limit = int(stats.get("bytes_limit", 0))
+            self.peak_pool_bytes = max(self.peak_pool_bytes, peak)
+            return {
+                "pool_used_mib": round(in_use / MIB, 3),
+                "pool_held_mib": round(in_use / MIB, 3),
+                "peak_pool_held_mib": round(self.peak_pool_bytes / MIB, 3),
+                "peak_pool_held_bytes": self.peak_pool_bytes,
+                "device_used_mib": round(in_use / MIB, 1),
+                "device_total_mib": round(limit / MIB, 1),
+                "method": "jax memory_stats (XLA allocator; device_total = allocator limit)",
+            }
         cp = self._cupy()
         if cp is None:
             return None

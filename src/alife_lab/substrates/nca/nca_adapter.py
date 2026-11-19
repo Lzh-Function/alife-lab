@@ -18,7 +18,7 @@ from alife_lab.core.spec import ExperimentSpec, NCAExperiment
 from alife_lab.substrates.base import Capabilities, MetricDefinition, PluginManifest
 from alife_lab.substrates.nca.render import cell_info, rgb_bytes
 from alife_lab.substrates.nca.targets import padded_target
-from alife_lab.substrates.nca.train_adapter import JAX_AVAILABLE, seed_state
+from alife_lab.substrates.nca.train_adapter import JAX_AVAILABLE, on_device, seed_state
 
 SERIALIZE_VERSION = 1
 
@@ -97,10 +97,11 @@ NCA_MANIFEST = PluginManifest(
         supports_deterministic_cpu=True,
         intervention_types=("damage", "seed"),
     ),
-    backends=("jax",),
+    backends=("jax", "jax_cuda"),
     gpu_required=False,
     serialize_version=SERIALIZE_VERSION,
     metrics=_METRICS,
+    backend_numeric_policies={"jax_cuda": ("float32_jax",)},
     reference={
         "description": "Growing NCA dynamics with fixed weights (Mordvintsev et al. 2020).",
         "paper_urls": ["https://distill.pub/2020/growing-ca/"],
@@ -110,6 +111,13 @@ NCA_MANIFEST = PluginManifest(
 
 
 class NCAAdapter:
+    backend: str = "jax"
+
+    def set_backend(self, backend: str) -> None:
+        if backend not in NCA_MANIFEST.backends:
+            raise ValueError(f"unsupported nca backend {backend!r}")
+        self.backend = backend
+
     @property
     def manifest(self) -> PluginManifest:
         return NCA_MANIFEST
@@ -123,6 +131,10 @@ class NCAAdapter:
         return state
 
     def initialize(self, spec: ExperimentSpec) -> NCAState:
+        with on_device(self.backend):
+            return self._initialize(spec)
+
+    def _initialize(self, spec: ExperimentSpec) -> NCAState:
         exp = _nca(spec)
         _model()
         import jax
@@ -133,6 +145,10 @@ class NCAAdapter:
         return self._prepare(exp, NCAState(x=x, tick=0, key=key))
 
     def step(self, state: NCAState, spec: ExperimentSpec) -> NCAState:
+        with on_device(self.backend):
+            return self._step(state, spec)
+
+    def _step(self, state: NCAState, spec: ExperimentSpec) -> NCAState:
         import jax
         import jax.numpy as jnp
 
@@ -222,6 +238,10 @@ class NCAAdapter:
         }
 
     def deserialize_state(self, payload: dict[str, Any], spec: ExperimentSpec) -> NCAState:
+        with on_device(self.backend):
+            return self._deserialize(payload, spec)
+
+    def _deserialize(self, payload: dict[str, Any], spec: ExperimentSpec) -> NCAState:
         exp = _nca(spec)
         meta = payload["meta"]
         if meta["serialize_version"] != SERIALIZE_VERSION:

@@ -45,5 +45,18 @@ learned regeneration of a trained shape (E2 within this assay), not of open-ende
 ## Measured (2026-11-19, JAX 0.12.0.1 CPU, x86_64)
 - Training step (56², batch 8, scan of 96 steps): 0.74 s; (36², batch 8, 64 steps): ~0.24 s.
 - Worker RSS with JAX loaded: ~413 MB. `nca` run (36²): hundreds of ticks per second.
-- A CUDA build of JAX is not installed; training on the GPU is future work (needs its own
-  determinism check).
+- GPU (`jax_cuda`, `nca-gpu` extra: jax[cuda13] 0.12.0.1, RTX 5070): article scale (72²,
+  pool 1024, batch 8, 64–96 steps, regenerating) 0.16 s/step (~21 min for 8000 steps), XLA peak
+  3.3 GB (preallocation disabled; XLA's autotuner logged one failed 4 GiB scratch allocation and
+  fell back). Checkpoint at step 21: 5 MB compressed.
+
+## GPU backend (`jax_cuda`)
+- Placement is explicit per adapter (`jax.default_device`), so installing the CUDA build does not
+  move CPU runs. `--xla_gpu_deterministic_ops=true` is set; preallocation is disabled.
+- The GPU is only allowed with `numeric_policy: float32_jax` (device-agnostic); a spec declaring
+  `float32_jax_cpu` is rejected on the GPU instead of being silently run with other rounding.
+- Verified (tests/reference/test_nca_gpu.py, tests/integration/test_nca_platform.py): two GPU
+  training runs are bitwise identical; GPU vs CPU weights after 5 steps differ by < 5e-3
+  (measured 2.9e-4 on the small config); the bundled model regrows on the GPU; a `local_gpu`
+  run resolves to `jax_cuda`, records jax/jaxlib/plugin versions and the GPU, reports XLA memory
+  statistics and passes replay verification with the recorded backend.

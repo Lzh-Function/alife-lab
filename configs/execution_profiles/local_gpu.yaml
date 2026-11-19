@@ -4,7 +4,7 @@ execution:
   target_selector:
     role: local_interactive
     gpu_count: 1
-    backend: cupy          # explicit: never chosen by "auto" (float substrates differ numerically)
+    backend: gpu           # first GPU backend of the substrate (cupy, jax_cuda); never "auto"
   memory:
     policy: probe_available
     max_fraction_of_available: 0.80

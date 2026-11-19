@@ -24,6 +24,8 @@ fast = ["numba>=0.68"]
 gpu = ["cupy-cuda13x[ctk]>=14.2"]
 # Optional autodiff runtime for Neural Cellular Automata training (CPU build of JAX).
 nca = ["jax>=0.8"]
+# CUDA 13 build of JAX for NCA training/runs on the GPU (with pip CUDA libraries, ~4 GB).
+nca-gpu = ["jax[cuda13]>=0.8"]
 
 [project.scripts]
 alife = "alife_lab.cli:main"

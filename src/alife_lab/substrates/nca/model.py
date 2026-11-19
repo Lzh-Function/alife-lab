@@ -10,15 +10,21 @@ Automata", Distill (2020). Implemented from the article; no code reused.
   [steps_min, steps_max]; per-variable gradient L2 normalisation; Adam (b1 0.9, b2 0.999,
   eps 1e-7) with a step decay of the learning rate. Pool / damage handled by ``training.py``.
 
-JAX is an optional dependency (``uv sync --extra nca``) imported only by workers. The CPU
-platform is forced so results do not depend on whether a CUDA build of JAX is installed.
+JAX is an optional dependency (``uv sync --extra nca``; CUDA build: ``--extra nca-gpu``) imported
+only by workers. Computations are placed explicitly on the backend's device (``device()``), so
+installing the CUDA build never changes CPU runs. On the GPU, XLA's deterministic ops are enabled
+and memory is not preallocated (other GPU work such as CuPy can share the device).
 """
 
 from __future__ import annotations
 
 import os
 
-os.environ.setdefault("JAX_PLATFORMS", "cpu")
+os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
+if "--xla_gpu_deterministic_ops" not in os.environ.get("XLA_FLAGS", ""):
+    os.environ["XLA_FLAGS"] = (
+        os.environ.get("XLA_FLAGS", "") + " --xla_gpu_deterministic_ops=true"
+    ).strip()
 
 from typing import Any
 
@@ -27,6 +33,14 @@ import jax.numpy as jnp
 import numpy as np
 
 Params = dict[str, Any]
+
+
+def device(backend: str) -> Any:
+    """The JAX device for a backend name: ``jax`` -> CPU, ``jax_cuda`` -> first CUDA device."""
+    if backend == "jax_cuda":
+        return jax.devices("cuda")[0]
+    return jax.devices("cpu")[0]
+
 
 _SOBEL = np.array([[-1.0, 0.0, 1.0], [-2.0, 0.0, 2.0], [-1.0, 0.0, 1.0]], np.float32) / 8.0
 _IDENT = np.zeros((3, 3), np.float32)

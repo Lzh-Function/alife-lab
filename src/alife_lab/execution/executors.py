@@ -23,7 +23,7 @@ from alife_lab.substrates import get_manifest, has_substrate
 IMPLEMENTED_ROLES = ("cpu_dev", "local_interactive")
 
 
-GPU_BACKENDS = frozenset({"cupy"})
+GPU_BACKENDS = frozenset({"cupy", "jax_cuda"})
 
 
 def available_backends(gpu_count: int = 0) -> tuple[str, ...]:
@@ -35,6 +35,8 @@ def available_backends(gpu_count: int = 0) -> tuple[str, ...]:
         out.append("jax")  # CPU platform (forced in the NCA model module)
     if gpu_count > 0 and importlib.util.find_spec("cupy") is not None:
         out.append("cupy")
+    if gpu_count > 0 and importlib.util.find_spec("jax_cuda13_plugin") is not None:
+        out.append("jax_cuda")
     return tuple(out)
 
 
@@ -114,8 +116,14 @@ def _validate(
         errors.append(f"unknown substrate {substrate!r}")
     else:
         manifest = get_manifest(substrate)
-        if selector.backend == "auto":
-            candidates = [b for b in manifest.backends if b in target.capabilities.backends]
+        if selector.backend in ("auto", "gpu"):
+            # "auto" never picks a GPU backend; "gpu" picks the substrate's first GPU backend.
+            candidates = [
+                b
+                for b in manifest.backends
+                if b in target.capabilities.backends
+                and (b in GPU_BACKENDS) == (selector.backend == "gpu")
+            ]
             resolved_backend = candidates[0] if candidates else None
         elif selector.backend in manifest.backends:
             resolved_backend = selector.backend
@@ -126,6 +134,13 @@ def _validate(
             )
         if manifest.gpu_required and target.gpu_count == 0:
             errors.append(f"substrate {substrate!r} requires a GPU")
+        allowed = manifest.backend_numeric_policies.get(resolved_backend or "")
+        policy = getattr(spec.experiment.dynamics, "numeric_policy", None)
+        if allowed is not None and policy not in allowed:
+            errors.append(
+                f"backend {resolved_backend!r} requires numeric_policy in {list(allowed)}; the "
+                f"spec says {policy!r} (results would differ from the declared policy)"
+            )
         if resolved_backend in GPU_BACKENDS:
             if target.gpu_count == 0:
                 errors.append(f"backend {resolved_backend!r} needs a GPU; target has none")

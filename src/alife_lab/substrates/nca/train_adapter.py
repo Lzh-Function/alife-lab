@@ -8,8 +8,10 @@ are checkpointed separately. JAX is imported lazily (workers only).
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import math
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -105,10 +107,11 @@ NCA_TRAIN_MANIFEST = PluginManifest(
         supports_deterministic_cpu=True,
         intervention_types=(),
     ),
-    backends=("jax",),
+    backends=("jax", "jax_cuda"),
     gpu_required=False,
     serialize_version=SERIALIZE_VERSION,
     metrics=_METRICS,
+    backend_numeric_policies={"jax_cuda": ("float32_jax",)},
     reference={
         "description": "Mordvintsev, Randazzo, Niklasson, Levin (2020) Growing Neural Cellular "
         "Automata, Distill. Optimisation run with an explicit image-reconstruction objective.",
@@ -118,7 +121,24 @@ NCA_TRAIN_MANIFEST = PluginManifest(
 )
 
 
+@contextlib.contextmanager
+def on_device(backend: str) -> Iterator[None]:
+    """Place every JAX computation of a block on the backend's device."""
+    m = _model()
+    import jax
+
+    with jax.default_device(m.device(backend)):
+        yield
+
+
 class NCATrainAdapter:
+    backend: str = "jax"
+
+    def set_backend(self, backend: str) -> None:
+        if backend not in NCA_TRAIN_MANIFEST.backends:
+            raise ValueError(f"unsupported nca_train backend {backend!r}")
+        self.backend = backend
+
     @property
     def manifest(self) -> PluginManifest:
         return NCA_TRAIN_MANIFEST
@@ -132,6 +152,10 @@ class NCATrainAdapter:
         return state
 
     def initialize(self, spec: ExperimentSpec) -> TrainState:
+        with on_device(self.backend):
+            return self._initialize(spec)
+
+    def _initialize(self, spec: ExperimentSpec) -> TrainState:
         exp = _tr(spec)
         m = _model()
         import jax
@@ -163,6 +187,10 @@ class NCATrainAdapter:
             x[i][(yy - cy) ** 2 + (xx - cx) ** 2 < r * r] = 0.0
 
     def step(self, state: TrainState, spec: ExperimentSpec) -> TrainState:
+        with on_device(self.backend):
+            return self._step(state, spec)
+
+    def _step(self, state: TrainState, spec: ExperimentSpec) -> TrainState:
         exp = _tr(spec)
         m = _model()
         import jax
@@ -264,6 +292,10 @@ class NCATrainAdapter:
         }  # fmt: skip
 
     def deserialize_state(self, payload: dict[str, Any], spec: ExperimentSpec) -> TrainState:
+        with on_device(self.backend):
+            return self._deserialize(payload, spec)
+
+    def _deserialize(self, payload: dict[str, Any], spec: ExperimentSpec) -> TrainState:
         exp = _tr(spec)
         meta = payload["meta"]
         if meta["serialize_version"] != SERIALIZE_VERSION:

@@ -764,7 +764,9 @@ class NCATarget(_Frozen):
 
 class NCATrainDynamics(_Frozen):
     clock_unit: Literal["optimizer_step"] = "optimizer_step"
-    numeric_policy: Literal["float32_jax_cpu"] = "float32_jax_cpu"
+    # float32_jax_cpu: CPU only (bitwise reproducible across runs on this platform);
+    # float32_jax: any JAX device (CPU or CUDA); results depend on the recorded backend.
+    numeric_policy: Literal["float32_jax_cpu", "float32_jax"] = "float32_jax_cpu"
     # Mordvintsev et al. experiments: 1 = growing, 2 = persistent (pool), 3 = regenerating.
     experiment: Literal["growing", "persistent", "regenerating"] = "persistent"
     architecture: NCAArchitecture = NCAArchitecture()
@@ -819,7 +821,7 @@ class NCAWeights(_Frozen):
 
 class NCADynamics(_Frozen):
     clock_unit: Literal["tick"] = "tick"
-    numeric_policy: Literal["float32_jax_cpu"] = "float32_jax_cpu"
+    numeric_policy: Literal["float32_jax_cpu", "float32_jax"] = "float32_jax_cpu"
     architecture: NCAArchitecture = NCAArchitecture()
     # "trained": the given weights; "untrained": control with freshly initialised weights
     # (zero output layer => nothing grows), "noise": control with random output weights.

@@ -79,6 +79,13 @@ def _backend_version(backend: str) -> str | None:
 
         rt = cupy.cuda.runtime.runtimeGetVersion()
         return f"cupy {cupy.__version__} / CUDA runtime {rt // 1000}.{(rt % 1000) // 10}"
+    if backend in ("jax", "jax_cuda"):
+        from importlib import metadata
+
+        out = f"jax {metadata.version('jax')} / jaxlib {metadata.version('jaxlib')}"
+        if backend == "jax_cuda":
+            out += f" / jax-cuda13-plugin {metadata.version('jax-cuda13-plugin')}"
+        return out
     return str(np.__version__)
 
 
@@ -97,7 +104,7 @@ class _Worker:
         self.backend = str(job.extra.get("backend") or "numpy")
         if hasattr(self.adapter, "set_backend"):
             self.adapter.set_backend(self.backend)
-        self.gpu = GpuMemoryTracker()
+        self.gpu = GpuMemoryTracker(self.backend)
         self.store = LocalArtifactStore(Path(job.runs_root))
         self.run_dir = self.store.run_dir(job.run_id)
         self.running = not job.start_paused
@@ -238,7 +245,7 @@ class _Worker:
 
     def advance(self) -> None:
         self.state = self.adapter.step(self.state, self.spec)
-        if self.backend == "cupy":
+        if self.backend in ("cupy", "jax_cuda"):
             self.gpu.update()
         self.record_metrics()
         self.dirty_preview = True

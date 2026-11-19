@@ -744,6 +744,33 @@ class Controller:
                         if report.resolved_backend == "cupy"
                         else {}
                     ),
+                    **(
+                        {
+                            "jax": _pkg_version("jax"),
+                            "jaxlib": _pkg_version("jaxlib"),
+                            **(
+                                {
+                                    "jax-cuda13-plugin": _pkg_version("jax-cuda13-plugin"),
+                                    "gpu": [
+                                        {
+                                            k: d.get(k)
+                                            for k in (
+                                                "name",
+                                                "compute_capability",
+                                                "driver_version",
+                                                "memory_total_mib",
+                                            )
+                                        }
+                                        for d in self.target.probe.get("gpu", {}).get("devices", [])
+                                    ],
+                                }
+                                if report.resolved_backend == "jax_cuda"
+                                else {}
+                            ),
+                        }
+                        if report.resolved_backend in ("jax", "jax_cuda")
+                        else {}
+                    ),
                 },
                 "target_capabilities": self.target.to_json()["capabilities"],
                 "validation_warnings": report.warnings,
