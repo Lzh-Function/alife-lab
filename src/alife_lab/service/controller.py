@@ -142,6 +142,7 @@ class ActiveJob:
     steps_per_second: float = 0.0
     peak_rss_mb: float = 0.0
     last_rss_mb: float | None = None
+    gpu_memory: dict[str, Any] | None = None
     cpu_percent: float | None = None
     started_at: float = field(default_factory=time.time)
     process: psutil.Process | None = None
@@ -384,6 +385,7 @@ class Controller:
                 "worker_rss_mb": job.last_rss_mb,
                 "worker_peak_rss_mb": round(job.peak_rss_mb, 1),
                 "worker_cpu_percent": job.cpu_percent,
+                "gpu_memory": job.gpu_memory,
                 "last_heartbeat": job.last_heartbeat,
             },
         }
@@ -691,6 +693,25 @@ class Controller:
                     **(
                         {"numba": _pkg_version("numba")}
                         if report.resolved_backend == "numba"
+                        else {}
+                    ),
+                    **(
+                        {
+                            "cupy": _pkg_version("cupy-cuda13x"),
+                            "gpu": [
+                                {
+                                    k: d.get(k)
+                                    for k in (
+                                        "name",
+                                        "compute_capability",
+                                        "driver_version",
+                                        "memory_total_mib",
+                                    )
+                                }
+                                for d in self.target.probe.get("gpu", {}).get("devices", [])
+                            ],
+                        }
+                        if report.resolved_backend == "cupy"
                         else {}
                     ),
                 },
@@ -1653,6 +1674,8 @@ class Controller:
                 sub.push_preview(preview)
         elif kind == "heartbeat":
             job.steps_per_second = float(message.get("steps_per_second", 0.0))
+            if message.get("gpu_memory"):
+                job.gpu_memory = message["gpu_memory"]
             self._sample_resources(job)
             self.db.execute("UPDATE jobs SET heartbeat_at=? WHERE id=?", (now, job.job_id))
             self._broadcast(
@@ -1663,6 +1686,7 @@ class Controller:
                     "steps_per_second": job.steps_per_second,
                     "worker_rss_mb": job.last_rss_mb,
                     "worker_cpu_percent": job.cpu_percent,
+                    "gpu_memory": job.gpu_memory,
                 },
             )
         elif kind == "checkpoint":
@@ -1901,6 +1925,7 @@ class Controller:
                 "exit_code": code,
                 "wall_seconds": round(now - job.started_at, 3),
                 "worker_peak_rss_mb": round(job.peak_rss_mb, 1) if job.process else None,
+                "gpu_memory_last_heartbeat": job.gpu_memory,
             },
             severity="info" if target != RunState.FAILED else "error",
         )

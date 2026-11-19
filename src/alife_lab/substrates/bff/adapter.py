@@ -168,7 +168,7 @@ BFF_MANIFEST = PluginManifest(
         intervention_types=("inject_program", "zero_programs"),
     ),
     # Order = preference for backend "auto"; both are bit-identical (tested).
-    backends=("numba", "numpy"),
+    backends=("numba", "numpy", "cupy"),
     gpu_required=False,
     serialize_version=SERIALIZE_VERSION,
     metrics=_METRICS,

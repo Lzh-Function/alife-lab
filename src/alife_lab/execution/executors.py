@@ -23,11 +23,16 @@ from alife_lab.substrates import get_manifest, has_substrate
 IMPLEMENTED_ROLES = ("cpu_dev", "local_interactive")
 
 
-def available_backends() -> tuple[str, ...]:
-    """CPU backends usable by workers (checked without importing them here)."""
+GPU_BACKENDS = frozenset({"cupy"})
+
+
+def available_backends(gpu_count: int = 0) -> tuple[str, ...]:
+    """Backends usable by workers (checked without importing them: no CUDA in the API)."""
     out = ["numpy"]
     if importlib.util.find_spec("numba") is not None:
         out.append("numba")
+    if gpu_count > 0 and importlib.util.find_spec("cupy") is not None:
+        out.append("cupy")
     return tuple(out)
 
 
@@ -119,10 +124,17 @@ def _validate(
             )
         if manifest.gpu_required and target.gpu_count == 0:
             errors.append(f"substrate {substrate!r} requires a GPU")
-        if selector.gpu_count > 0 and not manifest.gpu_required:
+        if resolved_backend in GPU_BACKENDS:
+            if target.gpu_count == 0:
+                errors.append(f"backend {resolved_backend!r} needs a GPU; target has none")
+            if selector.gpu_count == 0:
+                errors.append(
+                    f"backend {resolved_backend!r} needs a GPU reservation (gpu_count >= 1)"
+                )
+        elif selector.gpu_count > 0 and not manifest.gpu_required:
             warnings.append(
-                "profile reserves a GPU role but this substrate runs on CPU (numpy); "
-                "no GPU memory is used"
+                f"profile reserves a GPU but the resolved backend {resolved_backend!r} runs on "
+                "the CPU; no GPU memory is used"
             )
     runner = spec.experiment.runner
     if runner.checkpoint_interval > runner.max_steps:
@@ -165,18 +177,19 @@ class LocalExecutor:
 
     def probe(self) -> ExecutionTarget:
         gpus = probe_gpus()
+        gpu_count = len(gpus["devices"])
         self._target = ExecutionTarget(
             target_id=self.target_id,
             kind="local",
             roles=IMPLEMENTED_ROLES,
-            gpu_count=len(gpus["devices"]),
+            gpu_count=gpu_count,
             capabilities=TargetCapabilities(
                 pause_live=True,
                 checkpoint_on_signal=True,
                 interactive_preview=True,
                 remote_cancel=False,
                 multi_gpu=False,
-                backends=available_backends(),
+                backends=available_backends(gpu_count),
             ),
             probe={"gpu": gpus},
         )
@@ -234,7 +247,7 @@ class FakeExecutor:
                 interactive_preview=True,
                 remote_cancel=False,
                 multi_gpu=False,
-                backends=available_backends(),
+                backends=available_backends(gpu_count),
             ),
         )
 

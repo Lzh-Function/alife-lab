@@ -14,6 +14,7 @@ import numpy as np
 
 from alife_lab import API_CONTRACT_VERSION
 from alife_lab.core.spec import ExperimentSpec, FlowLeniaExperiment
+from alife_lab.substrates._xp import to_backend, to_host
 from alife_lab.substrates.base import Capabilities, MetricDefinition, PluginManifest
 from alife_lab.substrates.flow_lenia import core
 from alife_lab.substrates.flow_lenia.core import F64, Rule
@@ -51,14 +52,14 @@ def _theta(exp: FlowLeniaExperiment) -> float:
     return float(d.theta_A) if d.theta_A is not None else float(d.channels)
 
 
-def _centroid(mass: F64, torus: bool) -> tuple[float, float] | None:
+def _centroid(mass: Any, torus: bool) -> tuple[float, float] | None:
     total = float(mass.sum())
     if total <= 1e-12:
         return None
     h, w = mass.shape
     out = []
     for axis, size in ((0, w), (1, h)):  # x from columns, y from rows
-        weights = mass.sum(axis=axis)
+        weights = to_host(mass.sum(axis=axis))  # marginals only leave the device
         if torus:
             angles = np.arange(size) * (2 * math.pi / size)
             s = float((weights * np.sin(angles)).sum())
@@ -73,7 +74,7 @@ def _centroid(mass: F64, torus: bool) -> tuple[float, float] | None:
 
 @dataclass
 class FlowLeniaState:
-    cells: F64  # (H, W, C)
+    cells: Any  # float64 (H, W, C): numpy, or cupy for the GPU backend
     tick: int
     rule: Rule = field(repr=False)
     kfft: Any = field(repr=False)
@@ -142,7 +143,7 @@ FLOW_LENIA_MANIFEST = PluginManifest(
         supports_deterministic_cpu=True,
         intervention_types=("paint", "erase"),
     ),
-    backends=("numpy",),
+    backends=("numpy", "cupy"),
     gpu_required=False,
     serialize_version=SERIALIZE_VERSION,
     metrics=_METRICS,
@@ -157,6 +158,15 @@ FLOW_LENIA_MANIFEST = PluginManifest(
 
 
 class FlowLeniaAdapter:
+    backend: str = "numpy"
+
+    def set_backend(self, backend: str) -> None:
+        """``cupy``: field on the GPU (cuFFT + fused reintegration kernel), float64.
+        Not bitwise equal to numpy (FFT library); see docs/reference_fidelity/flow_lenia.md."""
+        if backend not in FLOW_LENIA_MANIFEST.backends:
+            raise ValueError(f"unsupported flow_lenia backend {backend!r}")
+        self.backend = backend
+
     @property
     def manifest(self) -> PluginManifest:
         return FLOW_LENIA_MANIFEST
@@ -164,10 +174,12 @@ class FlowLeniaAdapter:
     def _new_state(self, exp: FlowLeniaExperiment, cells: F64, tick: int) -> FlowLeniaState:
         rule = realise_rule(exp)
         return FlowLeniaState(
-            cells=cells,
+            cells=to_backend(cells, self.backend),
             tick=tick,
             rule=rule,
-            kfft=core.kernels_fft(exp.world.height, exp.world.width, rule),
+            kfft=to_backend(
+                core.kernels_fft(exp.world.height, exp.world.width, rule), self.backend
+            ),
             torus=exp.world.boundary == "torus",
         )
 
@@ -227,7 +239,7 @@ class FlowLeniaAdapter:
 
     def render(self, state: FlowLeniaState) -> tuple[dict[str, Any], bytes]:
         h, w, c = state.cells.shape
-        data = np.rint(np.clip(state.cells, 0.0, 1.0) * 255).astype(np.uint8).tobytes()
+        data = to_host((state.cells.clip(0.0, 1.0) * 255).round().astype(np.uint8)).tobytes()
         header = {
             "codec": "field_u8",
             "width": w,
@@ -262,15 +274,17 @@ class FlowLeniaAdapter:
         mask = dxx * dxx + dyy * dyy <= radius * radius
         chans = slice(None) if channel is None else slice(channel, channel + 1)
         before = float(state.cells.sum())
+        cells = to_host(state.cells).copy()
         if kind == "paint":
             value = float(payload.get("value", 1.0))
             if not 0.0 <= value <= 1.0:
                 raise ValueError("value must be within 0..1")
-            state.cells[mask, chans] = value
+            cells[mask, chans] = value
         elif kind == "erase":
-            state.cells[mask, chans] = 0.0
+            cells[mask, chans] = 0.0
         else:
             raise ValueError(f"unsupported intervention kind {kind!r}")
+        state.cells = to_backend(cells, self.backend)
         state.reset_baselines()
         return state, {
             "cells": int(mask.sum()),
@@ -290,6 +304,8 @@ class FlowLeniaAdapter:
         f, alpha = core.flow(state.cells, u, _theta(exp), exp.dynamics.n)
         d = exp.dynamics
         mu = core.target_positions(state.cells.shape, f, d.dt, d.dd, d.sigma, exp.world.boundary)
+        u, f, alpha, mu = to_host(u), to_host(f), to_host(alpha), to_host(mu)
+        cells = to_host(state.cells)
         r = max(1, min(int(query.get("radius", 3)), 32))
         ys = [(y + k) % h for k in range(-r, r + 1)]
         xs = [(x + k) % w for k in range(-r, r + 1)]
@@ -299,7 +315,7 @@ class FlowLeniaAdapter:
             "query": {"x": x, "y": y, "radius": r},
             "channels": [
                 {
-                    "value": float(state.cells[y, x, ch]),
+                    "value": float(cells[y, x, ch]),
                     "affinity": float(u[y, x, ch]),
                     "alpha": float(alpha[y, x, 0, ch]),
                     "flow": {"x": float(f[y, x, 1, ch]), "y": float(f[y, x, 0, ch])},
@@ -310,24 +326,25 @@ class FlowLeniaAdapter:
                 }
                 for ch in range(c)
             ],
-            "patch_mass": float(state.cells[np.ix_(ys, xs)].sum()),
+            "patch_mass": float(cells[np.ix_(ys, xs)].sum()),
             "rule": state.rule.to_json(),
         }
 
     def state_distance(self, a: FlowLeniaState, b: FlowLeniaState) -> dict[str, Any]:
         if a.cells.shape != b.cells.shape:
             return {"metric": "max_abs_difference", "value": None, "exact_equal": False}
-        diff = np.abs(a.cells - b.cells)
+        ca, cb = to_host(a.cells), to_host(b.cells)
+        diff = np.abs(ca - cb)
         return {
             "metric": "max_abs_difference",
             "value": float(diff.max()),
-            "exact_equal": bool(np.array_equal(a.cells, b.cells)),
+            "exact_equal": bool(np.array_equal(ca, cb)),
             "mean_abs_difference": float(diff.mean()),
         }
 
     def serialize_state(self, state: FlowLeniaState) -> dict[str, Any]:
         return {
-            "arrays": {"cells": state.cells},
+            "arrays": {"cells": to_host(state.cells)},
             "meta": {
                 "serialize_version": SERIALIZE_VERSION,
                 "tick": state.tick,

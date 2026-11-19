@@ -148,8 +148,8 @@ def replay_state(inp: ReplayInput, target: int) -> dict[str, Any]:
         "spec_digest": inp.base_expected_spec_digest or spec.digest(),
         "clock_unit": "tick",
         "substrate": spec.experiment.substrate,
-        "backend": "numpy",
-        "backend_version": np.__version__,
+        "backend": inp.backend,
+        "backend_version": None if inp.backend != "numpy" else np.__version__,
         "reason": "replay_reconstruction",
         "replay": {
             "base_sha256": inp.base_sha256,

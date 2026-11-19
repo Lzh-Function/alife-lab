@@ -76,3 +76,15 @@ Worker RSS in the GUI run (128²): 53.5 MB. Orbium centroid speed in this setup 
 - Display codec `field_u8`: `round(A·255)`; display only, never used for metrics or state.
 - `centroid_displacement` is the unwrapped motion of the mass-weighted circular mean over
   the whole world; it is not a creature tracker and is meaningless with several patterns.
+
+## GPU backend (`cupy`)
+The same reference functions run on CuPy arrays (NumPy → CuPy dispatch; cuFFT, float64). The
+field stays on the device; only marginals/metrics, previews and checkpoints are copied back.
+**Not bitwise equal** to the NumPy oracle (different FFT library): measured max |difference|
+on Orbium 128² was 7e-16 after 1 tick, 3e-15 after 10, 6e-14 after 100 and 3e-6 after 1000
+ticks (sensitivity of the dynamics). Tests: ≤ 1e-13 after 10 ticks, ≤ 1e-10 after 100; GPU runs
+are bitwise reproducible on the same device; Orbium survives 600 ticks; checkpoints continue
+bitwise; worker run + replay verification with the recorded backend `verified`. Throughput
+(float64, warm): 128² 0.28 ms/tick, 512² 0.41, 1024² 1.34 (CPU 32.2), 2048² 6.1.
+A GPU run is therefore a numerically different execution of the same spec; the backend is
+recorded in the run, its checkpoints and its provenance, and replay uses the same backend.

@@ -175,3 +175,48 @@ def test_backend_choice_does_not_change_results(settings: Settings) -> None:
             await c.shutdown()
 
     arun(main)
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    __import__("importlib.util").util.find_spec("cupy") is None, reason="gpu extra not installed"
+)
+def test_gpu_backend_run_equals_cpu_and_replays(settings: Settings) -> None:
+    """local_gpu profile -> cupy backend in a worker process; bit-identical soups to numpy;
+    replay verification reproduces with the recorded backend; GPU memory is reported."""
+    from alife_lab.substrates.bff.vm_cupy import available
+
+    if not available():
+        pytest.skip("no CUDA device")
+
+    async def main() -> None:
+        c = Controller(settings, LocalExecutor())
+        await c.start()
+        try:
+            sp = small(c, n=512)
+            runs = {}
+            for profile in ("local_gpu", "cpu_dev"):
+                rid = c.create_run(sp, profile, 0)["id"]
+                await c.start_run(rid, start_paused=True)
+                await wait_for(lambda rid=rid: state_of(c, rid) == "paused", 60)
+                await c.control(rid, "step", {"count": 30})
+                runs[profile] = rid
+            assert c.run_summary(runs["local_gpu"])["backend"] == "cupy"
+            manifest = c.provenance(runs["local_gpu"])["execution"]
+            assert manifest["backend_versions"]["cupy"] and manifest["backend_versions"]["gpu"]
+            cmp = c.create_comparison([runs["cpu_dev"], runs["local_gpu"]], name="gpu-vs-cpu")
+            points = c.comparison_report(cmp["id"])["divergence"]["points"]
+            assert all(p["distance_to_first"] == [0, 0] for p in points)
+            assert (await c.verify_replay(runs["local_gpu"]))["status"] == "verified"
+            await wait_for(
+                lambda: (
+                    (c.run_summary(runs["local_gpu"])["live"] or {}).get("gpu_memory") is not None
+                ),
+                15,
+            )
+            gm = c.run_summary(runs["local_gpu"])["live"]["gpu_memory"]
+            assert gm["peak_pool_held_bytes"] > 0 and gm["device_total_mib"] > 1000
+        finally:
+            await c.shutdown()
+
+    arun(main)

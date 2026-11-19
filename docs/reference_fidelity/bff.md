@@ -118,3 +118,20 @@ evaluation — with random partners (exact and near copy rate 0 %), with an all-
 with themselves (P+P leaves the second half at Hamming distance 62). Their growth in the soup
 therefore depends on multi-interaction dynamics with other soup programs. The mechanism has not
 been analysed; the debugger's next-epoch trace is the intended tool for that.
+
+## GPU backend (`cupy`, `vm_cupy.py`)
+CUDA kernels via CuPy 14.2.0 (CUDA runtime 13.2, pip toolkit), NVIDIA GeForce RTX 5070
+(compute capability 12.0), driver 610.88. One thread per pair: gather `soup[s[2k]] ++ soup[s[2k+1]]`,
+CuBFF background mutation (SplitMix64 on the device), evaluation, scatter. The Fisher–Yates
+permutation stays on the host (sequential). Integer semantics ⇒ the backend must be exact:
+
+| Property (tests/reference/test_bff_cupy.py, tests/integration/test_bff_platform.py) | Result |
+|---|---|
+| Kernel == scalar oracle (800 tapes × 2 variants) | bit-identical |
+| 25 epochs with mutation == NumPy backend (soup, ops, mutated bytes) | bit-identical |
+| CuBFF binary fixtures (3 configs, up to 193 epochs) | SHA-256 equal |
+| Worker run on `local_gpu` vs `cpu_dev` (comparison) and replay verification | distance 0, `verified` |
+
+Measured 2026-11-18, mutation 2^18 / 2^30, warm (single epoch wall time, host↔device copies
+included): 4096 programs 3.94 ms/epoch (numba 5.49); 131072 programs **9.09 ms/epoch** (numba,
+all cores, 96.6); 1048576 programs 57.1 ms/epoch. CuPy pool held 80 MiB at 2^20 programs.

@@ -82,7 +82,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         "optional_backends",
         json.dumps(optional)
         if optional
-        else "none installed (numba: uv sync --extra fast; GPU runtimes are later phases)",
+        else "none installed (numba: uv sync --extra fast; CUDA via CuPy: uv sync --extra gpu)",
         required=False,
     )
     git = git_info()

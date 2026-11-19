@@ -15,6 +15,7 @@ import numpy.typing as npt
 
 from alife_lab import API_CONTRACT_VERSION
 from alife_lab.core.spec import ExperimentSpec, LeniaExperiment
+from alife_lab.substrates._xp import to_backend, to_host
 from alife_lab.substrates.base import Capabilities, MetricDefinition, PluginManifest
 from alife_lab.substrates.lenia import reference as ref
 
@@ -35,14 +36,14 @@ def _kfft(exp: LeniaExperiment) -> F64:
     return ref.kernel_fft(exp.world.height, exp.world.width, k.R, list(k.b), k.core)
 
 
-def _circular_centroid(cells: F64) -> tuple[float, float] | None:
+def _circular_centroid(cells: Any) -> tuple[float, float] | None:
     total = float(cells.sum())
     if total <= 1e-12:
         return None
     h, w = cells.shape
     out = []
     for axis, size in ((0, w), (1, h)):  # x from columns, y from rows
-        weights = cells.sum(axis=axis)
+        weights = to_host(cells.sum(axis=axis))  # marginals only leave the device
         angles = np.arange(size) * (2 * math.pi / size)
         s = float((weights * np.sin(angles)).sum())
         c = float((weights * np.cos(angles)).sum())
@@ -54,9 +55,9 @@ def _circular_centroid(cells: F64) -> tuple[float, float] | None:
 
 @dataclass
 class LeniaState:
-    cells: F64
+    cells: Any  # float64 (H, W): numpy, or cupy for the GPU backend
     tick: int
-    kfft: F64 = field(repr=False)
+    kfft: Any = field(repr=False)
     last_centroid: tuple[float, float] | None = None
     dx: float = 0.0
     dy: float = 0.0
@@ -139,7 +140,7 @@ LENIA_MANIFEST = PluginManifest(
         supports_deterministic_cpu=True,
         intervention_types=("paint", "erase"),
     ),
-    backends=("numpy",),
+    backends=("numpy", "cupy"),
     gpu_required=False,
     serialize_version=SERIALIZE_VERSION,
     metrics=_METRICS,
@@ -153,9 +154,23 @@ LENIA_MANIFEST = PluginManifest(
 
 
 class LeniaAdapter:
+    backend: str = "numpy"
+
+    def set_backend(self, backend: str) -> None:
+        """``cupy`` keeps the field on the GPU (cuFFT, float64). Not bitwise equal to numpy:
+        rounding differences grow with time (see docs/reference_fidelity/lenia.md)."""
+        if backend not in LENIA_MANIFEST.backends:
+            raise ValueError(f"unsupported lenia backend {backend!r}")
+        self.backend = backend
+
     @property
     def manifest(self) -> PluginManifest:
         return LENIA_MANIFEST
+
+    def _device(self, state: LeniaState) -> LeniaState:
+        state.cells = to_backend(state.cells, self.backend)
+        state.kfft = to_backend(state.kfft, self.backend)
+        return state
 
     def initialize(self, spec: ExperimentSpec) -> LeniaState:
         exp = _lenia(spec)
@@ -169,7 +184,7 @@ class LeniaAdapter:
             size = min(init.size, h, w)
             block = rng.random((size, size)) * (rng.random((size, size)) < init.density)
             ref.place_centered(cells, block)
-        state = LeniaState(cells=cells, tick=0, kfft=_kfft(exp))
+        state = self._device(LeniaState(cells=cells, tick=0, kfft=_kfft(exp)))
         state.track()
         return state
 
@@ -200,7 +215,7 @@ class LeniaAdapter:
 
     def render(self, state: LeniaState) -> tuple[dict[str, Any], bytes]:
         h, w = state.cells.shape
-        data = np.rint(state.cells * 255).astype(np.uint8).tobytes()
+        data = to_host((state.cells * 255).round().astype(np.uint8)).tobytes()
         return {"codec": "field_u8", "width": w, "height": h, "scale": "linear 0..1"}, data
 
     def apply_intervention(
@@ -221,15 +236,17 @@ class LeniaAdapter:
         dxx = (xx - x + w // 2) % w - w // 2
         mask = dxx * dxx + dyy * dyy <= radius * radius
         before = float(state.cells.sum())
+        cells = to_host(state.cells).copy()
         if kind == "paint":
             value = float(payload.get("value", 1.0))
             if not 0.0 <= value <= 1.0:
                 raise ValueError("value must be within 0..1")
-            state.cells[mask] = value
+            cells[mask] = value
         elif kind == "erase":
-            state.cells[mask] = 0.0
+            cells[mask] = 0.0
         else:
             raise ValueError(f"unsupported intervention kind {kind!r}")
+        state.cells = to_backend(cells, self.backend)
         state.last_centroid, state.dx, state.dy = None, 0.0, 0.0
         state.track()
         return state, {
@@ -249,36 +266,39 @@ class LeniaAdapter:
         g = exp.dynamics.growth
         u = ref.potential(state.cells, state.kfft)
         growth = ref.GROWTH[g.function](u, g.m, g.s)
+        u, growth = to_host(u), to_host(growth)
         r = max(1, min(int(query.get("radius", 3)), 32))
         ys = [(y + d) % h for d in range(-r, r + 1)]
         xs = [(x + d) % w for d in range(-r, r + 1)]
-        patch = state.cells[np.ix_(ys, xs)]
+        cells = to_host(state.cells)
+        patch = cells[np.ix_(ys, xs)]
         return {
             "substrate": "lenia",
             "tick": state.tick,
             "query": {"x": x, "y": y, "radius": r},
-            "value": float(state.cells[y, x]),
+            "value": float(cells[y, x]),
             "potential": float(u[y, x]),
             "growth": float(growth[y, x]),
-            "next_value": float(np.clip(state.cells[y, x] + growth[y, x] / exp.dynamics.T, 0, 1)),
+            "next_value": float(np.clip(cells[y, x] + growth[y, x] / exp.dynamics.T, 0, 1)),
             "patch_mass": float(patch.sum()),
             "patch_max": float(patch.max()),
         }
 
     def state_distance(self, a: LeniaState, b: LeniaState) -> dict[str, Any]:
-        if a.cells.shape != b.cells.shape:
+        ca, cb = to_host(a.cells), to_host(b.cells)
+        if ca.shape != cb.shape:
             return {"metric": "max_abs_difference", "value": None, "exact_equal": False}
-        diff = np.abs(a.cells - b.cells)
+        diff = np.abs(ca - cb)
         return {
             "metric": "max_abs_difference",
             "value": float(diff.max()),
-            "exact_equal": bool(np.array_equal(a.cells, b.cells)),
+            "exact_equal": bool(np.array_equal(ca, cb)),
             "mean_abs_difference": float(diff.mean()),
         }
 
     def serialize_state(self, state: LeniaState) -> dict[str, Any]:
         return {
-            "arrays": {"cells": state.cells},
+            "arrays": {"cells": to_host(state.cells)},
             "meta": {
                 "serialize_version": SERIALIZE_VERSION,
                 "tick": state.tick,
@@ -303,11 +323,13 @@ class LeniaAdapter:
             raise ValueError("lenia checkpoint values must be finite and within [0, 1]")
         tr = meta.get("tracker") or {}
         last = tr.get("last")
-        return LeniaState(
-            cells=cells,
-            tick=int(meta["tick"]),
-            kfft=_kfft(exp),
-            last_centroid=(float(last[0]), float(last[1])) if last else None,
-            dx=float(tr.get("dx", 0.0)),
-            dy=float(tr.get("dy", 0.0)),
+        return self._device(
+            LeniaState(
+                cells=cells,
+                tick=int(meta["tick"]),
+                kfft=_kfft(exp),
+                last_centroid=(float(last[0]), float(last[1])) if last else None,
+                dx=float(tr.get("dx", 0.0)),
+                dy=float(tr.get("dy", 0.0)),
+            )
         )

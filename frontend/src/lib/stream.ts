@@ -11,8 +11,15 @@ export interface StreamHandlers {
   onMetrics: (rows: MetricRow[], stepsPerSecond: number) => void;
   onEvent: (event: RunEvent) => void;
   onRunState: (state: string) => void;
-  onHeartbeat: (info: { steps_per_second: number; worker_rss_mb: number | null; worker_cpu_percent: number | null }) => void;
+  onHeartbeat: (info: { steps_per_second: number; worker_rss_mb: number | null; worker_cpu_percent: number | null; gpu_memory?: GpuMemory | null }) => void;
   onResync: () => void;
+}
+
+export interface GpuMemory {
+  pool_held_mib: number;
+  peak_pool_held_mib: number;
+  device_used_mib: number;
+  device_total_mib: number;
 }
 
 export function useRunStream(runId: string | null, handlers: StreamHandlers): ConnState {

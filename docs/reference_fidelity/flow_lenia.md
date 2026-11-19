@@ -98,3 +98,16 @@ shifted passes of reintegration tracking.
   (all channels by default). They change the total mass, so `mass_drift` is re-based.
 - Display codec `field_u8` with `channels`: `round(clip(A, 0, 1)·255)` per channel; 1 channel →
   colormap, 2–3 channels → RGB. Values above 1 (mass concentrates) saturate in the preview only.
+
+## GPU backend (`cupy`)
+Affinity, Sobel flow and target positions run on CuPy arrays (cuFFT, float64); reintegration
+tracking is a fused CUDA kernel (`flow_lenia/gpu.py`, gather form, same loop order and
+expression, FMA contraction disabled), **bit-identical** to the NumPy reintegration for
+identical inputs (15 Hypothesis cases, σ ∈ {0.3, 0.65, 1.2}, dd 1–6, wall/torus). Whole GPU
+steps differ from the NumPy oracle only through the FFT: 64², 3 channels, 200 ticks →
+max |difference| 1.5e-14 (wall) / 2.3e-14 (torus); mass drift 6e-15. Tests require ≤ 1e-12.
+Worker run + replay verification with the recorded backend: `verified`; GPU vs CPU run of the
+same spec in a comparison: distance < 1e-9 over 60 ticks.
+Throughput (3 channels, 12 kernels, dd 5, float64, warm): 128² 2.4 ms/tick (CPU 46.4),
+256² 6.1 (CPU 250), 512² 22.7, 1024² 102 (CuPy pool 782 MiB). In the GUI (128², max speed)
+239 ticks/s; the worker's RSS is ~474 MB with CUDA/CuPy loaded (vs ~60 MB on the CPU).

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, type Frame, type MetricRow, type RunEvent } from "../lib/api";
-import { useRunStream } from "../lib/stream";
+import { useRunStream, type GpuMemory } from "../lib/stream";
 import { useT } from "../i18n";
 import { ToolBar, WorldView, type WorldViewHandle } from "./WorldView";
 import { initialTool, type ToolState } from "../lib/substrates";
@@ -25,7 +25,7 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
   const [simRate, setSimRate] = useState(0);
   const [uiFps, setUiFps] = useState(0);
   const [dropped, setDropped] = useState(0);
-  const [worker, setWorker] = useState<{ rss: number | null; cpu: number | null }>({ rss: null, cpu: null });
+  const [worker, setWorker] = useState<{ rss: number | null; cpu: number | null; gpu: GpuMemory | null }>({ rss: null, cpu: null, gpu: null });
   const [tool, setTool] = useState<ToolState | null>(null);
   const [inspection, setInspection] = useState<Inspection | null>(null);
   const [inspectError, setInspectError] = useState<string | null>(null);
@@ -92,7 +92,7 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
     onRunState: () => void qc.invalidateQueries({ queryKey: ["run", runId] }),
     onHeartbeat: (hb) => {
       setSimRate(hb.steps_per_second);
-      setWorker({ rss: hb.worker_rss_mb, cpu: hb.worker_cpu_percent });
+      setWorker({ rss: hb.worker_rss_mb, cpu: hb.worker_cpu_percent, gpu: hb.gpu_memory ?? null });
     },
     onResync: () => void resync(),
   });
@@ -317,6 +317,15 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
             <dd>{dropped}</dd>
             <dt>{t("lab.worker")}</dt>
             <dd>{worker.rss !== null ? `${worker.rss} MB RSS, CPU ${worker.cpu ?? "?"}%` : "—"}</dd>
+            {worker.gpu && (
+              <>
+                <dt>{t("lab.gpu_memory")}</dt>
+                <dd data-testid="gpu-memory" title={t("lab.gpu_memory_note")}>
+                  {worker.gpu.pool_held_mib.toFixed(1)} MiB ({t("lab.gpu_peak")} {worker.gpu.peak_pool_held_mib.toFixed(1)}) ·{" "}
+                  {t("lab.gpu_device")} {Math.round(worker.gpu.device_used_mib)}/{Math.round(worker.gpu.device_total_mib)} MiB
+                </dd>
+              </>
+            )}
           </dl>
           {metricIds.map((m) => (
             <div key={m} className="spark">

@@ -25,7 +25,9 @@ _NVIDIA_QUERY = [
     "--format=csv,noheader,nounits",
 ]
 
-OPTIONAL_BACKENDS = ("numba", "llvmlite", "jax", "jaxlib", "torch", "cupy", "mujoco", "warp-lang")
+OPTIONAL_BACKENDS = (
+    "numba", "llvmlite", "jax", "jaxlib", "torch", "cupy", "cupy-cuda13x", "mujoco", "warp-lang",
+)  # fmt: skip
 CORE_PACKAGES = ("fastapi", "starlette", "uvicorn", "pydantic", "numpy", "pyyaml", "psutil")
 
 

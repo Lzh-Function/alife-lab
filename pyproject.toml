@@ -19,6 +19,9 @@ dependencies = [
 [project.optional-dependencies]
 # Optional JIT backend for BFF (bit-identical to the NumPy backend; selected automatically).
 fast = ["numba>=0.68"]
+# Optional CUDA backend (CuPy with pip-installed CUDA 13 toolkit libraries, ~1.9 GB).
+# Results: BFF bit-identical to the CPU oracle; Lenia/Flow-Lenia within documented tolerances.
+gpu = ["cupy-cuda13x[ctk]>=14.2"]
 
 [project.scripts]
 alife = "alife_lab.cli:main"
@@ -74,7 +77,7 @@ plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
 # pyarrow ships without type information.
-module = ["pyarrow", "pyarrow.*", "brotli", "numba", "numba.*"]
+module = ["pyarrow", "pyarrow.*", "brotli", "numba", "numba.*", "cupy", "cupy.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

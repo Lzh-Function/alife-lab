@@ -23,6 +23,8 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
+from alife_lab.substrates._xp import is_device, xp_of
+
 F64 = npt.NDArray[np.float64]
 I64 = npt.NDArray[np.int64]
 
@@ -158,82 +160,90 @@ def kernels_fft(height: int, width: int, rule: Rule) -> Any:
     return np.fft.fft2(kernels_spatial(height, width, rule), axes=(0, 1))
 
 
-def growth(u: F64, m: F64, s: F64) -> F64:
-    out: F64 = np.exp(-(((u - m) / s) ** 2) / 2) * 2 - 1
+def growth(u: Any, m: Any, s: Any) -> Any:
+    out = xp_of(u).exp(-(((u - m) / s) ** 2) / 2) * 2 - 1
     return out
 
 
-def affinity(cells: F64, kfft: Any, rule: Rule, channels: int) -> F64:
+def affinity(cells: Any, kfft: Any, rule: Rule, channels: int) -> Any:
     """U (H, W, C): sum over kernels targeting each channel of h * G(K * A_source)."""
-    fa = np.fft.fft2(cells, axes=(0, 1))
-    potential = np.real(np.fft.ifft2(kfft * fa[:, :, rule.source], axes=(0, 1)))
-    g = growth(potential, rule.m, rule.s) * rule.h
-    out = np.zeros((*cells.shape[:2], channels), dtype=np.float64)
+    xp = xp_of(cells)
+    fa = xp.fft.fft2(cells, axes=(0, 1))
+    potential = xp.real(xp.fft.ifft2(kfft * fa[:, :, xp.asarray(rule.source)], axes=(0, 1)))
+    g = growth(potential, xp.asarray(rule.m), xp.asarray(rule.s)) * xp.asarray(rule.h)
+    out = xp.zeros((*cells.shape[:2], channels), dtype=xp.float64)
     for c in range(channels):
-        sel = rule.target == c
-        if sel.any():
-            out[:, :, c] = g[:, :, sel].sum(axis=-1)
+        sel = np.flatnonzero(rule.target == c)
+        if sel.size:
+            out[:, :, c] = g[:, :, xp.asarray(sel)].sum(axis=-1)
     return out
 
 
-def sobel(field: F64) -> F64:
+def sobel(field: Any) -> Any:
     """Zero-padded Sobel gradient of (H, W, C) -> (H, W, 2, C): [d/d row, d/d column].
 
     Equals ``scipy.signal.convolve2d(A, k, mode="same")`` with k = [[1,0,-1],[2,0,-2],[1,0,-1]]
     (column) and its transpose (row), i.e. the official ``sobel``.
     """
-    p = np.pad(field, ((1, 1), (1, 1), (0, 0)))
+    xp = xp_of(field)
+    p = xp.pad(field, ((1, 1), (1, 1), (0, 0)))
     smooth_rows = p[:-2] + 2 * p[1:-1] + p[2:]  # (H, W+2, C)
     smooth_cols = p[:, :-2] + 2 * p[:, 1:-1] + p[:, 2:]  # (H+2, W, C)
     d_col = smooth_rows[:, 2:] - smooth_rows[:, :-2]
     d_row = smooth_cols[2:] - smooth_cols[:-2]
-    return np.stack([d_row, d_col], axis=2)
+    return xp.stack([d_row, d_col], axis=2)
 
 
-def flow(cells: F64, u: F64, theta_a: float, n: float) -> tuple[F64, F64]:
+def flow(cells: Any, u: Any, theta_a: float, n: float) -> tuple[Any, Any]:
     grad_u = sobel(u)
     grad_a = sobel(cells.sum(axis=-1, keepdims=True))
-    alpha = np.clip((cells[:, :, None, :] / theta_a) ** n, 0.0, 1.0)
+    alpha = xp_of(cells).clip((cells[:, :, None, :] / theta_a) ** n, 0.0, 1.0)
     return grad_u * (1 - alpha) - grad_a * alpha, alpha
 
 
 def target_positions(
-    cells_shape: tuple[int, ...], f: F64, dt: float, dd: int, sigma: float, boundary: str
-) -> F64:
+    cells_shape: tuple[int, ...], f: Any, dt: float, dd: int, sigma: float, boundary: str
+) -> Any:
     """Distribution centres mu (H, W, 2, C) in continuous coordinates (cell i spans [i, i+1))."""
+    xp = xp_of(f)
     h, w = cells_shape[:2]
-    pos = np.stack(np.meshgrid(np.arange(h), np.arange(w), indexing="ij"), axis=-1) + 0.5
+    pos = xp.stack(xp.meshgrid(xp.arange(h), xp.arange(w), indexing="ij"), axis=-1) + 0.5
     ma = dd - sigma
-    mu = pos[..., None] + np.clip(dt * f, -ma, ma)
+    mu = pos[..., None] + xp.clip(dt * f, -ma, ma)
     if boundary == "wall":
-        size = np.array([h, w], dtype=np.float64)[None, None, :, None]
-        mu = np.clip(mu, sigma, size - sigma)
+        size = xp.asarray([h, w], dtype=xp.float64)[None, None, :, None]
+        mu = xp.clip(mu, sigma, size - sigma)
     return mu
 
 
-def reintegrate(cells: F64, mu: F64, dd: int, sigma: float, boundary: str) -> F64:
+def reintegrate(cells: Any, mu: Any, dd: int, sigma: float, boundary: str) -> Any:
     """Move mass to the squares centred at ``mu``; vectorised over the (2dd+1)^2 window."""
+    if is_device(cells):
+        from alife_lab.substrates.flow_lenia.gpu import reintegrate_cupy
+
+        return reintegrate_cupy(cells, mu, dd, sigma, boundary)
+    xp = xp_of(cells)
     h, w, _ = cells.shape
-    pos = np.stack(np.meshgrid(np.arange(h), np.arange(w), indexing="ij"), axis=-1) + 0.5
+    pos = xp.stack(xp.meshgrid(xp.arange(h), xp.arange(w), indexing="ij"), axis=-1) + 0.5
     pos = pos[..., None]  # (H, W, 2, 1)
-    size = np.array([h, w], dtype=np.float64)[None, None, :, None]
+    size = xp.asarray([h, w], dtype=xp.float64)[None, None, :, None]
     cap = min(1.0, 2 * sigma)
     norm = 4 * sigma**2
-    out = np.zeros_like(cells)
+    out = xp.zeros_like(cells)
     for dx in range(-dd, dd + 1):
         for dy in range(-dd, dd + 1):
-            src = np.roll(cells, (dx, dy), axis=(0, 1))
-            mur = np.roll(mu, (dx, dy), axis=(0, 1))
-            delta = np.abs(pos - mur)
+            src = xp.roll(cells, (dx, dy), axis=(0, 1))
+            mur = xp.roll(mu, (dx, dy), axis=(0, 1))
+            delta = xp.abs(pos - mur)
             if boundary == "torus":
-                delta = np.minimum(delta, np.abs(delta - size))
-            overlap = np.clip(0.5 - delta + sigma, 0.0, cap)
+                delta = xp.minimum(delta, xp.abs(delta - size))
+            overlap = xp.clip(0.5 - delta + sigma, 0.0, cap)
             out += src * (overlap[:, :, 0] * overlap[:, :, 1]) / norm
     return out
 
 
 def step(
-    cells: F64,
+    cells: Any,
     kfft: Any,
     rule: Rule,
     *,
@@ -243,7 +253,7 @@ def step(
     theta_a: float,
     n: float,
     boundary: str,
-) -> F64:
+) -> Any:
     channels = cells.shape[2]
     u = affinity(cells, kfft, rule, channels)
     f, _ = flow(cells, u, theta_a, n)

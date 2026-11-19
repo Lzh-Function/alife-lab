@@ -147,6 +147,10 @@ def run_epoch(
     n = soup.shape[0]
     if n % 2:
         raise ValueError("num_programs must be even")
+    if backend == "cupy":
+        from alife_lab.substrates.bff.vm_cupy import run_epoch_cupy
+
+        return run_epoch_cupy(soup, params_seed, epoch, mutation_prob, step_limit, variant)
     s = shuffle_indices(params_seed, epoch, n)
     p1, p2 = s[0::2], s[1::2]
     tapes = np.concatenate([soup[p1], soup[p2]], axis=1)

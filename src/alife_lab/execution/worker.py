@@ -34,6 +34,7 @@ from alife_lab.artifacts.store import (
 )
 from alife_lab.core.hashing import sha256_bytes
 from alife_lab.core.spec import ExecutionProfile, ExperimentSpec
+from alife_lab.execution.gpu_memory import GpuMemoryTracker
 from alife_lab.storage.metrics_store import MetricsWriter
 from alife_lab.substrates import get_adapter
 
@@ -73,6 +74,11 @@ def _backend_version(backend: str) -> str | None:
         from importlib import metadata
 
         return metadata.version("numba")
+    if backend == "cupy":
+        import cupy
+
+        rt = cupy.cuda.runtime.runtimeGetVersion()
+        return f"cupy {cupy.__version__} / CUDA runtime {rt // 1000}.{(rt % 1000) // 10}"
     return str(np.__version__)
 
 
@@ -91,6 +97,7 @@ class _Worker:
         self.backend = str(job.extra.get("backend") or "numpy")
         if hasattr(self.adapter, "set_backend"):
             self.adapter.set_backend(self.backend)
+        self.gpu = GpuMemoryTracker()
         self.store = LocalArtifactStore(Path(job.runs_root))
         self.run_dir = self.store.run_dir(job.run_id)
         self.running = not job.start_paused
@@ -231,6 +238,8 @@ class _Worker:
 
     def advance(self) -> None:
         self.state = self.adapter.step(self.state, self.spec)
+        if self.backend == "cupy":
+            self.gpu.update()
         self.record_metrics()
         self.dirty_preview = True
         self.ticks_since_rate += 1
@@ -388,6 +397,7 @@ class _Worker:
                         "tick": self.tick,
                         "running": self.running,
                         "steps_per_second": round(self.steps_per_second, 2),
+                        "gpu_memory": self.gpu.snapshot(),
                     }
                 )
                 last_heartbeat = now
