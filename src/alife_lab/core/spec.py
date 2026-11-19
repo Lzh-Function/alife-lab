@@ -645,6 +645,87 @@ class PhysarumExperiment(_Frozen):
         return self
 
 
+# --------------------------------------------------------------------------- #
+# Abstract reaction network (stochastic simulation, Gillespie 1977 direct method)
+# --------------------------------------------------------------------------- #
+
+MAX_SPECIES = 64
+MAX_REACTIONS = 256
+MAX_COUNT = 10**9
+_SPECIES_NAME = Annotated[
+    str, Field(min_length=1, max_length=24, pattern=r"^[A-Za-z][A-Za-z0-9_]*$")
+]
+_STOICH = Annotated[int, Field(ge=1, le=8)]
+
+
+class Species(_Frozen):
+    name: _SPECIES_NAME
+    initial: Annotated[int, Field(ge=0, le=MAX_COUNT)] = 0
+    # Buffered species (Gillespie's X-bar): count held fixed, consumption/production ignored.
+    constant: bool = False
+
+
+class Reaction(_Frozen):
+    id: Annotated[str, Field(min_length=1, max_length=32, pattern=r"^[A-Za-z0-9_\-]+$")]
+    reactants: dict[_SPECIES_NAME, _STOICH] = {}
+    products: dict[_SPECIES_NAME, _STOICH] = {}
+    rate: Annotated[float, Field(ge=0.0, le=1e9)]  # stochastic rate constant c (per time)
+    # Declared role (informational; never changes the dynamics): e.g. "catalysed", "inflow".
+    label: Annotated[str, Field(max_length=40)] = ""
+
+
+class ReactionNetworkDynamics(_Frozen):
+    clock_unit: Literal["tick"] = "tick"
+    numeric_policy: Literal["gillespie_direct_float64"] = "gillespie_direct_float64"
+    time_per_tick: Annotated[float, Field(gt=0.0, le=1e6)] = 0.01
+    max_events_per_tick: Annotated[int, Field(ge=1, le=10_000_000)] = 200_000
+    species: Annotated[list[Species], Field(min_length=1, max_length=MAX_SPECIES)]
+    reactions: Annotated[list[Reaction], Field(min_length=1, max_length=MAX_REACTIONS)]
+    disabled_reactions: list[str] = []  # knock-out control: these reactions never fire
+
+
+ReactionNetworkMetric = Literal["total_molecules", "species_present", "events", "diversity", "time"]
+
+
+class ReactionNetworkObservation(_Frozen):
+    metrics: tuple[ReactionNetworkMetric, ...] = (
+        "total_molecules",
+        "species_present",
+        "events",
+        "diversity",
+        "time",
+    )
+    record_species_counts: bool = True  # adds `count.<species>` to every metrics row
+
+
+class ReactionNetworkExperiment(_Frozen):
+    name: _NAME
+    mode: Literal["reference", "exploratory"] = "exploratory"
+    substrate: Literal["reaction_network"]
+    seed: _SEED
+    dynamics: ReactionNetworkDynamics
+    runner: RunnerSpec = RunnerSpec()
+    observations: ReactionNetworkObservation = ReactionNetworkObservation()
+
+    @model_validator(mode="after")
+    def _check(self) -> ReactionNetworkExperiment:
+        names = [sp.name for sp in self.dynamics.species]
+        if len(set(names)) != len(names):
+            raise ValueError("species names must be unique")
+        ids = [r.id for r in self.dynamics.reactions]
+        if len(set(ids)) != len(ids):
+            raise ValueError("reaction ids must be unique")
+        known = set(names)
+        for r in self.dynamics.reactions:
+            unknown = (set(r.reactants) | set(r.products)) - known
+            if unknown:
+                raise ValueError(f"reaction {r.id!r} uses unknown species {sorted(unknown)}")
+        missing = set(self.dynamics.disabled_reactions) - set(ids)
+        if missing:
+            raise ValueError(f"disabled_reactions not found: {sorted(missing)}")
+        return self
+
+
 AnyExperiment = Annotated[
     ConwayExperiment
     | BoidsExperiment
@@ -653,7 +734,8 @@ AnyExperiment = Annotated[
     | LeniaExperiment
     | FlowLeniaExperiment
     | GrayScottExperiment
-    | PhysarumExperiment,
+    | PhysarumExperiment
+    | ReactionNetworkExperiment,
     Field(discriminator="substrate"),
 ]
 

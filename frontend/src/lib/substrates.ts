@@ -4,12 +4,25 @@
 import type { Frame } from "./api";
 import { popcount } from "./api";
 
-export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum";
+export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network";
 
 /** Substrates rendered as continuous particles (vs. grids). */
 export const PARTICLE_SUBSTRATES = new Set(["boids", "particle_life"]);
 /** Substrates rendered as a continuous scalar field (codec field_u8). */
-export const FIELD_SUBSTRATES = new Set(["lenia", "flow_lenia", "gray_scott", "physarum"]);
+export const FIELD_SUBSTRATES = new Set(["lenia", "flow_lenia", "gray_scott", "physarum", "reaction_network"]);
+/** Non-spatial substrates whose display is a species x time image (rows = species). */
+export const ROW_DISPLAY_SUBSTRATES = new Set(["reaction_network"]);
+
+/** World size used for display/pointer mapping; non-spatial substrates get a display size. */
+export function displayWorld(substrate: string, experiment: Record<string, unknown>): { width: number; height: number } {
+  const world = experiment.world as { width: number; height: number } | undefined;
+  if (world) return world;
+  if (substrate === "reaction_network") {
+    const species = ((experiment.dynamics as { species?: unknown[] } | undefined)?.species ?? []).length;
+    return { width: 256, height: Math.max(1, species) };
+  }
+  return { width: 64, height: 64 };
+}
 
 export interface ToolState {
   mode: string; // "off" or an intervention mode
@@ -68,6 +81,12 @@ export const TOOLS: Record<SubstrateId, ToolDescriptor> = {
     modes: ["off", "inspect", "attract", "erase"],
     radius: { min: 1, max: 30, step: 1, initial: 4 },
     noteKey: "lab.tool.physarum_note",
+  },
+  reaction_network: {
+    modes: ["off", "inspect", "add", "remove"],
+    radius: { min: 0, max: 0, step: 1, initial: 0 },
+    count: { min: 1, max: 100000, initial: 100 },
+    noteKey: "lab.tool.reaction_network_note",
   },
   particle_life: {
     modes: ["off", "inspect", "spawn", "remove"],
@@ -217,6 +236,11 @@ export const FORM_FIELDS: Record<SubstrateId, FormField[]> = {
         { value: "false", labelKey: "form.off_control" },
       ],
     },
+    ...RUNNER,
+  ],
+  reaction_network: [
+    { path: "seed", labelKey: "form.seed", kind: "int", min: 0 },
+    { path: "dynamics.time_per_tick", labelKey: "form.reaction_network.time_per_tick", kind: "float", min: 0.000001, step: 0.001 },
     ...RUNNER,
   ],
   particle_life: [

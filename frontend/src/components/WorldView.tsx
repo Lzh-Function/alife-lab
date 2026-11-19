@@ -1,6 +1,6 @@
 import { forwardRef, useCallback, useImperativeHandle, useRef } from "react";
 import type { Frame } from "../lib/api";
-import { FIELD_SUBSTRATES, PARTICLE_SUBSTRATES, TOOLS, type SubstrateId, type ToolState } from "../lib/substrates";
+import { FIELD_SUBSTRATES, PARTICLE_SUBSTRATES, ROW_DISPLAY_SUBSTRATES, TOOLS, type SubstrateId, type ToolState } from "../lib/substrates";
 import { useT } from "../i18n";
 import { ParticleCanvas, type ParticleCanvasHandle } from "./ParticleCanvas";
 import { WorldCanvas, type WorldCanvasHandle } from "./WorldCanvas";
@@ -58,12 +58,12 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
         return;
       }
       const payload: Record<string, unknown> = { x: Number(x.toFixed(3)), y: Number(y.toFixed(3)), radius: tool.radius };
-      if (tool.mode === "spawn") payload.count = tool.count;
+      if (tool.mode === "spawn" || ((tool.mode === "add" || tool.mode === "remove") && ROW_DISPLAY_SUBSTRATES.has(substrate))) payload.count = tool.count;
       if (tool.mode === "paint") payload.value = tool.value ?? 1;
       if ((tool.mode === "paint" || tool.mode === "erase") && tool.channel != null) payload.channel = tool.channel;
       onIntervene(tool.mode, payload);
     },
-    [tool, onIntervene],
+    [tool, onIntervene, onInspect, substrate],
   );
 
   if (substrate === "bff") {
@@ -105,6 +105,7 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
         ref={field}
         width={world.width}
         height={world.height}
+        minRowPixels={ROW_DISPLAY_SUBSTRATES.has(substrate) ? 28 : 0}
         toolRadius={active || inspecting ? tool!.radius : null}
         onPoint={onPoint}
         onDisplayFps={onDisplayFps}

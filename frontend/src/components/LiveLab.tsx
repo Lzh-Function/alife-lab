@@ -4,13 +4,14 @@ import { api, ApiError, type Frame, type MetricRow, type RunEvent } from "../lib
 import { useRunStream, type GpuMemory } from "../lib/stream";
 import { useT } from "../i18n";
 import { ToolBar, WorldView, type WorldViewHandle } from "./WorldView";
-import { initialTool, type ToolState } from "../lib/substrates";
+import { displayWorld, initialTool, type ToolState } from "../lib/substrates";
 import { Sparkline } from "./Sparkline";
 import { StateBadge } from "./StateBadge";
 import { Timeline } from "./Timeline";
 import { InspectorPanel, type Inspection } from "./InspectorPanel";
 import { BffDebugger, type BffTrace } from "./BffDebugger";
 import { AssayResult, type AssayResultData } from "./AssayResult";
+import { SpeciesChart } from "./SpeciesChart";
 
 const LIVE = new Set(["starting", "running", "pausing", "paused", "resuming"]);
 const MAX_ROWS = 4000;
@@ -185,7 +186,7 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
   if (!summary) return <p>{run.isError ? t("common.error") : t("common.loading")}</p>;
   const currentTool = tool ?? initialTool(summary.substrate);
   currentToolRef.current = currentTool;
-  const world = summary.spec.experiment.world;
+  const world = displayWorld(summary.substrate, summary.spec.experiment as Record<string, unknown>);
   const last = rows.length ? rows[rows.length - 1] : null;
   const metricIds = summary.spec.experiment.observations.metrics;
 
@@ -289,6 +290,7 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
           onFrame={onReplayFrame}
           onShownTick={(v) => (shownReplayTick.current = v)}
         />
+        {summary.substrate === "reaction_network" && <SpeciesChart rows={rows} experiment={summary.spec.experiment as Record<string, unknown>} />}
         {trace && <BffDebugger trace={trace} onClose={() => setTrace(null)} />}
         {assay && <AssayResult result={assay} onClose={() => setAssay(null)} />}
       </section>
@@ -300,6 +302,15 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
           onTrace={summary.substrate === "bff" ? onTrace : undefined}
           onAssay={summary.substrate === "bff" ? onAssay : undefined}
           assayPending={assayPending}
+          onReactionToggle={
+            summary.substrate === "reaction_network" && live
+              ? (id, enable) => {
+                  onIntervene(enable ? "enable_reaction" : "disable_reaction", { reaction: id });
+                  const q = lastInspect.current;
+                  if (q) window.setTimeout(() => onInspect(q.x, q.y), 300);
+                }
+              : undefined
+          }
         />
         <div className="panel">
           <h3>{t("lab.metrics")}</h3>

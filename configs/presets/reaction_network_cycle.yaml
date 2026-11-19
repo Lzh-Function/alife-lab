@@ -1,0 +1,11 @@
+preset:
+  id: reaction_network_cycle
+  scenario: reaction_network_cycle.yaml
+  title_key: preset.reaction_network_cycle.title
+  description_key: preset.reaction_network_cycle.description
+  overrides: {}
+  expected_observation: >-
+    Four replicators maintained by mutual cyclic catalysis on an inflowing food F (counts
+    ~200-300 each for seed 0); the observer reports the cycle I1 -> I2 -> I3 -> I4 as a
+    candidate from the reaction history.
+  negative_control: preset reaction_network_cycle_no_catalysis

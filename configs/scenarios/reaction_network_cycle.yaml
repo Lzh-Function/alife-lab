@@ -1,0 +1,36 @@
+# Abstract catalytic cycle (hypercycle-like, open system): food F flows in and out; each
+# replicator I_k is copied from F only when catalysed by its predecessor I_(k-1) (cyclic);
+# replicators decay. Abstract chemistry: no physico-chemical realism is claimed.
+schema_version: 1
+experiment:
+  name: reaction_network_cycle
+  mode: exploratory
+  substrate: reaction_network
+  seed: 0
+  dynamics:
+    clock_unit: tick
+    numeric_policy: gillespie_direct_float64
+    time_per_tick: 0.05
+    max_events_per_tick: 200000
+    species:
+      - {name: F, initial: 1000}
+      - {name: I1, initial: 50}
+      - {name: I2, initial: 50}
+      - {name: I3, initial: 50}
+      - {name: I4, initial: 50}
+    reactions:
+      - {id: inflow, reactants: {}, products: {F: 1}, rate: 200.0, label: inflow}
+      - {id: outflow, reactants: {F: 1}, products: {}, rate: 0.05, label: outflow}
+      - {id: rep1, reactants: {I4: 1, I1: 1, F: 1}, products: {I4: 1, I1: 2}, rate: 2.0e-5, label: catalysed}
+      - {id: rep2, reactants: {I1: 1, I2: 1, F: 1}, products: {I1: 1, I2: 2}, rate: 2.0e-5, label: catalysed}
+      - {id: rep3, reactants: {I2: 1, I3: 1, F: 1}, products: {I2: 1, I3: 2}, rate: 2.0e-5, label: catalysed}
+      - {id: rep4, reactants: {I3: 1, I4: 1, F: 1}, products: {I3: 1, I4: 2}, rate: 2.0e-5, label: catalysed}
+      - {id: d1, reactants: {I1: 1}, products: {}, rate: 0.2, label: decay}
+      - {id: d2, reactants: {I2: 1}, products: {}, rate: 0.2, label: decay}
+      - {id: d3, reactants: {I3: 1}, products: {}, rate: 0.2, label: decay}
+      - {id: d4, reactants: {I4: 1}, products: {}, rate: 0.2, label: decay}
+    disabled_reactions: []
+  runner: {max_steps: 1000000, checkpoint_interval: 500}
+  observations:
+    metrics: [total_molecules, species_present, events, diversity, time]
+    record_species_counts: true

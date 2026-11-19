@@ -5,7 +5,7 @@ import { useRunStream } from "../lib/stream";
 import { useT } from "../i18n";
 import { StateBadge } from "./StateBadge";
 import { WorldView, type WorldViewHandle } from "./WorldView";
-import type { ToolState } from "../lib/substrates";
+import { displayWorld, type ToolState } from "../lib/substrates";
 
 const LIVE = new Set(["starting", "running", "pausing", "paused", "resuming"]);
 
@@ -69,7 +69,7 @@ export function RunPane({
   );
 
   if (!summary) return <div className="panel">{t("common.loading")}</div>;
-  const world = summary.spec.experiment.world;
+  const world = displayWorld(summary.substrate, summary.spec.experiment as Record<string, unknown>);
   return (
     <div className="panel run-pane" data-testid={`pane-${arm}`}>
       <div className="lab-head">

@@ -1,0 +1,13 @@
+preset:
+  id: reaction_network_cycle_no_catalysis
+  scenario: reaction_network_cycle.yaml
+  title_key: preset.reaction_network_cycle_no_catalysis.title
+  description_key: preset.reaction_network_cycle_no_catalysis.description
+  overrides:
+    experiment:
+      name: reaction_network_cycle_no_catalysis
+      dynamics: {disabled_reactions: [rep1, rep2, rep3, rep4]}
+  expected_observation: >-
+    Negative control (catalysis disabled): same species and food supply, catalysed
+    replication knocked out; replicators decay to zero (by tick ~500) and no cycle is found.
+  negative_control: null

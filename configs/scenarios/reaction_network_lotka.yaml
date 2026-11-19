@@ -1,0 +1,28 @@
+# Gillespie (1977) Lotka reactions, simulated with the direct method:
+#   Xbar + Y1 -> 2 Y1 (c1 Xbar = 10), Y1 + Y2 -> 2 Y2 (c2 = 0.01), Y2 -> Z (c3 = 10),
+# Xbar buffered, Y1 = Y2 = 1000 initially. Xbar = 100000 with c1 = 1e-4 gives c1 Xbar = 10.
+schema_version: 1
+experiment:
+  name: reaction_network_lotka
+  mode: reference
+  substrate: reaction_network
+  seed: 0
+  dynamics:
+    clock_unit: tick
+    numeric_policy: gillespie_direct_float64
+    time_per_tick: 0.01
+    max_events_per_tick: 200000
+    species:
+      - {name: Xbar, initial: 100000, constant: true}
+      - {name: Y1, initial: 1000}
+      - {name: Y2, initial: 1000}
+      - {name: Z, initial: 0}
+    reactions:
+      - {id: r1, reactants: {Xbar: 1, Y1: 1}, products: {Xbar: 1, Y1: 2}, rate: 1.0e-4, label: prey birth}
+      - {id: r2, reactants: {Y1: 1, Y2: 1}, products: {Y2: 2}, rate: 0.01, label: predation}
+      - {id: r3, reactants: {Y2: 1}, products: {Z: 1}, rate: 10.0, label: predator death}
+    disabled_reactions: []
+  runner: {max_steps: 1000000, checkpoint_interval: 500}
+  observations:
+    metrics: [total_molecules, species_present, events, diversity, time]
+    record_species_counts: true

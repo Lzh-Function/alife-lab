@@ -1,0 +1,19 @@
+preset:
+  id: reaction_network_cycle_food_only
+  scenario: reaction_network_cycle.yaml
+  title_key: preset.reaction_network_cycle_food_only.title
+  description_key: preset.reaction_network_cycle_food_only.description
+  overrides:
+    experiment:
+      name: reaction_network_cycle_food_only
+      dynamics:
+        species:
+          - {name: F, initial: 1000}
+          - {name: I1, initial: 0}
+          - {name: I2, initial: 0}
+          - {name: I3, initial: 0}
+          - {name: I4, initial: 0}
+  expected_observation: >-
+    Negative control (raw material only): no replicators initially, so nothing but food
+    inflow/outflow happens; replicators can be injected with the add tool.
+  negative_control: null

@@ -55,6 +55,12 @@ export interface Inspection {
     sensors: { front: number; left: number; right: number };
     decision: string;
   } | null;
+  // reaction_network
+  time?: number;
+  species?: Array<{ name: string; count: number; constant: boolean }>;
+  selected_species?: { name: string; count: number; constant: boolean; consumed_by: string[]; produced_by: string[] } | null;
+  reactions?: Array<{ id: string; label: string; equation: string; products: string; rate: number; enabled: boolean; propensity: number; fired: number }>;
+  cycle_candidates?: { autocatalysis: Array<{ species: string; reaction: string }>; cycles: Array<{ species: string[]; reactions: string[] }>; truncated: boolean; rule: string };
   // flow_lenia
   channels?: Array<{
     value: number;
@@ -73,12 +79,14 @@ export function InspectorPanel({
   onTrace,
   onAssay,
   assayPending = false,
+  onReactionToggle,
 }: {
   data: Inspection | null;
   error: string | null;
   onTrace?: (mode: "trace_next_epoch" | "trace_self") => void;
   onAssay?: () => void;
   assayPending?: boolean;
+  onReactionToggle?: (reactionId: string, enable: boolean) => void;
 }) {
   const t = useT();
   return (
@@ -221,6 +229,70 @@ export function InspectorPanel({
                 {data.patch_mass?.toFixed(3)} (r = {data.query?.radius})
               </dd>
             </dl>
+          )}
+          {data.substrate === "reaction_network" && data.reactions && (
+            <div data-testid="inspector-reactions">
+              {data.selected_species && (
+                <p className="small">
+                  <strong>{data.selected_species.name}</strong> = {data.selected_species.count}
+                  {data.selected_species.constant && ` (${t("inspector.buffered")})`} · {t("inspector.consumed_by")}{" "}
+                  {data.selected_species.consumed_by.join(", ") || "—"} · {t("inspector.produced_by")} {data.selected_species.produced_by.join(", ") || "—"}
+                </p>
+              )}
+              <p className="small muted">t = {data.time?.toFixed(3)}</p>
+              <table className="small mono">
+                <thead>
+                  <tr>
+                    <th>id</th>
+                    <th>{t("inspector.reaction")}</th>
+                    <th>c</th>
+                    <th>a</th>
+                    <th>{t("inspector.fired")}</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.reactions.map((r) => (
+                    <tr key={r.id} className={r.enabled ? "" : "muted"}>
+                      <td title={r.label}>{r.id}</td>
+                      <td>
+                        {r.equation} → {r.products}
+                      </td>
+                      <td>{r.rate.toPrecision(3)}</td>
+                      <td>{r.propensity.toPrecision(3)}</td>
+                      <td>{r.fired}</td>
+                      <td>
+                        {onReactionToggle && (
+                          <button className="small" data-testid={`toggle-${r.id}`} onClick={() => onReactionToggle(r.id, !r.enabled)}>
+                            {r.enabled ? t("inspector.knock_out") : t("inspector.restore")}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {data.cycle_candidates && (
+                <div className="small" data-testid="inspector-cycles">
+                  <strong>{t("inspector.cycle_candidates")}</strong>{" "}
+                  {data.cycle_candidates.cycles.length === 0 && t("inspector.no_cycles")}
+                  <ul>
+                    {data.cycle_candidates.cycles.map((c, i) => (
+                      <li key={i} className="mono">
+                        {c.species.join(" → ")} → {c.species[0]} ({c.reactions.join(", ")})
+                      </li>
+                    ))}
+                  </ul>
+                  {data.cycle_candidates.autocatalysis.length > 0 && (
+                    <span className="muted">
+                      {t("inspector.autocatalysis")}: {data.cycle_candidates.autocatalysis.map((a) => `${a.species} (${a.reaction})`).join(", ")}
+                    </span>
+                  )}
+                  <br />
+                  <span className="muted">{data.cycle_candidates.rule}</span>
+                </div>
+              )}
+            </div>
           )}
           {data.substrate === "physarum" && data.trail !== undefined && (
             <dl className="stats small" data-testid="inspector-physarum">

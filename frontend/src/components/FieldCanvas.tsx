@@ -36,10 +36,11 @@ interface Props {
   onDisplayFps: (fps: number) => void;
   maxPixels?: number;
   testId?: string;
+  minRowPixels?: number;
 }
 
 export const FieldCanvas = forwardRef<FieldCanvasHandle, Props>(function FieldCanvas(
-  { width, height, toolRadius, onPoint, onDisplayFps, maxPixels = 720, testId = "world-canvas" },
+  { width, height, toolRadius, onPoint, onDisplayFps, maxPixels = 720, testId = "world-canvas", minRowPixels = 0 },
   ref,
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -50,6 +51,8 @@ export const FieldCanvas = forwardRef<FieldCanvasHandle, Props>(function FieldCa
   const raf = useRef<number | null>(null);
   const drag = useRef<{ x: number; y: number } | null>(null);
   const scale = Math.max(1, Math.floor(maxPixels / Math.max(width, height)));
+  // Short, wide images (e.g. species x time) get taller rows so they stay readable.
+  const rowPx = Math.max(scale, minRowPixels);
 
   const paint = useCallback(() => {
     raf.current = null;
@@ -116,7 +119,7 @@ export const FieldCanvas = forwardRef<FieldCanvasHandle, Props>(function FieldCa
       data-testid={testId}
       className={`world-canvas ${toolRadius !== null ? "brush-active" : ""}`}
       width={width * scale}
-      height={height * scale}
+      height={height * rowPx}
       onPointerDown={(ev) => {
         if (toolRadius === null) return;
         const c = cellAt(ev);

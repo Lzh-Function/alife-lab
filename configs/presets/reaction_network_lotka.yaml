@@ -1,0 +1,11 @@
+preset:
+  id: reaction_network_lotka
+  scenario: reaction_network_lotka.yaml
+  title_key: preset.reaction_network_lotka.title
+  description_key: preset.reaction_network_lotka.description
+  overrides: {}
+  expected_observation: >-
+    Stochastic predator-prey oscillations of Y1 and Y2 around ~1000 (Gillespie 1977, Fig. of
+    the Lotka reactions); Z accumulates at ~c3 * Y2 per time unit. Extinction is possible on
+    long runs (a property of the stochastic model).
+  negative_control: null
