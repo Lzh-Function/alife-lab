@@ -1,0 +1,13 @@
+preset:
+  id: protocell_no_division
+  scenario: protocell_default.yaml
+  title_key: preset.protocell_no_division.title
+  description_key: preset.protocell_no_division.description
+  overrides:
+    experiment:
+      name: protocell_no_division
+      dynamics: {division: false}
+  expected_observation: >-
+    Control (growth only): cells grow (mean radius 1.8 -> 4.6 by tick 1500) but never divide;
+    population stays 20.
+  negative_control: null

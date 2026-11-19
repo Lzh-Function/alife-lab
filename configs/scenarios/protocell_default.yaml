@@ -1,0 +1,33 @@
+# Abstract protocells on a 64 x 64 periodic food field (integer molecule counts, exact matter
+# ledger): uptake through the membrane, catalysed lipid synthesis and replication,
+# maintenance, decay, growth, division with binomial partition and heritable traits.
+schema_version: 1
+experiment:
+  name: protocell_default
+  mode: exploratory
+  substrate: protocell
+  seed: 0
+  world: {width: 64, height: 64, boundary: periodic}
+  initialization: {count: 20, membrane: 200, catalyst: 20, food: 50}
+  dynamics:
+    clock_unit: tick
+    numeric_policy: integer_counts_binomial
+    environment: {inflow_per_cell: 0.2, food_decay: 0.002, waste_decay: 0.05, hop_probability: 0.5,
+                  initial_food_per_cell: 20}
+    genome: {k_lipid: 0.05, k_replicate: 0.02, permeability: 0.05}
+    mutation_sigma: 0.05
+    heritable: [k_lipid, k_replicate, permeability]
+    membrane_decay: 0.01
+    catalyst_decay: 0.005
+    maintenance: 0.002
+    membrane_density: 20.0
+    division_membrane: 400
+    min_membrane: 60
+    rupture_pressure: 60.0
+    membrane: true
+    metabolism: true
+    division: true
+    partition: binomial
+    repulsion: 0.5
+    diffusion: 0.1
+  runner: {max_steps: 100000, checkpoint_interval: 500}

@@ -1,0 +1,10 @@
+preset:
+  id: protocell_default
+  scenario: protocell_default.yaml
+  title_key: preset.protocell_default.title
+  description_key: preset.protocell_default.description
+  overrides: {}
+  expected_observation: >-
+    Seed 0: 20 cells grow and divide (204 cells and 184 divisions by tick 1500, no deaths);
+    catalyst partition asymmetry ~0.07; ledger_residual stays exactly 0.
+  negative_control: preset protocell_no_membrane

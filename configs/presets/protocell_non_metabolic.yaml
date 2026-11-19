@@ -1,0 +1,13 @@
+preset:
+  id: protocell_non_metabolic
+  scenario: protocell_default.yaml
+  title_key: preset.protocell_non_metabolic.title
+  description_key: preset.protocell_non_metabolic.description
+  overrides:
+    experiment:
+      name: protocell_non_metabolic
+      dynamics: {metabolism: false}
+  expected_observation: >-
+    Control (no metabolism): no lipid synthesis or replication; membranes decay and all
+    cells die.
+  negative_control: null

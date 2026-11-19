@@ -1,0 +1,14 @@
+preset:
+  id: protocell_random_partition
+  scenario: protocell_default.yaml
+  title_key: preset.protocell_random_partition.title
+  description_key: preset.protocell_random_partition.description
+  overrides:
+    experiment:
+      name: protocell_random_partition
+      dynamics: {partition: random_fraction}
+  expected_observation: >-
+    Control (random partition): each division gives the daughters a uniform random fraction
+    of every content instead of a binomial half; asymmetry ~0.5 instead of ~0.07 and many
+    more daughters die (seed 0: 80 vs 0 deaths by tick 1500).
+  negative_control: null

@@ -1,0 +1,13 @@
+preset:
+  id: protocell_fixed_traits
+  scenario: protocell_default.yaml
+  title_key: preset.protocell_fixed_traits.title
+  description_key: preset.protocell_fixed_traits.description
+  overrides:
+    experiment:
+      name: protocell_fixed_traits
+      dynamics: {heritable: []}
+  expected_observation: >-
+    Control (no heritable variation): daughters copy the parent's traits exactly, so trait
+    means cannot change; compare mean_k_replicate / mean_permeability with the default.
+  negative_control: null

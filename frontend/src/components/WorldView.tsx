@@ -58,7 +58,8 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
         return;
       }
       const payload: Record<string, unknown> = { x: Number(x.toFixed(3)), y: Number(y.toFixed(3)), radius: tool.radius };
-      if (tool.mode === "spawn" || ((tool.mode === "add" || tool.mode === "remove") && ROW_DISPLAY_SUBSTRATES.has(substrate))) payload.count = tool.count;
+      if (tool.mode === "spawn" || tool.mode === "add_food" || ((tool.mode === "add" || tool.mode === "remove") && ROW_DISPLAY_SUBSTRATES.has(substrate)))
+        payload.count = tool.count;
       if (tool.mode === "paint") payload.value = tool.value ?? 1;
       if ((tool.mode === "paint" || tool.mode === "erase") && tool.channel != null) payload.channel = tool.channel;
       if (substrate === "pd_nca" && tool.mode === "seed") payload.agent = tool.channel ?? 0;

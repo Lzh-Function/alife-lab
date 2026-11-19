@@ -4,12 +4,12 @@
 import type { Frame } from "./api";
 import { popcount } from "./api";
 
-export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network" | "nca_train" | "nca" | "pd_nca";
+export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network" | "nca_train" | "nca" | "pd_nca" | "protocell";
 
 /** Substrates rendered as continuous particles (vs. grids). */
 export const PARTICLE_SUBSTRATES = new Set(["boids", "particle_life"]);
 /** Substrates rendered as a continuous scalar field (codec field_u8). */
-export const FIELD_SUBSTRATES = new Set(["lenia", "flow_lenia", "gray_scott", "physarum", "reaction_network", "nca_train", "nca", "pd_nca"]);
+export const FIELD_SUBSTRATES = new Set(["lenia", "flow_lenia", "gray_scott", "physarum", "reaction_network", "nca_train", "nca", "pd_nca", "protocell"]);
 /** Non-spatial substrates whose display is a species x time image (rows = species). */
 export const ROW_DISPLAY_SUBSTRATES = new Set(["reaction_network"]);
 
@@ -94,6 +94,12 @@ export const TOOLS: Record<SubstrateId, ToolDescriptor> = {
     radius: { min: 0, max: 0, step: 1, initial: 0 },
     count: { min: 1, max: 100000, initial: 100 },
     noteKey: "lab.tool.reaction_network_note",
+  },
+  protocell: {
+    modes: ["off", "inspect", "add_food", "add_cell", "kill"],
+    radius: { min: 1, max: 16, step: 1, initial: 3 },
+    count: { min: 1, max: 100000, initial: 500 },
+    noteKey: "lab.tool.protocell_note",
   },
   pd_nca: {
     modes: ["off", "inspect", "seed", "erase"],
@@ -298,6 +304,24 @@ export const FORM_FIELDS: Record<SubstrateId, FormField[]> = {
     ...RUNNER,
   ],
   nca: [{ path: "seed", labelKey: "form.seed", kind: "int", min: 0 }, ...RUNNER],
+  protocell: [
+    { path: "seed", labelKey: "form.seed", kind: "int", min: 0 },
+    { path: "world.width", labelKey: "form.width", kind: "int", min: 8, max: 512 },
+    { path: "world.height", labelKey: "form.height", kind: "int", min: 8, max: 512 },
+    { path: "initialization.count", labelKey: "form.protocell.count", kind: "int", min: 0, max: 4000 },
+    { path: "dynamics.environment.inflow_per_cell", labelKey: "form.protocell.inflow", kind: "float", min: 0, max: 100, step: 0.05 },
+    { path: "dynamics.mutation_sigma", labelKey: "form.protocell.mutation", kind: "float", min: 0, max: 2, step: 0.01 },
+    {
+      path: "dynamics.partition",
+      labelKey: "form.protocell.partition",
+      kind: "select",
+      options: [
+        { value: "binomial", labelKey: "form.protocell.partition.binomial" },
+        { value: "random_fraction", labelKey: "form.protocell.partition.random" },
+      ],
+    },
+    ...RUNNER,
+  ],
   pd_nca: [
     { path: "seed", labelKey: "form.seed", kind: "int", min: 0 },
     { path: "world.width", labelKey: "form.width", kind: "int", min: 8, max: 256 },

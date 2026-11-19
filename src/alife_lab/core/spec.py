@@ -947,6 +947,113 @@ class PDNCAExperiment(_Frozen):
         return self
 
 
+# --------------------------------------------------------------------------- #
+# Protocells: compartments, metabolism, growth and division (abstract 2D model)
+# --------------------------------------------------------------------------- #
+
+MAX_PROTOCELLS = 4000
+
+
+class ProtocellWorld(_Frozen):
+    width: Annotated[int, Field(ge=8, le=512)] = 64
+    height: Annotated[int, Field(ge=8, le=512)] = 64
+    boundary: Literal["periodic"] = "periodic"
+
+
+class ProtocellEnvironment(_Frozen):
+    inflow_per_cell: Annotated[float, Field(ge=0.0, le=100.0)] = 0.2  # mean food added / tick
+    food_decay: Annotated[float, Field(ge=0.0, le=1.0)] = 0.002  # per molecule per tick
+    waste_decay: Annotated[float, Field(ge=0.0, le=1.0)] = 0.05
+    hop_probability: Annotated[float, Field(ge=0.0, le=1.0)] = 0.5  # field diffusion
+    initial_food_per_cell: Annotated[int, Field(ge=0, le=10_000)] = 20
+
+
+class ProtocellGenome(_Frozen):
+    """Heritable traits (initial values; mutated multiplicatively at division)."""
+
+    k_lipid: Annotated[float, Field(ge=0.0, le=100.0)] = 0.05  # F + C -> C + M
+    k_replicate: Annotated[float, Field(ge=0.0, le=100.0)] = 0.02  # F + C -> 2 C
+    permeability: Annotated[float, Field(ge=0.0, le=10.0)] = 0.05  # food uptake per tick
+
+
+class ProtocellDynamics(_Frozen):
+    clock_unit: Literal["tick"] = "tick"
+    numeric_policy: Literal["integer_counts_binomial"] = "integer_counts_binomial"
+    environment: ProtocellEnvironment = ProtocellEnvironment()
+    genome: ProtocellGenome = ProtocellGenome()
+    mutation_sigma: Annotated[float, Field(ge=0.0, le=2.0)] = 0.05  # log-normal per trait
+    heritable: tuple[Literal["k_lipid", "k_replicate", "permeability"], ...] = (
+        "k_lipid",
+        "k_replicate",
+        "permeability",
+    )
+    membrane_decay: Annotated[float, Field(ge=0.0, le=1.0)] = 0.01  # M -> W
+    catalyst_decay: Annotated[float, Field(ge=0.0, le=1.0)] = 0.005  # C -> W
+    maintenance: Annotated[float, Field(ge=0.0, le=1.0)] = 0.002  # F -> W per membrane unit
+    membrane_density: Annotated[float, Field(gt=0.0, le=1000.0)] = 20.0  # M per area unit
+    division_membrane: Annotated[int, Field(ge=4, le=100_000)] = 400
+    min_membrane: Annotated[int, Field(ge=1, le=100_000)] = 60
+    rupture_pressure: Annotated[float, Field(gt=0.0, le=1e6)] = 60.0  # contents per area
+    # Controls
+    membrane: bool = True  # False: contents leak freely (no compartment)
+    metabolism: bool = True  # False: no lipid synthesis / replication
+    division: bool = True  # False: cells only grow (and eventually rupture)
+    partition: Literal["binomial", "random_fraction"] = "binomial"
+    repulsion: Annotated[float, Field(ge=0.0, le=10.0)] = 0.5
+    diffusion: Annotated[float, Field(ge=0.0, le=10.0)] = 0.1  # Brownian step (world units)
+
+
+class ProtocellInitialization(_Frozen):
+    count: Annotated[int, Field(ge=0, le=MAX_PROTOCELLS)] = 20
+    membrane: Annotated[int, Field(ge=1, le=100_000)] = 200
+    catalyst: Annotated[int, Field(ge=0, le=100_000)] = 20
+    food: Annotated[int, Field(ge=0, le=100_000)] = 50
+
+
+ProtocellMetric = Literal[
+    "population", "divisions", "ruptures", "deaths", "mean_radius", "total_matter",
+    "field_food", "ledger_residual", "mean_k_replicate", "mean_permeability",
+    "partition_asymmetry",
+]  # fmt: skip
+
+
+class ProtocellObservation(_Frozen):
+    metrics: tuple[ProtocellMetric, ...] = (
+        "population",
+        "divisions",
+        "ruptures",
+        "deaths",
+        "mean_radius",
+        "total_matter",
+        "field_food",
+        "ledger_residual",
+        "mean_k_replicate",
+        "mean_permeability",
+        "partition_asymmetry",
+    )
+
+
+class ProtocellExperiment(_Frozen):
+    name: _NAME
+    mode: Literal["reference", "exploratory"] = "exploratory"
+    substrate: Literal["protocell"]
+    seed: _SEED
+    world: ProtocellWorld = ProtocellWorld()
+    initialization: ProtocellInitialization = ProtocellInitialization()
+    dynamics: ProtocellDynamics = ProtocellDynamics()
+    runner: RunnerSpec = RunnerSpec(max_steps=100_000, checkpoint_interval=500)
+    observations: ProtocellObservation = ProtocellObservation()
+
+    @model_validator(mode="after")
+    def _check(self) -> ProtocellExperiment:
+        d = self.dynamics
+        if d.min_membrane * 2 > d.division_membrane:
+            raise ValueError("division_membrane must be at least 2 * min_membrane")
+        if self.mode == "reference":
+            raise ValueError("protocell is an abstract model without a reference implementation")
+        return self
+
+
 AnyExperiment = Annotated[
     ConwayExperiment
     | BoidsExperiment
@@ -959,7 +1066,8 @@ AnyExperiment = Annotated[
     | ReactionNetworkExperiment
     | NCATrainExperiment
     | NCAExperiment
-    | PDNCAExperiment,
+    | PDNCAExperiment
+    | ProtocellExperiment,
     Field(discriminator="substrate"),
 ]
 

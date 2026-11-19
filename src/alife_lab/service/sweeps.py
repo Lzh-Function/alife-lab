@@ -34,6 +34,7 @@ ALWAYS_COMPUTED = {
     "nca_train": set(),
     "nca": set(),
     "pd_nca": set(),
+    "protocell": {"population"},
 }
 UNIT_NOTE = (
     "Unit of analysis: one independently seeded run per value. Time points within a run are not "

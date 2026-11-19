@@ -62,6 +62,20 @@ export interface Inspection {
   target_rgba?: number[] | null;
   last_step?: { loss?: number; steps?: number; lr?: number };
   parameter_count?: number;
+  // protocell
+  field?: { food: number; waste: number };
+  protocell?: {
+    id: number;
+    birth_tick: number;
+    ancestors: number[];
+    contents: Record<string, number>;
+    genome: Record<string, number>;
+    radius: number;
+    pressure: number;
+    distance: number;
+  } | null;
+  ledger?: Record<string, number>;
+  ledger_residual?: number;
   // pd_nca
   aliveness?: number[];
   dominant?: number;
@@ -241,6 +255,44 @@ export function InspectorPanel({
                 {data.patch_mass?.toFixed(3)} (r = {data.query?.radius})
               </dd>
             </dl>
+          )}
+          {data.substrate === "protocell" && data.ledger && (
+            <div data-testid="inspector-protocell">
+              {data.protocell ? (
+                <dl className="stats small">
+                  <dt>{t("inspector.protocell.id")}</dt>
+                  <dd className="mono">
+                    #{data.protocell.id} · {t("inspector.protocell.born")} t={data.protocell.birth_tick} · r={data.protocell.radius.toFixed(2)}
+                  </dd>
+                  <dt>{t("inspector.protocell.contents")}</dt>
+                  <dd className="mono">
+                    {Object.entries(data.protocell.contents)
+                      .map(([k, v]) => `${k} ${v}`)
+                      .join(" · ")}
+                  </dd>
+                  <dt>{t("inspector.protocell.genome")}</dt>
+                  <dd className="mono">
+                    {Object.entries(data.protocell.genome)
+                      .map(([k, v]) => `${k} ${v.toPrecision(3)}`)
+                      .join(" · ")}
+                  </dd>
+                  <dt>{t("inspector.protocell.pressure")}</dt>
+                  <dd className="mono">{data.protocell.pressure.toFixed(2)}</dd>
+                  <dt>{t("inspector.protocell.ancestors")}</dt>
+                  <dd className="mono" data-testid="inspector-ancestors">
+                    {data.protocell.ancestors.length ? data.protocell.ancestors.join(" ← ") : "—"}
+                  </dd>
+                </dl>
+              ) : (
+                <p className="muted small">{t("inspector.none")}</p>
+              )}
+              <p className="small mono" data-testid="inspector-ledger">
+                {t("inspector.protocell.ledger")}: {Object.entries(data.ledger)
+                  .map(([k, v]) => `${k} ${v}`)
+                  .join(" · ")}{" "}
+                · residual {data.ledger_residual}
+              </p>
+            </div>
           )}
           {data.substrate === "pd_nca" && data.aliveness && (
             <div data-testid="inspector-pdnca">

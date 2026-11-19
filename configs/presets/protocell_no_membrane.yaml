@@ -1,0 +1,13 @@
+preset:
+  id: protocell_no_membrane
+  scenario: protocell_default.yaml
+  title_key: preset.protocell_no_membrane.title
+  description_key: preset.protocell_no_membrane.description
+  overrides:
+    experiment:
+      name: protocell_no_membrane
+      dynamics: {membrane: false}
+  expected_observation: >-
+    Control (no compartment): contents leak every tick; no growth, all cells die (seed 0:
+    20 deaths, population 0 by tick 300).
+  negative_control: null

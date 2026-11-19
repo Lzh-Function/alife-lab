@@ -17,6 +17,7 @@ from alife_lab.substrates.particle_life.particle_life import (
 )
 from alife_lab.substrates.pd_nca.adapter import PD_NCA_MANIFEST, PDNCAAdapter
 from alife_lab.substrates.physarum.physarum import PHYSARUM_MANIFEST, PhysarumAdapter
+from alife_lab.substrates.protocell.adapter import PROTOCELL_MANIFEST, ProtocellAdapter
 from alife_lab.substrates.reaction_network.adapter import (
     REACTION_NETWORK_MANIFEST,
     ReactionNetworkAdapter,
@@ -35,6 +36,7 @@ _REGISTRY: dict[str, tuple[PluginManifest, type[SubstrateAdapter]]] = {
     "nca_train": (NCA_TRAIN_MANIFEST, NCATrainAdapter),
     "nca": (NCA_MANIFEST, NCAAdapter),
     "pd_nca": (PD_NCA_MANIFEST, PDNCAAdapter),
+    "protocell": (PROTOCELL_MANIFEST, ProtocellAdapter),
 }
 
 
