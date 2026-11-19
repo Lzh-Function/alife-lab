@@ -1,14 +1,14 @@
 // Phase 2 slice: Pause -> Checkpoint -> paired Fork -> Intervention -> Compare from the browser.
 import { expect, test } from "@playwright/test";
 import path from "node:path";
-import { BASE, DATA, expectState, startServer, stopServer, tick, waitHealthy } from "./helpers";
+import { BASE, DATA, expectState, startServer, stopServer, tick, waitHealthy, openPreset } from "./helpers";
 
 test("paired fork with a treatment brush diverges from the control arm", async ({ page }) => {
   const server = startServer();
   await waitHealthy();
   try {
     await page.goto(`${BASE}/#/catalog`);
-    await page.getByTestId("preset-conway_glider").click();
+    await openPreset(page, "conway_glider");
     await page.getByTestId("input-name").fill("e2e_fork_parent");
     await page.getByTestId("field-runner.max_steps").fill("100000");
     await page.getByTestId("input-profile").selectOption("cpu_dev");

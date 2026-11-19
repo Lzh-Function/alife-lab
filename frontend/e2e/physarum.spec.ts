@@ -1,14 +1,14 @@
 // Phase 4: Physarum-inspired stigmergy (Jones 2010) in the GUI.
 import { expect, test } from "@playwright/test";
 import path from "node:path";
-import { BASE, DATA, expectState, startServer, stopServer, tick, waitHealthy } from "./helpers";
+import { BASE, DATA, expectState, startServer, stopServer, tick, waitHealthy, openPreset } from "./helpers";
 
 test("physarum: network forms, attractant intervention, agent sensors in inspector", async ({ page }) => {
   const server = startServer();
   await waitHealthy();
   try {
     await page.goto(`${BASE}/#/catalog`);
-    await page.getByTestId("preset-physarum_network").click();
+    await openPreset(page, "physarum_network");
     await page.getByTestId("input-profile").selectOption("cpu_dev");
     await page.getByTestId("input-tps").fill("0");
     await expect(page.getByTestId("validation")).toContainText("OK");

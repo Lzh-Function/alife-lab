@@ -1,14 +1,14 @@
 // Phase 2 slice 3: a second, continuous substrate (Boids) through the same GUI paths.
 import { expect, test } from "@playwright/test";
 import path from "node:path";
-import { BASE, DATA, expectState, startServer, stopServer, tick, waitHealthy } from "./helpers";
+import { BASE, DATA, expectState, startServer, stopServer, tick, waitHealthy, openPreset } from "./helpers";
 
 test("boids run: observe, spawn intervention, paired fork, replay verification", async ({ page }) => {
   const server = startServer();
   await waitHealthy();
   try {
     await page.goto(`${BASE}/#/catalog`);
-    await page.getByTestId("preset-boids_flocking").click();
+    await openPreset(page, "boids_flocking");
     await page.getByTestId("input-name").fill("e2e_boids");
     await page.getByTestId("field-initialization.count").fill("200");
     await page.getByTestId("input-profile").selectOption("cpu_dev");

@@ -154,6 +154,9 @@ def test_profile_and_role_validation(settings: Settings) -> None:
             assert not report.ok  # profile requires gpu_count=1, fake target has none
             _, report = c.validate(spec(), "cpu_dev")
             assert report.ok and report.resolved_backend == "numpy"
+            # local_cpu (the GUI's "CPU" switch) reserves no GPU: valid without one, no warning.
+            _, report = c.validate(spec(), "local_cpu")
+            assert report.ok and report.resolved_backend == "numpy" and not report.warnings
         finally:
             await c.shutdown()
 

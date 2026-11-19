@@ -1,7 +1,7 @@
 // Phase 3: BFF VM debugger — stand-alone trace and next-epoch pair trace from a run.
 import { expect, test } from "@playwright/test";
 import path from "node:path";
-import { BASE, DATA, expectState, startServer, stopServer, tick, waitHealthy } from "./helpers";
+import { BASE, DATA, expectState, startServer, stopServer, tick, waitHealthy, openPreset } from "./helpers";
 
 test("bff debugger: step through a copier and a next-epoch pair of a run", async ({ page }) => {
   const server = startServer();
@@ -26,7 +26,7 @@ test("bff debugger: step through a copier and a next-epoch pair of a run", async
 
     // From a run: inspect program #0 and trace the pair it will be evaluated in next epoch.
     await page.goto(`${BASE}/#/catalog`);
-    await page.getByTestId("preset-bff_reference").click();
+    await openPreset(page, "bff_reference");
     await page.getByTestId("field-soup.num_programs").fill("1024");
     await page.getByTestId("input-profile").selectOption("cpu_dev");
     await page.getByTestId("input-start-paused").check();

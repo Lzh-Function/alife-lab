@@ -1,14 +1,14 @@
 // Phase 2 slice D: third substrate (Particle Life) through the GUI, with the inspector.
 import { expect, test } from "@playwright/test";
 import path from "node:path";
-import { BASE, DATA, expectState, startServer, stopServer, tick, waitHealthy } from "./helpers";
+import { BASE, DATA, expectState, startServer, stopServer, tick, waitHealthy, openPreset } from "./helpers";
 
 test("particle life: run, spawn typed particles, inspect matrix", async ({ page }) => {
   const server = startServer();
   await waitHealthy();
   try {
     await page.goto(`${BASE}/#/catalog`);
-    await page.getByTestId("preset-particle_life_self_sorting").click();
+    await openPreset(page, "particle_life_self_sorting");
     await page.getByTestId("field-initialization.count").fill("400");
     await page.getByTestId("input-profile").selectOption("cpu_dev");
     await page.getByTestId("input-tps").fill("60");

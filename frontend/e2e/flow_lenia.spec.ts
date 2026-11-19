@@ -1,14 +1,14 @@
 // Phase 3: Flow-Lenia (multi-channel, mass conserving) in the GUI.
 import { expect, test } from "@playwright/test";
 import path from "node:path";
-import { BASE, DATA, expectState, startServer, stopServer, tick, waitHealthy } from "./helpers";
+import { BASE, DATA, expectState, startServer, stopServer, tick, waitHealthy, openPreset } from "./helpers";
 
 test("flow lenia: run, mass conserved, paint one channel, inspect channels", async ({ page }) => {
   const server = startServer();
   await waitHealthy();
   try {
     await page.goto(`${BASE}/#/catalog`);
-    await page.getByTestId("preset-flow_lenia_example").click();
+    await openPreset(page, "flow_lenia_example");
     await page.getByTestId("input-profile").selectOption("cpu_dev");
     await page.getByTestId("input-tps").fill("0");
     await expect(page.getByTestId("validation")).toContainText("OK");

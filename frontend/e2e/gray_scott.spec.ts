@@ -1,14 +1,14 @@
 // Phase 4: Gray–Scott reaction–diffusion in the GUI (Pearson coral regime).
 import { expect, test } from "@playwright/test";
 import path from "node:path";
-import { BASE, DATA, expectState, startServer, stopServer, tick, waitHealthy } from "./helpers";
+import { BASE, DATA, expectState, startServer, stopServer, tick, waitHealthy, openPreset } from "./helpers";
 
 test("gray-scott: pattern grows, seed tool, inspector rates", async ({ page }) => {
   const server = startServer();
   await waitHealthy();
   try {
     await page.goto(`${BASE}/#/catalog`);
-    await page.getByTestId("preset-gray_scott_coral").click();
+    await openPreset(page, "gray_scott_coral");
     await page.getByTestId("input-profile").selectOption("cpu_dev");
     await page.getByTestId("input-tps").fill("0");
     await expect(page.getByTestId("validation")).toContainText("OK");

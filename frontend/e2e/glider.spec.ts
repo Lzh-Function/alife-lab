@@ -2,14 +2,14 @@
 // Starts and restarts `uv run alife serve` itself with an isolated ALIFE_HOME / ALIFE_RUNS_DIR.
 import { expect, test } from "@playwright/test";
 import path from "node:path";
-import { BASE, DATA, expectState, startServer, stopServer, tick, waitHealthy } from "./helpers";
+import { BASE, DATA, expectState, startServer, stopServer, tick, waitHealthy, openPreset } from "./helpers";
 
 test("conway glider vertical slice survives a server restart", async ({ page }) => {
   let server = startServer();
   await waitHealthy();
   try {
     await page.goto(`${BASE}/#/catalog`);
-    await page.getByTestId("preset-conway_glider").click();
+    await openPreset(page, "conway_glider");
     await page.getByTestId("input-name").fill("e2e_glider");
     await page.getByTestId("field-runner.max_steps").fill("100000");
     await page.getByTestId("input-profile").selectOption("cpu_dev");

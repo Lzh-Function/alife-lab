@@ -4,6 +4,8 @@ import { api, ApiError, type Frame, type MetricRow, type RunEvent } from "../lib
 import { useRunStream, type GpuMemory } from "../lib/stream";
 import { useT } from "../i18n";
 import { ToolBar, WorldView, type WorldViewHandle } from "./WorldView";
+import { Help, metricHelp } from "./Help";
+import { SUBSTRATE_GUIDE } from "../guide/content";
 import { displayWorld, initialTool, type ToolState } from "../lib/substrates";
 import { Sparkline } from "./Sparkline";
 import { StateBadge } from "./StateBadge";
@@ -342,13 +344,14 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
               : undefined
           }
         />
+        <AboutSubstrate substrate={summary.substrate} />
         <div className="panel">
           <h3>{t("lab.metrics")}</h3>
           <dl className="stats">
             <dt>{t(`clock.${summary.clock.unit}`)}</dt>
             <dd data-testid="tick">{tick ?? summary.clock.value}</dd>
             {metricIds.map((m) => (
-              <MetricStat key={m} id={m} value={last?.values[m] ?? null} />
+              <MetricStat key={m} id={m} substrate={summary.substrate} value={last?.values[m] ?? null} />
             ))}
             <dt>{t("lab.sim_rate")}</dt>
             <dd>{simRate.toFixed(1)} tick/s</dd>
@@ -486,11 +489,44 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
   );
 }
 
-function MetricStat({ id, value }: { id: string; value: number | null }) {
+function AboutSubstrate({ substrate }: { substrate: string }) {
+  const t = useT();
+  const g = SUBSTRATE_GUIDE[substrate];
+  if (!g) return null;
+  return (
+    <details className="panel about" data-testid="lab-about">
+      <summary>
+        <strong>{t("lab.about")}</strong>: {g.title}
+      </summary>
+      <p>{g.oneLine}</p>
+      <h4>ここを見よう</h4>
+      <ul>
+        {g.watch.map((w) => (
+          <li key={w}>{w}</li>
+        ))}
+      </ul>
+      <h4>やってみよう</h4>
+      <ul>
+        {g.tryThis.map((w) => (
+          <li key={w}>{w}</li>
+        ))}
+      </ul>
+      <p className="small">
+        <strong>まだ言えないこと：</strong>
+        {g.cannotSay}
+      </p>
+      <a href={`#/guide/${substrate}`}>{t("lab.about.more")} →</a>
+    </details>
+  );
+}
+
+function MetricStat({ id, substrate, value }: { id: string; substrate: string; value: number | null }) {
   const t = useT();
   return (
     <>
-      <dt>{t(`metric.${id}`)}</dt>
+      <dt>
+        {t(`metric.${id}`)} <Help text={metricHelp(substrate, id)} testId={`metric-help-${id}`} />
+      </dt>
       <dd data-testid={`metric-${id}`}>{value === null ? "null" : Number.isInteger(value) ? value : value.toFixed(3)}</dd>
     </>
   );

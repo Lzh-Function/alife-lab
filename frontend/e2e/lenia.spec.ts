@@ -2,14 +2,14 @@
 // restart the service and restore the float64 state.
 import { expect, test } from "@playwright/test";
 import path from "node:path";
-import { BASE, DATA, expectState, startServer, stopServer, tick, waitHealthy } from "./helpers";
+import { BASE, DATA, expectState, startServer, stopServer, tick, waitHealthy, openPreset } from "./helpers";
 
 test("lenia orbium: run, paint, inspect, checkpoint and restore after restart", async ({ page }) => {
   let server = startServer();
   await waitHealthy();
   try {
     await page.goto(`${BASE}/#/catalog`);
-    await page.getByTestId("preset-lenia_orbium").click();
+    await openPreset(page, "lenia_orbium");
     await page.getByTestId("input-profile").selectOption("cpu_dev");
     await page.getByTestId("input-tps").fill("60");
     await expect(page.getByTestId("validation")).toContainText("OK");

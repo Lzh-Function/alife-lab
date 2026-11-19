@@ -1,6 +1,6 @@
 // Inspector: read-only queries on the live worker and on replayed states.
 import { expect, test, type Page } from "@playwright/test";
-import { BASE, expectState, startServer, stopServer, tick, waitHealthy } from "./helpers";
+import { BASE, expectState, startServer, stopServer, tick, waitHealthy, openPreset } from "./helpers";
 
 async function clickCell(page: Page, x: number, y: number, world = 128) {
   const box = (await page.getByTestId("world-canvas").boundingBox())!;
@@ -12,7 +12,7 @@ test("inspector explains conway cells live and in replay without changing the ru
   await waitHealthy();
   try {
     await page.goto(`${BASE}/#/catalog`);
-    await page.getByTestId("preset-conway_glider").click();
+    await openPreset(page, "conway_glider");
     await page.getByTestId("field-runner.max_steps").fill("100000");
     await page.getByTestId("input-profile").selectOption("cpu_dev");
     await page.getByTestId("input-start-paused").check();

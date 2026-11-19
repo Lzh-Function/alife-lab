@@ -1,7 +1,7 @@
 // Phase 4: Petri Dish NCA — competing NCAs with online learning. Skipped without JAX.
 import { expect, test } from "@playwright/test";
 import path from "node:path";
-import { BASE, DATA, expectState, startServer, stopServer, tick, waitHealthy } from "./helpers";
+import { BASE, DATA, expectState, startServer, stopServer, tick, waitHealthy, openPreset } from "./helpers";
 
 test("pd-nca: territories over epochs, seeding an NCA, interaction matrix", async ({ page, request }) => {
   const server = startServer();
@@ -10,7 +10,7 @@ test("pd-nca: territories over epochs, seeding an NCA, interaction matrix", asyn
     const targets = await (await request.get(`${BASE}/api/v1/compute-targets`)).json();
     test.skip(!targets.data.targets[0].capabilities.backends.includes("jax"), "JAX not installed");
     await page.goto(`${BASE}/#/catalog`);
-    await page.getByTestId("preset-pd_nca_dish").click();
+    await openPreset(page, "pd_nca_dish");
     await page.getByTestId("input-profile").selectOption("local_interactive");
     await page.getByTestId("input-tps").fill("0");
     await expect(page.getByTestId("validation")).toContainText("OK");

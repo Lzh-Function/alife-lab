@@ -1,14 +1,14 @@
 // Phase 4: abstract protocells — growth, division, exact ledger, interventions, lineage.
 import { expect, test } from "@playwright/test";
 import path from "node:path";
-import { BASE, DATA, expectState, startServer, stopServer, tick, waitHealthy } from "./helpers";
+import { BASE, DATA, expectState, startServer, stopServer, tick, waitHealthy, openPreset } from "./helpers";
 
 test("protocell: cells divide, ledger stays exact, food and lineage in the inspector", async ({ page }) => {
   const server = startServer();
   await waitHealthy();
   try {
     await page.goto(`${BASE}/#/catalog`);
-    await page.getByTestId("preset-protocell_default").click();
+    await openPreset(page, "protocell_default");
     await page.getByTestId("input-profile").selectOption("cpu_dev");
     await page.getByTestId("input-tps").fill("0");
     await expect(page.getByTestId("validation")).toContainText("OK");

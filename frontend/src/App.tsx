@@ -7,17 +7,20 @@ import { Diagnostics } from "./components/Diagnostics";
 import { CompareView, ComparisonList } from "./components/CompareView";
 import { SweepDetail, SweepList } from "./components/Sweeps";
 import { BffDebuggerPage } from "./components/BffDebuggerPage";
+import { GuidePage } from "./components/GuidePage";
+import { ComputeToggle } from "./components/ComputeToggle";
 
-type View = "catalog" | "library" | "lab" | "compare" | "sweeps" | "debugger" | "diagnostics";
-const VIEWS = ["catalog", "library", "lab", "compare", "sweeps", "debugger", "diagnostics"] as const;
+type View = "guide" | "catalog" | "library" | "lab" | "compare" | "sweeps" | "debugger" | "diagnostics";
+const VIEWS = ["guide", "catalog", "library", "lab", "compare", "sweeps", "debugger", "diagnostics"] as const;
 
-function parseHash(): { view: View; runId: string | null; comparisonId: string | null; sweepId: string | null } {
+function parseHash(): { view: View; runId: string | null; comparisonId: string | null; sweepId: string | null; anchor: string | null } {
   const parts = window.location.hash.replace(/^#\/?/, "").split("/");
   const view = VIEWS.find((v) => v === parts[0]) ?? "catalog";
   const runId = parts[1] && /^run_[0-9a-f]{16}$/.test(parts[1]) ? parts[1] : null;
   const comparisonId = parts[1] && /^cmp_[0-9a-f]{16}$/.test(parts[1]) ? parts[1] : null;
   const sweepId = parts[1] && /^swp_[0-9a-f]{16}$/.test(parts[1]) ? parts[1] : null;
-  return { view, runId, comparisonId, sweepId };
+  const anchor = view === "guide" && parts[1] && /^[a-z_]{1,40}$/.test(parts[1]) ? parts[1] : null;
+  return { view, runId, comparisonId, sweepId, anchor };
 }
 
 export function App() {
@@ -57,11 +60,13 @@ export function App() {
             </button>
           ))}
         </nav>
+        <ComputeToggle />
         <button className="ghost" data-testid="lang-toggle" onClick={() => setLang(lang === "ja" ? "en" : "ja")}>
           {t("lang.toggle")}
         </button>
       </header>
       <main>
+        {route.view === "guide" && <GuidePage anchor={route.anchor} />}
         {route.view === "catalog" && <Catalog onOpen={open} />}
         {route.view === "library" && <Library onOpen={open} />}
         {route.view === "lab" &&

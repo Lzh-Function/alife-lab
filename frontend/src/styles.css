@@ -68,8 +68,85 @@ h3 { margin: 0 0 0.5rem; font-size: 0.95rem; }
 .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; margin-bottom: 0.75rem; }
 .notice { background: var(--warn-bg); border: 1px solid var(--warn-border); border-radius: 6px; padding: 0.4rem 0.6rem; }
 .error { background: var(--err-bg); border: 1px solid var(--danger); border-radius: 6px; padding: 0.4rem 0.6rem; }
-.catalog { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.5rem; }
-@media (max-width: 900px) { .catalog { grid-template-columns: 1fr; } }
+/* World catalog: substrates | presets | sticky create form */
+.catalog3 { display: grid; grid-template-columns: 15rem minmax(0, 1fr) minmax(20rem, 30rem); gap: 1rem; align-items: start; }
+.catalog-nav, .catalog-form {
+  position: sticky; top: 4.2rem; max-height: calc(100vh - 5rem); overflow-y: auto;
+}
+.catalog-nav { display: flex; flex-direction: column; gap: 0.6rem; padding-right: 0.2rem; }
+.catalog-search { width: 100%; }
+.catalog-cat { display: flex; flex-direction: column; gap: 0.2rem; }
+.catalog-cat-title { font-size: 0.78rem; font-weight: 600; color: var(--muted); letter-spacing: 0.03em; margin-top: 0.2rem; }
+.substrate-item { display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; text-align: left; padding: 0.3rem 0.55rem; }
+.substrate-item.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.substrate-item.active .muted { color: inherit; opacity: 0.6; }
+.substrate-meta { display: flex; gap: 0.25rem; align-items: center; flex-shrink: 0; }
+.substrate-intro { background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; padding: 0.5rem 0.7rem; margin-bottom: 0.8rem; }
+.substrate-intro p { margin: 0 0 0.3rem; }
+.catalog-presets .cards { grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); }
+.catalog-form .form fieldset { grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); }
+.form-preset { grid-column: 1 / -1; }
+.compute-note { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 0.3rem; }
+.label-row { display: inline-flex; align-items: center; gap: 0.3rem; }
+.badge { display: inline-block; margin-left: 0.4rem; padding: 0 0.35rem; border: 1px solid var(--border); border-radius: 999px; font-size: 0.72rem; font-weight: 500; vertical-align: middle; color: var(--muted); }
+.badge-control { border-color: var(--warn-border); background: var(--warn-bg); color: var(--text); }
+.badge-gpu { margin-left: 0; border-color: var(--accent); color: var(--accent); }
+.substrate-item.active .badge-gpu { color: inherit; border-color: currentColor; }
+.stars { color: #d39b1d; font-size: 0.8rem; letter-spacing: -0.05em; margin-left: 0.3rem; white-space: nowrap; }
+button.linklike { border: none; background: none; padding: 0; color: var(--accent); text-decoration: underline; }
+@media (max-width: 1200px) {
+  .catalog3 { grid-template-columns: 13rem minmax(0, 1fr); }
+  .catalog-form { grid-column: 1 / -1; position: static; max-height: none; }
+}
+@media (max-width: 700px) {
+  .catalog3 { grid-template-columns: 1fr; }
+  .catalog-nav { position: static; max-height: none; }
+}
+/* Top-bar CPU/GPU switch */
+.segmented { display: inline-flex; align-items: center; gap: 0; }
+.segmented > span { margin-right: 0.4rem; }
+.segmented button { border-radius: 0; }
+.segmented button:first-of-type { border-radius: 6px 0 0 6px; }
+.segmented button:last-of-type { border-radius: 0 6px 6px 0; margin-left: -1px; }
+.segmented button.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+/* "?" help popovers */
+.help {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 1.05rem; height: 1.05rem; border-radius: 50%; border: 1px solid var(--muted);
+  color: var(--muted); font-size: 0.7rem; font-weight: 700; cursor: help; flex-shrink: 0; user-select: none;
+}
+.help:hover, .help:focus, .help.open { border-color: var(--accent); color: var(--accent); outline: none; }
+.help-pop {
+  display: none; position: absolute; z-index: 20; top: 1.4rem; left: 50%; transform: translateX(-50%);
+  width: max-content; max-width: 17rem; padding: 0.5rem 0.65rem; border-radius: 6px;
+  background: var(--text); color: var(--bg); font-size: 0.82rem; font-weight: 400; line-height: 1.5;
+  text-align: left; white-space: normal; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+.help:hover .help-pop, .help:focus .help-pop, .help.open .help-pop { display: block; }
+.stats dt .help-pop { left: 0; transform: none; }
+/* Guide page */
+.guide { display: grid; grid-template-columns: 14rem minmax(0, 1fr); gap: 1rem; align-items: start; }
+.guide-toc { position: sticky; top: 4.2rem; max-height: calc(100vh - 5rem); overflow-y: auto; display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.88rem; }
+.guide-toc a { display: block; padding: 0.1rem 0; }
+.guide-body { max-width: 62rem; line-height: 1.75; font-size: 0.95rem; }
+.guide-body section, .guide-substrate { scroll-margin-top: 4.5rem; }
+.guide-category { margin-top: 1.4rem; font-size: 1.05rem; }
+.guide-lead { font-size: 1.02rem; font-weight: 500; }
+.guide-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.2rem; }
+.guide-grid h4, .about h4 { margin: 0.6rem 0 0.2rem; font-size: 0.9rem; }
+.guide-grid ul, .guide-grid ol, .about ul { margin: 0.2rem 0; padding-left: 1.3rem; }
+.guide-figure { max-width: 100%; border-radius: 6px; border: 1px solid var(--border); background: #fff; }
+.claim { margin-top: 0.6rem; padding: 0.5rem 0.7rem; background: var(--bg); border-radius: 6px; display: flex; flex-direction: column; gap: 0.3rem; }
+.glossary { display: grid; grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); gap: 0.6rem 1.2rem; margin: 0; }
+.glossary dt { font-weight: 600; }
+.glossary dd { margin: 0; color: var(--muted); }
+.guide .table td { white-space: normal; }
+.about summary { cursor: pointer; }
+.about p, .about li { font-size: 0.88rem; line-height: 1.6; }
+@media (max-width: 900px) {
+  .guide, .guide-grid { grid-template-columns: 1fr; }
+  .guide-toc { position: static; max-height: none; }
+}
 .cards { display: grid; gap: 0.6rem; }
 .card { display: flex; flex-direction: column; gap: 0.25rem; text-align: left; padding: 0.7rem; }
 .card.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }

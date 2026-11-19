@@ -2,7 +2,7 @@
 // Skipped when the local target offers no JAX backend.
 import { expect, test } from "@playwright/test";
 import path from "node:path";
-import { BASE, DATA, expectState, startServer, stopServer, tick, waitHealthy } from "./helpers";
+import { BASE, DATA, expectState, startServer, stopServer, tick, waitHealthy, openPreset } from "./helpers";
 
 test("nca: draw target, train, run the model and damage it", async ({ page, request }) => {
   const server = startServer();
@@ -11,7 +11,7 @@ test("nca: draw target, train, run the model and damage it", async ({ page, requ
     const targets = await (await request.get(`${BASE}/api/v1/compute-targets`)).json();
     test.skip(!targets.data.targets[0].capabilities.backends.includes("jax"), "JAX not installed");
     await page.goto(`${BASE}/#/catalog`);
-    await page.getByTestId("preset-nca_train_regenerating").click();
+    await openPreset(page, "nca_train_regenerating");
     await page.getByTestId("field-target.size").fill("12");
     await page.getByTestId("field-dynamics.batch_size").fill("4");
     await page.getByTestId("field-dynamics.steps_min").fill("16");

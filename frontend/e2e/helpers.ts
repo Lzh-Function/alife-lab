@@ -47,3 +47,10 @@ export async function expectState(page: Page, state: string) {
   await expect(page.getByTestId("lab-head").getByTestId("run-state")).toHaveAttribute("data-state", state, { timeout: 20_000 });
 }
 
+
+/** Catalog presets are shown per substrate; search by id so any preset is one click away. */
+export async function openPreset(page: Page, id: string) {
+  await page.getByTestId("catalog-search").fill(id);
+  await page.getByTestId(`preset-${id}`).click();
+  await expect(page.getByTestId(`preset-${id}`)).toHaveClass(/selected/);
+}

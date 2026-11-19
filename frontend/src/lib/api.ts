@@ -306,7 +306,9 @@ export const api = {
   presets: () => request<Preset[]>("GET", "/presets"),
   profiles: () => request<ProfileInfo[]>("GET", "/execution-profiles"),
   substrates: () =>
-    request<Array<{ slug: string; plugin_version: string; display_name_key: string; backends: string[]; metrics: Array<{ id: string; display_name_key: string; unit: string }> }>>("GET", "/substrates"),
+    request<Array<{ slug: string; plugin_version: string; display_name_key: string; backends: string[]; backend_numeric_policies?: Record<string, string[]>; metrics: Array<{ id: string; display_name_key: string; unit: string }> }>>("GET", "/substrates"),
+  computeTargets: () =>
+    request<{ targets: Array<{ target_id: string; status: string; capabilities: { backends: string[] }; probe?: { gpu?: { status: string; devices?: Array<{ name: string; memory_total_mib: number }> } } }> }>("GET", "/compute-targets"),
   resources: () => request<Record<string, unknown>>("GET", "/system/resources"),
   capabilities: () => request<Record<string, unknown>>("GET", "/system/capabilities"),
   runs: () => request<RunListItem[]>("GET", "/experiments"),
