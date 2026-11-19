@@ -1,0 +1,11 @@
+preset:
+  id: agent_world_evolution
+  scenario: agent_world_default.yaml
+  title_key: preset.agent_world_evolution.title
+  description_key: preset.agent_world_evolution.description
+  overrides: {}
+  expected_observation: >-
+    Population evolution (seed 0, tick 3000): the population saturates (~320, food-limited)
+    while forward moves rise (0.52 vs 0.32 fixed, 0.25 random) and standing food falls
+    (387 vs 460 fixed, 501 random); signalling becomes rarer (0.13 vs 0.20 fixed).
+  negative_control: preset agent_world_random

@@ -4,12 +4,12 @@
 import type { Frame } from "./api";
 import { popcount } from "./api";
 
-export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network" | "nca_train" | "nca" | "pd_nca" | "protocell";
+export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network" | "nca_train" | "nca" | "pd_nca" | "protocell" | "agent_world";
 
 /** Substrates rendered as continuous particles (vs. grids). */
 export const PARTICLE_SUBSTRATES = new Set(["boids", "particle_life"]);
 /** Substrates rendered as a continuous scalar field (codec field_u8). */
-export const FIELD_SUBSTRATES = new Set(["lenia", "flow_lenia", "gray_scott", "physarum", "reaction_network", "nca_train", "nca", "pd_nca", "protocell"]);
+export const FIELD_SUBSTRATES = new Set(["lenia", "flow_lenia", "gray_scott", "physarum", "reaction_network", "nca_train", "nca", "pd_nca", "protocell", "agent_world"]);
 /** Non-spatial substrates whose display is a species x time image (rows = species). */
 export const ROW_DISPLAY_SUBSTRATES = new Set(["reaction_network"]);
 
@@ -94,6 +94,11 @@ export const TOOLS: Record<SubstrateId, ToolDescriptor> = {
     radius: { min: 0, max: 0, step: 1, initial: 0 },
     count: { min: 1, max: 100000, initial: 100 },
     noteKey: "lab.tool.reaction_network_note",
+  },
+  agent_world: {
+    modes: ["off", "inspect", "add_food", "remove"],
+    radius: { min: 1, max: 40, step: 1, initial: 6 },
+    noteKey: "lab.tool.agent_world_note",
   },
   protocell: {
     modes: ["off", "inspect", "add_food", "add_cell", "kill"],
@@ -304,6 +309,32 @@ export const FORM_FIELDS: Record<SubstrateId, FormField[]> = {
     ...RUNNER,
   ],
   nca: [{ path: "seed", labelKey: "form.seed", kind: "int", min: 0 }, ...RUNNER],
+  agent_world: [
+    { path: "seed", labelKey: "form.seed", kind: "int", min: 0 },
+    { path: "initialization.count", labelKey: "form.agent_world.count", kind: "int", min: 0, max: 4000 },
+    {
+      path: "dynamics.controller.kind",
+      labelKey: "form.agent_world.controller",
+      kind: "select",
+      options: [
+        { value: "mlp", labelKey: "form.agent_world.controller.mlp" },
+        { value: "baseline", labelKey: "form.agent_world.controller.baseline" },
+        { value: "random", labelKey: "form.agent_world.controller.random" },
+      ],
+    },
+    {
+      path: "dynamics.controller.mode",
+      labelKey: "form.agent_world.mode",
+      kind: "select",
+      options: [
+        { value: "evolution", labelKey: "form.agent_world.mode.evolution" },
+        { value: "lifetime", labelKey: "form.agent_world.mode.lifetime" },
+        { value: "fixed", labelKey: "form.agent_world.mode.fixed" },
+      ],
+    },
+    { path: "dynamics.food.regrowth", labelKey: "form.agent_world.regrowth", kind: "float", min: 0, max: 1, step: 0.001 },
+    ...RUNNER,
+  ],
   protocell: [
     { path: "seed", labelKey: "form.seed", kind: "int", min: 0 },
     { path: "world.width", labelKey: "form.width", kind: "int", min: 8, max: 512 },

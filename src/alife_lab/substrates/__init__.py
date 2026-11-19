@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from alife_lab.substrates.agent_world.adapter import AGENT_WORLD_MANIFEST, AgentWorldAdapter
 from alife_lab.substrates.base import PluginManifest, SubstrateAdapter
 from alife_lab.substrates.bff.adapter import BFF_MANIFEST, BFFAdapter
 from alife_lab.substrates.boids.boids import BOIDS_MANIFEST, BoidsAdapter
@@ -37,6 +38,7 @@ _REGISTRY: dict[str, tuple[PluginManifest, type[SubstrateAdapter]]] = {
     "nca": (NCA_MANIFEST, NCAAdapter),
     "pd_nca": (PD_NCA_MANIFEST, PDNCAAdapter),
     "protocell": (PROTOCELL_MANIFEST, ProtocellAdapter),
+    "agent_world": (AGENT_WORLD_MANIFEST, AgentWorldAdapter),
 }
 
 

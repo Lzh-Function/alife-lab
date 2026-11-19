@@ -1,4 +1,5 @@
 import { useT } from "../i18n";
+import { MultiLine } from "./MultiLine";
 
 // Read-only inspection results (conway cell / boids neighbourhood).
 type Vec = { x: number; y: number; magnitude: number };
@@ -62,6 +63,19 @@ export interface Inspection {
   target_rgba?: number[] | null;
   last_step?: { loss?: number; steps?: number; lr?: number };
   parameter_count?: number;
+  // agent_world
+  agent?: {
+    id: number;
+    parent: number;
+    birth_tick: number;
+    age: number;
+    energy: number;
+    heading_deg: number;
+    inputs: string[];
+    actions: string[];
+    history: { inputs: number[][]; hidden: number[][]; probs: number[][]; action: number[]; reward: number[] };
+    learned_delta_norm: number;
+  } | null;
   // protocell
   field?: { food: number; waste: number };
   protocell?: {
@@ -255,6 +269,48 @@ export function InspectorPanel({
                 {data.patch_mass?.toFixed(3)} (r = {data.query?.radius})
               </dd>
             </dl>
+          )}
+          {data.substrate === "agent_world" && (
+            <div data-testid="inspector-agent">
+              {data.agent ? (
+                <>
+                  <p className="small mono">
+                    #{data.agent.id} ← {data.agent.parent >= 0 ? `#${data.agent.parent}` : "—"} · {t("inspector.agent.age")} {data.agent.age} ·{" "}
+                    {t("inspector.agent.energy")} {data.agent.energy.toFixed(2)} · {data.agent.heading_deg.toFixed(0)}° · |ΔW|{" "}
+                    {data.agent.learned_delta_norm.toFixed(3)}
+                  </p>
+                  {data.agent.history.inputs.length > 0 && (
+                    <>
+                      <table className="small mono">
+                        <tbody>
+                          {data.agent.inputs.map((name, k) => (
+                            <tr key={name}>
+                              <td>{name}</td>
+                              <td>{data.agent!.history.inputs[data.agent!.history.inputs.length - 1][k].toFixed(3)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <p className="small muted">{t("inspector.agent.probs")}</p>
+                      <MultiLine
+                        testId="inspector-agent-probs"
+                        height={110}
+                        series={data.agent.actions.map((name, k) => ({
+                          label: name,
+                          className: ["arm-a", "arm-b", "arm-c", "arm-d"][k],
+                          points: data.agent!.history.probs.map((p, i) => [i, p[k]] as [number, number]),
+                        }))}
+                      />
+                      <p className="small mono" data-testid="inspector-agent-actions">
+                        {t("inspector.agent.actions")}: {data.agent.history.action.map((a) => data.agent!.actions[a][0]).join("")}
+                      </p>
+                    </>
+                  )}
+                </>
+              ) : (
+                <p className="muted small">{t("inspector.none")}</p>
+              )}
+            </div>
           )}
           {data.substrate === "protocell" && data.ledger && (
             <div data-testid="inspector-protocell">

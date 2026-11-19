@@ -1,0 +1,12 @@
+preset:
+  id: agent_world_no_communication
+  scenario: agent_world_default.yaml
+  title_key: preset.agent_world_no_communication.title
+  description_key: preset.agent_world_no_communication.description
+  overrides:
+    experiment:
+      name: agent_world_no_communication
+      dynamics: {communication: false}
+  expected_observation: >-
+    Control (communication blocked): signal inputs read zero and emission has no effect.
+  negative_control: null

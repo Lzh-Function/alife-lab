@@ -1,0 +1,31 @@
+# AgentWorld: 100 sensing agents on a 100 x 100 periodic world with regrowing food and a
+# diffusing signal field. Autonomous run (no external fitness): agents live, eat, emit, die
+# and reproduce; MLP controllers evolve by inheritance with mutation.
+schema_version: 1
+experiment:
+  name: agent_world_default
+  mode: exploratory
+  substrate: agent_world
+  seed: 0
+  world: {width: 100.0, height: 100.0, boundary: periodic, resolution: 50}
+  initialization: {count: 100}
+  dynamics:
+    clock_unit: tick
+    numeric_policy: float64_numpy
+    food: {initial: 0.5, capacity: 1.0, regrowth: 0.01, bite: 0.4}
+    body: {speed: 1.0, turn_deg: 30.0, sensor_distance: 4.0, sensor_angle_deg: 45.0,
+           initial_energy: 5.0, metabolism: 0.05, move_cost: 0.02, emit_cost: 0.01,
+           reproduce_threshold: 10.0}
+    controller: {kind: mlp, mode: evolution, hidden: 8, mutation_sigma: 0.1, learning_rate: 0.05,
+                 temperature: 1.0}
+    communication: true
+    signal_decay: 0.1
+    signal_diffusion: 0.2
+    emit_amount: 1.0
+    shuffle_policies: false
+    max_population: 2000
+  runner: {max_steps: 100000, checkpoint_interval: 500}
+  observations:
+    metrics: [population, mean_energy, births, deaths, food_total, mean_age, signal_rate,
+              forward_rate, mean_reward, genome_spread]
+    history: 32

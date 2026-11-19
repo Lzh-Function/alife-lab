@@ -1,0 +1,12 @@
+preset:
+  id: agent_world_random
+  scenario: agent_world_default.yaml
+  title_key: preset.agent_world_random.title
+  description_key: preset.agent_world_random.description
+  overrides:
+    experiment:
+      name: agent_world_random
+      dynamics: {controller: {kind: random}}
+  expected_observation: >-
+    Control: uniformly random actions; standing food stays high (501 at tick 3000, seed 0).
+  negative_control: null

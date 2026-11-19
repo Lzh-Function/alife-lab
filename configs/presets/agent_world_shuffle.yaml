@@ -1,0 +1,13 @@
+preset:
+  id: agent_world_shuffle
+  scenario: agent_world_default.yaml
+  title_key: preset.agent_world_shuffle.title
+  description_key: preset.agent_world_shuffle.description
+  overrides:
+    experiment:
+      name: agent_world_shuffle
+      dynamics: {shuffle_policies: true}
+  expected_observation: >-
+    Control (policy shuffle): controllers are permuted among agents every tick, breaking the
+    link between an agent's lineage and its behaviour; behaves like random (food 496).
+  negative_control: null

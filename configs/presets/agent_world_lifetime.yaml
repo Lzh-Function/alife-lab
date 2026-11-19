@@ -1,0 +1,13 @@
+preset:
+  id: agent_world_lifetime
+  scenario: agent_world_default.yaml
+  title_key: preset.agent_world_lifetime.title
+  description_key: preset.agent_world_lifetime.description
+  overrides:
+    experiment:
+      name: agent_world_lifetime
+      dynamics: {controller: {mode: lifetime}}
+  expected_observation: >-
+    Lifetime learning (REINFORCE on the agent's own energy change, not inherited): forward
+    moves 0.61 and standing food 380 by tick 3000 (seed 0).
+  negative_control: preset agent_world_fixed

@@ -1,0 +1,13 @@
+preset:
+  id: agent_world_fixed
+  scenario: agent_world_default.yaml
+  title_key: preset.agent_world_fixed.title
+  description_key: preset.agent_world_fixed.description
+  overrides:
+    experiment:
+      name: agent_world_fixed
+      dynamics: {controller: {mode: fixed}}
+  expected_observation: >-
+    Control: random genetic controllers copied without mutation and without learning
+    (selection among the initial variants only).
+  negative_control: null

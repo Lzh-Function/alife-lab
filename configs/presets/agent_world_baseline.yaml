@@ -1,0 +1,12 @@
+preset:
+  id: agent_world_baseline
+  scenario: agent_world_default.yaml
+  title_key: preset.agent_world_baseline.title
+  description_key: preset.agent_world_baseline.description
+  overrides:
+    experiment:
+      name: agent_world_baseline
+      dynamics: {controller: {kind: baseline}}
+  expected_observation: >-
+    Hand-coded baseline: turn towards the strongest food reading; never signals.
+  negative_control: null

@@ -1054,6 +1054,115 @@ class ProtocellExperiment(_Frozen):
         return self
 
 
+# --------------------------------------------------------------------------- #
+# AgentWorld: lightweight sensing agents with fixed, evolved or learning controllers
+# --------------------------------------------------------------------------- #
+
+MAX_AGENTS = 4000
+
+
+class AgentWorldWorld(_Frozen):
+    width: Annotated[float, Field(ge=16.0, le=2048.0)] = 100.0
+    height: Annotated[float, Field(ge=16.0, le=2048.0)] = 100.0
+    boundary: Literal["periodic"] = "periodic"
+    resolution: Annotated[int, Field(ge=8, le=512)] = 50  # food/signal grid cells per axis
+
+
+class AgentWorldFood(_Frozen):
+    initial: Annotated[float, Field(ge=0.0, le=1.0)] = 0.5  # fraction of capacity
+    capacity: Annotated[float, Field(gt=0.0, le=100.0)] = 1.0
+    regrowth: Annotated[float, Field(ge=0.0, le=1.0)] = 0.01  # logistic rate per tick
+    bite: Annotated[float, Field(ge=0.0, le=100.0)] = 0.4
+
+
+class AgentBody(_Frozen):
+    speed: Annotated[float, Field(gt=0.0, le=16.0)] = 1.0
+    turn_deg: Annotated[float, Field(gt=0.0, le=180.0)] = 30.0
+    sensor_distance: Annotated[float, Field(gt=0.0, le=64.0)] = 4.0
+    sensor_angle_deg: Annotated[float, Field(ge=0.0, le=180.0)] = 45.0
+    initial_energy: Annotated[float, Field(gt=0.0, le=1e4)] = 5.0
+    metabolism: Annotated[float, Field(ge=0.0, le=100.0)] = 0.05  # per tick
+    move_cost: Annotated[float, Field(ge=0.0, le=100.0)] = 0.02  # per forward move
+    emit_cost: Annotated[float, Field(ge=0.0, le=100.0)] = 0.01
+    reproduce_threshold: Annotated[float, Field(gt=0.0, le=1e5)] = 10.0  # child gets half
+
+
+class AgentController(_Frozen):
+    # baseline: hand-coded food-gradient follower; random: uniform actions (control);
+    # mlp: small policy network (inputs: food L/F/R, signal L/F/R, energy, bias).
+    kind: Literal["baseline", "random", "mlp"] = "mlp"
+    # fixed: no change; evolution: offspring inherit mutated genetic weights;
+    # lifetime: REINFORCE on the output layer with the agent's own energy change as reward
+    # (learned weights are NOT inherited — offspring get the genetic weights).
+    mode: Literal["fixed", "evolution", "lifetime"] = "evolution"
+    hidden: Annotated[int, Field(ge=2, le=64)] = 8
+    mutation_sigma: Annotated[float, Field(ge=0.0, le=5.0)] = 0.1
+    learning_rate: Annotated[float, Field(ge=0.0, le=10.0)] = 0.05
+    temperature: Annotated[float, Field(gt=0.0, le=100.0)] = 1.0
+
+
+class AgentWorldDynamics(_Frozen):
+    clock_unit: Literal["tick"] = "tick"
+    numeric_policy: Literal["float64_numpy"] = "float64_numpy"
+    food: AgentWorldFood = AgentWorldFood()
+    body: AgentBody = AgentBody()
+    controller: AgentController = AgentController()
+    communication: bool = True  # False: signal sensors read zero and emission does nothing
+    signal_decay: Annotated[float, Field(ge=0.0, le=1.0)] = 0.1
+    signal_diffusion: Annotated[float, Field(ge=0.0, le=1.0)] = 0.2
+    emit_amount: Annotated[float, Field(ge=0.0, le=100.0)] = 1.0
+    shuffle_policies: bool = False  # control: controllers permuted among agents every tick
+    max_population: Annotated[int, Field(ge=1, le=MAX_AGENTS)] = 2000
+
+
+class AgentWorldInitialization(_Frozen):
+    count: Annotated[int, Field(ge=0, le=MAX_AGENTS)] = 100
+
+
+AgentWorldMetric = Literal[
+    "population", "mean_energy", "births", "deaths", "food_total", "mean_age", "signal_rate",
+    "forward_rate", "mean_reward", "genome_spread",
+]  # fmt: skip
+
+
+class AgentWorldObservation(_Frozen):
+    metrics: tuple[AgentWorldMetric, ...] = (
+        "population",
+        "mean_energy",
+        "births",
+        "deaths",
+        "food_total",
+        "mean_age",
+        "signal_rate",
+        "forward_rate",
+        "mean_reward",
+        "genome_spread",
+    )
+    history: Annotated[int, Field(ge=1, le=256)] = 32  # per-agent ticks kept for the inspector
+
+
+class AgentWorldExperiment(_Frozen):
+    """Autonomous run: no external fitness; the only reward (lifetime mode) is internal."""
+
+    name: _NAME
+    mode: Literal["reference", "exploratory"] = "exploratory"
+    substrate: Literal["agent_world"]
+    seed: _SEED
+    world: AgentWorldWorld = AgentWorldWorld()
+    initialization: AgentWorldInitialization = AgentWorldInitialization()
+    dynamics: AgentWorldDynamics = AgentWorldDynamics()
+    runner: RunnerSpec = RunnerSpec(max_steps=100_000, checkpoint_interval=500)
+    observations: AgentWorldObservation = AgentWorldObservation()
+
+    @model_validator(mode="after")
+    def _check(self) -> AgentWorldExperiment:
+        if self.mode == "reference":
+            raise ValueError("agent_world is a project model without a reference implementation")
+        if self.initialization.count > self.dynamics.max_population:
+            raise ValueError("initial count exceeds max_population")
+        return self
+
+
 AnyExperiment = Annotated[
     ConwayExperiment
     | BoidsExperiment
@@ -1067,7 +1176,8 @@ AnyExperiment = Annotated[
     | NCATrainExperiment
     | NCAExperiment
     | PDNCAExperiment
-    | ProtocellExperiment,
+    | ProtocellExperiment
+    | AgentWorldExperiment,
     Field(discriminator="substrate"),
 ]
 
