@@ -68,6 +68,9 @@ h3 { margin: 0 0 0.5rem; font-size: 0.95rem; }
 .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; margin-bottom: 0.75rem; }
 .notice { background: var(--warn-bg); border: 1px solid var(--warn-border); border-radius: 6px; padding: 0.4rem 0.6rem; }
 .error { background: var(--err-bg); border: 1px solid var(--danger); border-radius: 6px; padding: 0.4rem 0.6rem; }
+/* Two-column list + form pages (sweeps) */
+.catalog { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.5rem; }
+@media (max-width: 900px) { .catalog { grid-template-columns: 1fr; } }
 /* World catalog: substrates | presets | sticky create form */
 .catalog3 { display: grid; grid-template-columns: 15rem minmax(0, 1fr) minmax(20rem, 30rem); gap: 1rem; align-items: start; }
 .catalog-nav, .catalog-form {
@@ -102,6 +105,13 @@ button.linklike { border: none; background: none; padding: 0; color: var(--accen
   .catalog3 { grid-template-columns: 1fr; }
   .catalog-nav { position: static; max-height: none; }
 }
+/* Discovery ledger */
+.discovery-new, .discovery-triaged { background: var(--panel); }
+.discovery-validated { border-color: var(--accent); color: var(--accent); }
+.discovery-rejected { border-color: var(--danger); color: var(--danger); }
+.discovery-inconclusive { border-color: var(--warn-border); background: var(--warn-bg); color: var(--text); }
+.discovery-detail .table td { white-space: normal; vertical-align: top; }
+.register-row { display: flex; gap: 0.4rem; margin-top: 0.4rem; flex-wrap: wrap; }
 /* Top-bar CPU/GPU switch */
 .segmented { display: inline-flex; align-items: center; gap: 0; }
 .segmented > span { margin-right: 0.4rem; }

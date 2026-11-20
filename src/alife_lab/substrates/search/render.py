@@ -155,7 +155,7 @@ def _candidate(state: SearchState, exp: SearchExperiment, i: int) -> dict[str, A
 
 def inspect(state: SearchState, exp: SearchExperiment, query: dict[str, Any]) -> dict[str, Any]:
     side, aw, fw = _panels(state)
-    qx, qy = int(query["x"]), int(query["y"])
+    qx, qy = int(query.get("x", 0)), int(query.get("y", 0))
     out: dict[str, Any] = {
         "substrate": "search",
         "tick": state.tick,
@@ -178,7 +178,13 @@ def inspect(state: SearchState, exp: SearchExperiment, query: dict[str, Any]) ->
     best = state.best
     if best is None:
         return out
-    if qx < side and state.score.size:
+    if "candidate" in query:  # direct lookup by archive index (used by the discovery ledger)
+        i = int(query["candidate"])
+        if not 0 <= i < state.score.size:
+            raise ValueError(f"candidate {i} does not exist at this generation")
+        out["region"] = "index"
+        out["candidate"] = _candidate(state, exp, i)
+    elif qx < side and state.score.size:
         px, py = to_pixel(state.u, side)
         dist = (px - qx) ** 2 + (py - qy) ** 2
         near = int(np.argmin(dist - 1e-6 * state.score))  # ties: prefer the higher score

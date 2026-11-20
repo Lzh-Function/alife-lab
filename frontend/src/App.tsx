@@ -9,18 +9,20 @@ import { SweepDetail, SweepList } from "./components/Sweeps";
 import { BffDebuggerPage } from "./components/BffDebuggerPage";
 import { GuidePage } from "./components/GuidePage";
 import { ComputeToggle } from "./components/ComputeToggle";
+import { DiscoveryDetailView, DiscoveryList } from "./components/Discoveries";
 
-type View = "guide" | "catalog" | "library" | "lab" | "compare" | "sweeps" | "debugger" | "diagnostics";
-const VIEWS = ["guide", "catalog", "library", "lab", "compare", "sweeps", "debugger", "diagnostics"] as const;
+type View = "guide" | "catalog" | "library" | "lab" | "compare" | "sweeps" | "discoveries" | "debugger" | "diagnostics";
+const VIEWS = ["guide", "catalog", "library", "lab", "compare", "sweeps", "discoveries", "debugger", "diagnostics"] as const;
 
-function parseHash(): { view: View; runId: string | null; comparisonId: string | null; sweepId: string | null; anchor: string | null } {
+function parseHash(): { view: View; runId: string | null; comparisonId: string | null; sweepId: string | null; discoveryId: string | null; anchor: string | null } {
   const parts = window.location.hash.replace(/^#\/?/, "").split("/");
   const view = VIEWS.find((v) => v === parts[0]) ?? "catalog";
   const runId = parts[1] && /^run_[0-9a-f]{16}$/.test(parts[1]) ? parts[1] : null;
   const comparisonId = parts[1] && /^cmp_[0-9a-f]{16}$/.test(parts[1]) ? parts[1] : null;
   const sweepId = parts[1] && /^swp_[0-9a-f]{16}$/.test(parts[1]) ? parts[1] : null;
   const anchor = view === "guide" && parts[1] && /^[a-z_]{1,40}$/.test(parts[1]) ? parts[1] : null;
-  return { view, runId, comparisonId, sweepId, anchor };
+  const discoveryId = parts[1] && /^dsc_[0-9a-f]{16}$/.test(parts[1]) ? parts[1] : null;
+  return { view, runId, comparisonId, sweepId, discoveryId, anchor };
 }
 
 export function App() {
@@ -83,6 +85,16 @@ export function App() {
           ))}
         {route.view === "sweeps" &&
           (route.sweepId ? <SweepDetail key={route.sweepId} sweepId={route.sweepId} /> : <SweepList onOpen={openSweep} />)}
+        {route.view === "discoveries" &&
+          (route.discoveryId ? (
+            <DiscoveryDetailView key={route.discoveryId} id={route.discoveryId} />
+          ) : (
+            <DiscoveryList
+              onOpen={(id) => {
+                window.location.hash = `/discoveries/${id}`;
+              }}
+            />
+          ))}
         {route.view === "debugger" && <BffDebuggerPage />}
         {route.view === "diagnostics" && <Diagnostics />}
       </main>

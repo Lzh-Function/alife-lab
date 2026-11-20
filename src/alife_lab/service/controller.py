@@ -170,6 +170,9 @@ class Controller:
         from alife_lab.service.sweeps import SweepService
 
         self.sweeps = SweepService(self)
+        from alife_lab.service.discoveries import DiscoveryService
+
+        self.discoveries = DiscoveryService(self)
         self._closed = False
         self._db_closed = False
         self._replay_pool: ProcessPoolExecutor | None = None

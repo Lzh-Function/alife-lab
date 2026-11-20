@@ -302,7 +302,62 @@ export function newCommandId(): string {
   return crypto.randomUUID();
 }
 
+export interface DiscoverySummary {
+  id: string;
+  title: string;
+  claim_kind: string;
+  substrate: string;
+  status: string;
+  evidence_level: string;
+  source_run_id: string;
+  created_at: number;
+  updated_at: number;
+  running: boolean;
+}
+
+export interface AssayCheck {
+  id: string;
+  purpose: string;
+  spec: Record<string, unknown>;
+  steps: number;
+  rule: Record<string, unknown>;
+}
+
+export interface CheckResult {
+  id: string;
+  viable_fraction?: number;
+  mean_speed?: number;
+  mean_mass?: number;
+  seconds?: number;
+  error?: string;
+  per_seed?: Array<{ seed: number; viable: boolean; speed: number; mass: number; survived: number; spec_hash: string }>;
+}
+
+export interface DiscoveryDetail extends DiscoverySummary {
+  source: { run_id: string; tick: number; candidate_index: number; generation: number; params: Record<string, number>; lineage: Array<{ index: number; generation: number; score: number }>; objective: string; algorithm: string; search_spec_hash: string };
+  candidate_spec: Record<string, unknown>;
+  candidate_spec_hash: string;
+  recorded: Record<string, number>;
+  assays: Array<{
+    id: string;
+    state: string;
+    plan: { plan_hash: string; claim_kind: string; seeds: number[]; seed_free_initial_state: boolean; checks: AssayCheck[]; status_rule: string; max_evidence_level: string };
+    result: { results: Record<string, CheckResult>; judgement: { status: string; evidence_level: string; verdicts: Record<string, { passed: boolean | null; reason: string }> } } | null;
+    artifact_path: string | null;
+    created_at: number;
+    finished_at: number | null;
+  }>;
+  events: Array<{ at: number; kind: string; author: string; payload: Record<string, unknown> }>;
+}
+
 export const api = {
+  discoveries: () => request<DiscoverySummary[]>("GET", "/discoveries"),
+  discovery: (id: string) => request<DiscoveryDetail>("GET", `/discoveries/${id}`),
+  createDiscovery: (body: { run_id: string; candidate: number; tick?: number; claim_kind: string; title: string }) =>
+    request<DiscoveryDetail>("POST", "/discoveries", body),
+  reviewDiscovery: (id: string, body: { status?: string; note?: string }) => request<DiscoveryDetail>("POST", `/discoveries/${id}/review`, body),
+  startAssay: (id: string) => request<DiscoveryDetail>("POST", `/discoveries/${id}/assays`),
+  discoveryRecord: (id: string) => request<Record<string, unknown>>("GET", `/discoveries/${id}/record`),
   presets: () => request<Preset[]>("GET", "/presets"),
   profiles: () => request<ProfileInfo[]>("GET", "/execution-profiles"),
   substrates: () =>

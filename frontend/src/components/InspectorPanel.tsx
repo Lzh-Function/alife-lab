@@ -122,6 +122,7 @@ export function InspectorPanel({
   assayPending = false,
   onReactionToggle,
   onOpenSpec,
+  onRegister,
 }: {
   data: Inspection | null;
   error: string | null;
@@ -130,6 +131,7 @@ export function InspectorPanel({
   assayPending?: boolean;
   onReactionToggle?: (reactionId: string, enable: boolean) => void;
   onOpenSpec?: (spec: Record<string, unknown>) => void;
+  onRegister?: (candidate: number, claimKind: string) => void;
 }) {
   const t = useT();
   return (
@@ -255,7 +257,7 @@ export function InspectorPanel({
               )}
             </>
           )}
-          {data.substrate === "search" && data.axes && <SearchInspector data={data as SearchInspection} onOpenSpec={onOpenSpec} />}
+          {data.substrate === "search" && data.axes && <SearchInspector data={data as SearchInspection} onOpenSpec={onOpenSpec} onRegister={onRegister} />}
           {data.substrate === "lenia" && data.value !== undefined && (
             <dl className="stats small" data-testid="inspector-field">
               <dt>{t("inspector.cell")}</dt>

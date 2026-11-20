@@ -198,6 +198,48 @@ MIGRATIONS: list[tuple[int, str]] = [
         CREATE INDEX sweep_members_run ON sweep_members(run_id);
         """,
     ),
+    (
+        4,
+        """
+        CREATE TABLE discoveries (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            claim_kind TEXT NOT NULL,
+            substrate TEXT NOT NULL,
+            source_run_id TEXT NOT NULL REFERENCES runs(id),
+            source_tick INTEGER NOT NULL,
+            source_ref_json TEXT NOT NULL,
+            candidate_spec_json TEXT NOT NULL,
+            candidate_spec_hash TEXT NOT NULL,
+            recorded_json TEXT NOT NULL,
+            status TEXT NOT NULL,
+            evidence_level TEXT NOT NULL,
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL
+        );
+        CREATE TABLE discovery_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            discovery_id TEXT NOT NULL REFERENCES discoveries(id),
+            at REAL NOT NULL,
+            kind TEXT NOT NULL,
+            author TEXT NOT NULL,
+            payload_json TEXT NOT NULL
+        );
+        CREATE INDEX discovery_events_d ON discovery_events(discovery_id);
+        CREATE TABLE assays (
+            id TEXT PRIMARY KEY,
+            discovery_id TEXT NOT NULL REFERENCES discoveries(id),
+            plan_json TEXT NOT NULL,
+            plan_hash TEXT NOT NULL,
+            state TEXT NOT NULL,
+            result_json TEXT,
+            artifact_path TEXT,
+            created_at REAL NOT NULL,
+            finished_at REAL
+        );
+        CREATE INDEX assays_d ON assays(discovery_id);
+        """,
+    ),
 ]
 
 

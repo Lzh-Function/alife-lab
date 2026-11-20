@@ -182,6 +182,16 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
       .catch((e) => setInspectError(e instanceof ApiError ? e.message : String(e)));
   };
 
+  // search: register a candidate in the discovery ledger (the server re-derives it by index).
+  const onRegister = (candidate: number, claimKind: string) => {
+    api
+      .createDiscovery({ run_id: runId, candidate, tick: lastInspect.current?.tick, claim_kind: claimKind, title: `${summary?.name ?? runId} #${candidate}` })
+      .then((d) => {
+        window.location.hash = `/discoveries/${d.id}`;
+      })
+      .catch((e) => setInspectError(e instanceof ApiError ? e.message : String(e)));
+  };
+
   // nca_train: checkpoint the current weights, export them into an nca spec and start a run.
   const runTrainedModel = async () => {
     try {
@@ -346,6 +356,7 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
           onAssay={summary.substrate === "bff" ? onAssay : undefined}
           assayPending={assayPending}
           onOpenSpec={summary.substrate === "search" ? onOpenSpec : undefined}
+          onRegister={summary.substrate === "search" ? onRegister : undefined}
           onReactionToggle={
             summary.substrate === "reaction_network" && live
               ? (id, enable) => {

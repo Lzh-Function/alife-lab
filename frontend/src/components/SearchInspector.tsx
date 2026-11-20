@@ -1,7 +1,10 @@
 // Inspection of a search run: the clicked candidate (or the best one), its parameters, scores
 // and a button that opens it as an ordinary run of the target world (a re-test outside the
 // search, with the full spec).
+import { useState } from "react";
 import { useT } from "../i18n";
+
+type Register = (candidate: number, claimKind: string) => void;
 
 export interface SearchCandidate {
   index: number;
@@ -37,8 +40,9 @@ export interface SearchInspection {
 const short = (path: string) => path.split(".").pop() ?? path;
 const num = (v: number) => (Math.abs(v) >= 100 ? v.toFixed(1) : v.toPrecision(4));
 
-function Candidate({ c, title, testId, onOpenSpec }: { c: SearchCandidate; title: string; testId: string; onOpenSpec?: (spec: Record<string, unknown>) => void }) {
+function Candidate({ c, title, testId, onOpenSpec, onRegister }: { c: SearchCandidate; title: string; testId: string; onOpenSpec?: (spec: Record<string, unknown>) => void; onRegister?: Register }) {
   const t = useT();
+  const [claim, setClaim] = useState("moving_localized");
   return (
     <div data-testid={testId}>
       <h4 className="small">
@@ -83,11 +87,22 @@ function Candidate({ c, title, testId, onOpenSpec }: { c: SearchCandidate; title
           {t("search.open_as_run")}
         </button>
       )}
+      {onRegister && c.spec && c.viable_fraction > 0 && (
+        <div className="register-row">
+          <select value={claim} onChange={(e) => setClaim(e.target.value)} data-testid={`${testId}-claim`}>
+            <option value="moving_localized">{t("discovery.claim.moving_localized")}</option>
+            <option value="faster_than_base">{t("discovery.claim.faster_than_base")}</option>
+          </select>
+          <button type="button" className="small" data-testid={`${testId}-register`} onClick={() => onRegister(c.index, claim)}>
+            {t("discovery.register")}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-export function SearchInspector({ data, onOpenSpec }: { data: SearchInspection; onOpenSpec?: (spec: Record<string, unknown>) => void }) {
+export function SearchInspector({ data, onOpenSpec, onRegister }: { data: SearchInspection; onOpenSpec?: (spec: Record<string, unknown>) => void; onRegister?: Register }) {
   const t = useT();
   return (
     <div className="search-inspector" data-testid="inspector-search">
@@ -115,8 +130,8 @@ export function SearchInspector({ data, onOpenSpec }: { data: SearchInspection; 
           {!data.candidate && <span className="muted"> · {t("search.archive_empty")}</span>}
         </p>
       )}
-      {data.candidate && <Candidate c={data.candidate} title={t("search.clicked")} testId="search-candidate" onOpenSpec={onOpenSpec} />}
-      {data.best && <Candidate c={data.best} title={t("search.best")} testId="search-best" onOpenSpec={onOpenSpec} />}
+      {data.candidate && <Candidate c={data.candidate} title={t("search.clicked")} testId="search-candidate" onOpenSpec={onOpenSpec} onRegister={onRegister} />}
+      {data.best && <Candidate c={data.best} title={t("search.best")} testId="search-best" onOpenSpec={onOpenSpec} onRegister={onRegister} />}
       {data.cma && (
         <p className="small muted mono">
           CMA-ES mean: {Object.entries(data.cma.mean).map(([k, v]) => `${short(k)}=${num(v)}`).join(", ")} · σ={data.cma.sigma.toFixed(3)}

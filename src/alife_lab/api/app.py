@@ -120,6 +120,19 @@ class ComparisonRequest(_Req):
     name: Annotated[str, Field(min_length=1, max_length=200)] = "manual comparison"
 
 
+class DiscoveryRequest(_Req):
+    run_id: str = Field(pattern=r"^run_[0-9a-f]{16}$")
+    candidate: int = Field(ge=0)
+    tick: int | None = Field(default=None, ge=0)
+    claim_kind: Literal["moving_localized", "faster_than_base"] = "moving_localized"
+    title: str = Field(default="", max_length=200)
+
+
+class DiscoveryReviewRequest(_Req):
+    status: Literal["new", "triaged"] | None = None
+    note: str | None = Field(default=None, max_length=2000)
+
+
 class RestoreRequest(_Req):
     checkpoint_id: str = "latest"
     start_paused: bool = True
@@ -663,6 +676,36 @@ def create_app(
     @app.post(f"{API}/sweeps/{{sweep_id}}/cancel")
     async def sweep_cancel(sweep_id: str) -> dict[str, Any]:
         return envelope(await ctl().sweeps.cancel(sweep_id))
+
+    # ------------------------------------------------------------- discoveries
+
+    @app.get(f"{API}/discoveries")
+    async def discoveries() -> dict[str, Any]:
+        return envelope(ctl().discoveries.list())
+
+    @app.post(f"{API}/discoveries", status_code=201)
+    async def discovery_create(body: DiscoveryRequest) -> dict[str, Any]:
+        return envelope(
+            await ctl().discoveries.create(
+                body.run_id, body.candidate, body.claim_kind, body.title, body.tick
+            )
+        )
+
+    @app.get(f"{API}/discoveries/{{discovery_id}}")
+    async def discovery_get(discovery_id: str) -> dict[str, Any]:
+        return envelope(ctl().discoveries.get(discovery_id))
+
+    @app.post(f"{API}/discoveries/{{discovery_id}}/review")
+    async def discovery_review(discovery_id: str, body: DiscoveryReviewRequest) -> dict[str, Any]:
+        return envelope(ctl().discoveries.review(discovery_id, body.status, body.note))
+
+    @app.post(f"{API}/discoveries/{{discovery_id}}/assays", status_code=202)
+    async def discovery_assay(discovery_id: str) -> dict[str, Any]:
+        return envelope(await ctl().discoveries.start_assay(discovery_id))
+
+    @app.get(f"{API}/discoveries/{{discovery_id}}/record")
+    async def discovery_record(discovery_id: str) -> dict[str, Any]:
+        return envelope(await run_in_threadpool(ctl().discoveries.record, discovery_id))
 
     @app.post(f"{API}/comparisons", status_code=201)
     async def create_comparison(body: ComparisonRequest) -> dict[str, Any]:

@@ -56,6 +56,15 @@ CPU time per run (single core): MAP-Elites ≈ 19 s, random ≈ 6 s, CMA-ES ≈ 
 candidates run all ticks). Pilot seeds 99, 101, 102 were used to choose bounds and budget.
 Caveat: quality (0.1 + speed) and the speed descriptor are correlated by construction.
 
+## Discovery ledger (ADR 0025)
+Assay plan v1 (tests/reference/test_assays.py, integration test_discovery_ledger): the found
+variant (m 0.1358, s 0.018) passes all checks under `faster_than_base` (speed 0.772 vs base
+0.623 in a 128² world over 3000 ticks) → validated, E2. Negative controls: a dissolving
+candidate (m 0.17) fails every check → rejected; the base parameters claiming to be faster
+than themselves fail `baseline` → rejected. On the development DB, the best candidate of
+random search seed 1 (m 0.1309, s 0.0162, speed 0.750) is also validated, so faster variants
+form a region rather than a single point.
+
 ## Limitations
 Lenia is the only target. The centroid speed is not a creature tracker (separate blobs share a
 centroid). With the seed-free pattern initialisation, extra search/holdout seeds repeat the same
