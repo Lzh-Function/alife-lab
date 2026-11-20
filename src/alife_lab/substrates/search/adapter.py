@@ -6,6 +6,12 @@ search seeds and scored by the pre-declared objective (``alife_lab.evolution.obj
 Whenever the best candidate changes it is re-scored on disjoint holdout seeds, which never
 drive the search. The archive of every evaluation is part of the checkpointed state.
 
+With a ``qd`` section every algorithm also maintains a MAP-Elites grid (passively, for
+coverage / QD-score); ``map_elites`` selects parents uniformly from its filled cells and
+mutates them with N(0, mutation_sigma) in the normalised box (clipped). The first generation
+and any generation with an empty grid sample uniformly. ``parent`` records the elite a child
+was mutated from (-1 otherwise: uniform samples and CMA-ES draws have no single parent).
+
 The target substrate is not modified: the score is computed outside it.
 """
 
@@ -20,14 +26,15 @@ import numpy.typing as npt
 
 from alife_lab import API_CONTRACT_VERSION
 from alife_lab.core.spec import ExperimentSpec, SearchExperiment
-from alife_lab.evolution import OBJECTIVE_VERSIONS, cmaes
+from alife_lab.evolution import OBJECTIVE_VERSIONS, cmaes, qd
 from alife_lab.evolution.space import bound_violation, candidate_spec, decode, seeds_for
 from alife_lab.substrates.base import Capabilities, MetricDefinition, PluginManifest
 
 F64 = npt.NDArray[np.float64]
-SERIALIZE_VERSION = 1
+SERIALIZE_VERSION = 2  # 2: + mass, parent (version 1 checkpoints load with NaN / -1)
 BOUND_PENALTY = 10.0  # CMA-ES f = -score + BOUND_PENALTY * |u - clip(u)|^2
-_ARCHIVE = ("u", "x", "score", "viable", "alive_fraction", "speed", "generation")
+_ARCHIVE = ("u", "x", "score", "viable", "alive_fraction", "speed", "mass", "parent",
+            "generation")  # fmt: skip
 
 
 def _se(spec: ExperimentSpec) -> SearchExperiment:
@@ -48,7 +55,11 @@ class SearchState:
     viable: F64  # (n,) fraction of search seeds on which the candidate was viable
     alive_fraction: F64  # (n,) mean final alive fraction
     speed: F64  # (n,) mean speed
+    mass: F64  # (n,) mean final mass
+    parent: F64  # (n,) archive index of the parent (-1: none)
     generation: F64  # (n,) generation index (1-based)
+    elites: npt.NDArray[np.int64] | None = field(default=None, repr=False)  # derived (QD grid)
+    grid: tuple[int, int] | None = None  # QD bins (descriptor 0, descriptor 1), from the spec
     holdout: dict[int, float] = field(default_factory=dict)  # archive index -> holdout score
     best_field: F64 | None = field(default=None, repr=False)
     last: dict[str, float] = field(default_factory=dict)
@@ -79,6 +90,15 @@ _METRICS = (
     _M("sigma", "metric.sigma", "normalised", "generation",
        "CMA-ES step size in normalised units (null for random search).", "none",
        "every generation", 1, "null for random search"),
+    _M("coverage", "metric.coverage", "fraction", "generation",
+       "Fraction of QD grid cells holding an elite (needs a qd section).", "none",
+       "every generation", 1, "absent without qd"),
+    _M("qd_score", "metric.qd_score", "score", "generation",
+       "Sum of the elites' scores over the QD grid (needs a qd section).", "sum",
+       "every generation", 1, "absent without qd"),
+    _M("archive_size", "metric.archive_size", "cells", "generation",
+       "Number of filled QD grid cells (needs a qd section).", "none", "every generation", 1,
+       "absent without qd"),
 )  # fmt: skip
 
 SEARCH_MANIFEST = PluginManifest(
@@ -123,8 +143,16 @@ def _empty(d: int) -> dict[str, F64]:
         "viable": np.zeros(0),
         "alive_fraction": np.zeros(0),
         "speed": np.zeros(0),
+        "mass": np.zeros(0),
+        "parent": np.zeros(0),
         "generation": np.zeros(0),
     }
+
+
+def _grid(exp: SearchExperiment) -> tuple[int, int] | None:
+    if exp.qd is None:
+        return None
+    return exp.qd.descriptors[0].bins, exp.qd.descriptors[1].bins
 
 
 class SearchAdapter:
@@ -151,18 +179,21 @@ class SearchAdapter:
         e = _empty(d)
         return SearchState(
             tick=0, rng=rng, cma=cma, u=e["u"], x=e["x"], score=e["score"], viable=e["viable"],
-            alive_fraction=e["alive_fraction"], speed=e["speed"], generation=e["generation"],
+            alive_fraction=e["alive_fraction"], speed=e["speed"], mass=e["mass"],
+            parent=e["parent"], generation=e["generation"],
+            elites=qd.empty(exp.qd) if exp.qd is not None else None,
+            grid=_grid(exp),
         )  # fmt: skip
 
     # ------------------------------------------------------------------ evaluation
 
     def _evaluate(
         self, exp: SearchExperiment, params: dict[str, float | int], seeds: list[int]
-    ) -> tuple[float, float, float, float, F64 | None]:
-        """Mean score, viable fraction, alive fraction, speed over seeds; first final field."""
+    ) -> tuple[float, float, float, float, float, F64 | None]:
+        """Mean score, viable fraction, alive fraction, speed, mass over seeds; first field."""
         from alife_lab.evolution.objectives import evaluate_lenia  # target adapters import us
 
-        scores, viable, alive, speed = [], [], [], []
+        scores, viable, alive, speed, mass = [], [], [], [], []
         first: F64 | None = None
         for s in seeds:
             cand = candidate_spec(exp, params, s)
@@ -171,12 +202,14 @@ class SearchAdapter:
                 viable.append(0.0)
                 alive.append(0.0)
                 speed.append(0.0)
+                mass.append(0.0)
                 continue
             ev = evaluate_lenia(cand, exp.dynamics.eval_steps, exp.dynamics.max_alive_fraction)
             scores.append(ev.score)
             viable.append(float(ev.viable))
             alive.append(ev.alive_fraction)
             speed.append(ev.speed)
+            mass.append(ev.mass)
             if first is None:
                 first = np.asarray(ev.field)
         return (
@@ -184,6 +217,7 @@ class SearchAdapter:
             float(np.mean(viable)),
             float(np.mean(alive)),
             float(np.mean(speed)),
+            float(np.mean(mass)),
             first,
         )
 
@@ -191,10 +225,18 @@ class SearchAdapter:
         exp = _se(spec)
         d = exp.dynamics
         dim = len(exp.space)
+        parents = np.full(d.population, -1.0)
         if d.algorithm == "cma_es":
             assert state.cma is not None
             par = cmaes.CMAParams.default(dim, d.population)
             u = cmaes.ask(state.cma, par, state.rng)
+        elif d.algorithm == "map_elites" and state.elites is not None and (state.elites >= 0).any():
+            assert exp.qd is not None
+            filled = state.elites[state.elites >= 0]
+            chosen = filled[state.rng.integers(0, filled.size, size=d.population)]
+            noise = state.rng.standard_normal((d.population, dim)) * exp.qd.mutation_sigma
+            u = np.clip(state.u[chosen] + noise, 0.0, 1.0)
+            parents = chosen.astype(np.float64)
         else:
             u = state.rng.random((d.population, dim))
         search_seeds = seeds_for(exp, 1, d.eval_seeds)
@@ -202,11 +244,11 @@ class SearchAdapter:
         fields: list[F64 | None] = []
         for ui in u:
             params = decode(exp, ui)
-            score, viable, alive, speed, fld = self._evaluate(exp, params, search_seeds)
+            score, viable, alive, speed, mass, fld = self._evaluate(exp, params, search_seeds)
             xs.append([float(v) for v in params.values()])
-            stats.append((score, viable, alive, speed))
+            stats.append((score, viable, alive, speed, mass))
             fields.append(fld)
-        st = np.array(stats)  # (pop, 4)
+        st = np.array(stats)  # (pop, 5)
         new_score = st[:, 0]
         gen = state.tick + 1
         prev_best = state.best
@@ -216,11 +258,18 @@ class SearchAdapter:
         state.viable = np.concatenate([state.viable, st[:, 1]])
         state.alive_fraction = np.concatenate([state.alive_fraction, st[:, 2]])
         state.speed = np.concatenate([state.speed, st[:, 3]])
+        state.mass = np.concatenate([state.mass, st[:, 4]])
+        state.parent = np.concatenate([state.parent, parents])
         state.generation = np.concatenate([state.generation, np.full(len(u), gen, dtype=float)])
         if d.algorithm == "cma_es":
             assert state.cma is not None
             f = -new_score + BOUND_PENALTY * np.array([bound_violation(ui) for ui in u])
             cmaes.tell(state.cma, par, u, f)
+        if exp.qd is not None:
+            if state.elites is None:
+                state.elites = qd.build(state, exp.qd)
+            else:
+                qd.insert(state.elites, state, exp.qd, state.score.size - len(u))
         best = state.best
         assert best is not None
         offset = state.score.size - len(u)
@@ -241,6 +290,8 @@ class SearchAdapter:
             "holdout_best": state.holdout.get(best, math.nan) if d.holdout_seeds else math.nan,
             "sigma": state.cma.sigma if state.cma is not None else math.nan,
         }
+        if exp.qd is not None and state.elites is not None:
+            state.last.update(qd.stats(state.elites, state))
         return state
 
     # ------------------------------------------------------------------ observation
@@ -273,6 +324,7 @@ class SearchAdapter:
             same_shape
             and np.array_equal(a.u, b.u)
             and np.array_equal(a.score, b.score)
+            and np.array_equal(a.parent, b.parent)
             and a.holdout == b.holdout
         )
         if a.cma is not None and b.cma is not None:
@@ -304,16 +356,19 @@ class SearchAdapter:
     def deserialize_state(self, payload: dict[str, Any], spec: ExperimentSpec) -> SearchState:
         exp = _se(spec)
         meta = payload["meta"]
-        if meta["serialize_version"] != SERIALIZE_VERSION:
+        if meta["serialize_version"] not in (1, SERIALIZE_VERSION):
             raise ValueError("incompatible search checkpoint serialize_version")
-        arr = payload["arrays"]
+        arr = dict(payload["arrays"])
+        n = len(arr["score"])
+        arr.setdefault("mass", np.full(n, np.nan))  # version 1 had no mass / parent
+        arr.setdefault("parent", np.full(n, -1.0))
         rng = np.random.Generator(np.random.PCG64())
         rng.bit_generator.state = meta["rng_state"]
         archive = {k: np.asarray(arr[k], dtype=np.float64).copy() for k in _ARCHIVE}
         if archive["u"].ndim != 2 or archive["u"].shape[1] != len(exp.space):
             raise ValueError("search checkpoint does not match the search space")
         bf = arr.get("best_field")
-        return SearchState(
+        state = SearchState(
             tick=int(meta["tick"]),
             rng=rng,
             cma=cmaes.CMAState.from_json(meta["cma"]) if meta.get("cma") else None,
@@ -322,5 +377,9 @@ class SearchAdapter:
             last=dict(meta.get("last") or {}),
             u=archive["u"], x=archive["x"], score=archive["score"], viable=archive["viable"],
             alive_fraction=archive["alive_fraction"], speed=archive["speed"],
-            generation=archive["generation"],
+            mass=archive["mass"], parent=archive["parent"], generation=archive["generation"],
         )  # fmt: skip
+        if exp.qd is not None:
+            state.elites = qd.build(state, exp.qd)
+            state.grid = _grid(exp)
+        return state

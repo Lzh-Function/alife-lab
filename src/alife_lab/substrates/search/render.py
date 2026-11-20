@@ -51,11 +51,26 @@ def to_pixel(u: Any, side: int) -> tuple[Any, Any]:
     return px, py
 
 
-def render(state: SearchState) -> tuple[dict[str, Any], bytes]:
+def lineage(state: SearchState, i: int, limit: int = 200) -> list[int]:
+    """Ancestors of candidate i (parent first), following ``parent`` until -1."""
+    out: list[int] = []
+    p = int(state.parent[i]) if state.parent.size else -1
+    while p >= 0 and len(out) < limit:
+        out.append(p)
+        p = int(state.parent[p])
+    return out
+
+
+def _panels(state: SearchState) -> tuple[int, int, int]:
+    """(side, archive panel width, field width)."""
     fshape = state.best_field.shape if state.best_field is not None else None
     side = map_side(state, fshape)
-    fw = fshape[1] if fshape else side
-    img = np.empty((side, side + fw, 3), dtype=np.float64)
+    return side, side if state.grid is not None else 0, fshape[1] if fshape else side
+
+
+def render(state: SearchState) -> tuple[dict[str, Any], bytes]:
+    side, aw, fw = _panels(state)
+    img = np.empty((side, side + aw + fw, 3), dtype=np.float64)
     img[:] = _BG
     for k in range(1, 4):  # quarter grid lines
         img[:, (side * k) // 4, :] = _GRID
@@ -71,6 +86,10 @@ def render(state: SearchState) -> tuple[dict[str, Any], bytes]:
         img[py[order], px[order]] = colors[order]
         b = state.best
         assert b is not None
+        anc = lineage(state, b)
+        if anc:  # ancestry of the best candidate (MAP-Elites), cyan
+            ax, ay = to_pixel(state.u[anc], side)
+            img[ay, ax] = [80, 220, 240]
         bx, by = to_pixel(state.u[b], side)
         for dx, dy in ((-2, 0), (2, 0), (0, -2), (0, 2), (-2, -1), (2, 1), (-1, 2), (1, -2)):
             x, y = int(bx[0]) + dx, int(by[0]) + dy
@@ -79,15 +98,33 @@ def render(state: SearchState) -> tuple[dict[str, Any], bytes]:
     if state.cma is not None:
         cx, cy = to_pixel(state.cma.mean, side)
         img[int(cy[0]), int(cx[0])] = [240, 60, 60]
+    if state.grid is not None and state.elites is not None:
+        gx, gy = state.grid
+        panel = np.empty((side, side, 3))
+        panel[:] = _BG * 1.4
+        top = float(state.score.max()) if state.score.size else 1.0
+        cell_w, cell_h = side / gx, side / gy
+        for c, e in enumerate(state.elites):
+            col, row = c % gx, c // gx
+            x0, x1 = int(col * cell_w), int((col + 1) * cell_w)
+            y1, y0 = side - int(row * cell_h), side - int((row + 1) * cell_h)  # mass upwards
+            if e >= 0:
+                panel[y0:y1, x0:x1] = _cmap(state.score[e] / (top or 1.0))
+            panel[y0:y1, x0] = _GRID  # cell borders
+            panel[y0, x0:x1] = _GRID
+        img[:, side : side + aw] = panel
     if state.best_field is not None:
-        img[:, side:, :] = (np.clip(state.best_field, 0.0, 1.0) * 255.0)[..., None]
+        img[:, side + aw :, :] = (np.clip(state.best_field, 0.0, 1.0) * 255.0)[..., None]
     data = np.rint(img).astype(np.uint8).tobytes()
+    scale = "left: parameter map (colour = score)"
+    if aw:
+        scale += "; middle: QD archive (descriptor 0 to the right, 1 upwards)"
     return {
         "codec": "field_u8",
-        "width": side + fw,
+        "width": side + aw + fw,
         "height": side,
         "channels": 3,
-        "scale": "left: parameter map (colour = score); right: best candidate final state",
+        "scale": scale + "; right: best candidate final state",
     }, data
 
 
@@ -95,6 +132,7 @@ def _candidate(state: SearchState, exp: SearchExperiment, i: int) -> dict[str, A
     params = decode(exp, state.u[i])
     seed0 = seeds_for(exp, 1, exp.dynamics.eval_seeds)[0]
     spec = candidate_spec(exp, params, seed0, name=f"{exp.name}-cand{i}")
+    anc = lineage(state, i)
     return {
         "index": i,
         "generation": int(state.generation[i]),
@@ -103,15 +141,20 @@ def _candidate(state: SearchState, exp: SearchExperiment, i: int) -> dict[str, A
         "viable_fraction": float(state.viable[i]),
         "alive_fraction": float(state.alive_fraction[i]),
         "speed": float(state.speed[i]),
+        "mass": float(state.mass[i]),
         "holdout_score": state.holdout.get(i),
         "out_of_box": bool(np.any((state.u[i] < 0) | (state.u[i] > 1))),
+        "lineage": [
+            {"index": a, "generation": int(state.generation[a]), "score": float(state.score[a])}
+            for a in anc[:20]
+        ],
+        "lineage_depth": len(anc),
         "spec": spec.model_dump(mode="json") if spec is not None else None,
     }
 
 
 def inspect(state: SearchState, exp: SearchExperiment, query: dict[str, Any]) -> dict[str, Any]:
-    fshape = state.best_field.shape if state.best_field is not None else None
-    side = map_side(state, fshape)
+    side, aw, fw = _panels(state)
     qx, qy = int(query["x"]), int(query["y"])
     out: dict[str, Any] = {
         "substrate": "search",
@@ -124,6 +167,14 @@ def inspect(state: SearchState, exp: SearchExperiment, query: dict[str, Any]) ->
         "search_seeds": seeds_for(exp, 1, exp.dynamics.eval_seeds),
         "holdout_seeds": seeds_for(exp, 2, exp.dynamics.holdout_seeds),
     }
+    if exp.qd is not None and state.elites is not None:
+        filled = state.elites[state.elites >= 0]
+        out["qd"] = {
+            "descriptors": [d.model_dump(mode="json") for d in exp.qd.descriptors],
+            "filled": int(filled.size),
+            "cells": int(state.elites.size),
+            "archive_version": exp.qd.archive_version,
+        }
     best = state.best
     if best is None:
         return out
@@ -134,10 +185,28 @@ def inspect(state: SearchState, exp: SearchExperiment, query: dict[str, Any]) ->
         out["region"] = "map"
         if dist[near] <= 16:
             out["candidate"] = _candidate(state, exp, near)
+    elif aw and qx < side + aw and state.grid is not None and state.elites is not None:
+        gx, gy = state.grid
+        col = min(gx - 1, max(0, int((qx - side) * gx / side)))
+        row = min(gy - 1, max(0, int((side - 1 - qy) * gy / side)))
+        out["region"] = "archive"
+        assert exp.qd is not None
+        d0, d1 = exp.qd.descriptors
+        w0, w1 = (d0.high - d0.low) / gx, (d1.high - d1.low) / gy
+        out["archive_cell"] = {
+            "column": col,
+            "row": row,
+            d0.name: [d0.low + col * w0, d0.low + (col + 1) * w0],
+            d1.name: [d1.low + row * w1, d1.low + (row + 1) * w1],
+        }
+        e = int(state.elites[row * gx + col])
+        if e >= 0:
+            out["candidate"] = _candidate(state, exp, e)
     else:
         out["region"] = "best"
-        if state.best_field is not None and 0 <= qy < fshape[0] and 0 <= qx - side < fshape[1]:  # type: ignore[index]
-            out["cell_value"] = float(state.best_field[qy, qx - side])
+        x = qx - side - aw
+        if state.best_field is not None and 0 <= qy < side and 0 <= x < fw:
+            out["cell_value"] = float(state.best_field[qy, x])
     out["best"] = _candidate(state, exp, best)
     if state.cma is not None:
         out["cma"] = {"mean": decode(exp, state.cma.mean), "sigma": state.cma.sigma}

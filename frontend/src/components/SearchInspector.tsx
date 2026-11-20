@@ -11,7 +11,10 @@ export interface SearchCandidate {
   viable_fraction: number;
   alive_fraction: number;
   speed: number;
+  mass?: number;
   holdout_score: number | null;
+  lineage?: Array<{ index: number; generation: number; score: number }>;
+  lineage_depth?: number;
   out_of_box: boolean;
   spec: Record<string, unknown> | null;
 }
@@ -23,7 +26,9 @@ export interface SearchInspection {
   evaluated: number;
   search_seeds: number[];
   holdout_seeds: number[];
-  region?: "map" | "best";
+  region?: "map" | "archive" | "best";
+  qd?: { descriptors: Array<{ name: string; low: number; high: number; bins: number }>; filled: number; cells: number; archive_version: number };
+  archive_cell?: Record<string, number | number[]>;
   candidate?: SearchCandidate;
   best?: SearchCandidate;
   cma?: { mean: Record<string, number>; sigma: number };
@@ -54,9 +59,24 @@ function Candidate({ c, title, testId, onOpenSpec }: { c: SearchCandidate; title
         <dd className="mono">{(c.viable_fraction * 100).toFixed(0)}%</dd>
         <dt>{t("search.speed")}</dt>
         <dd className="mono">{c.speed.toFixed(4)}</dd>
+        {c.mass !== undefined && Number.isFinite(c.mass) && (
+          <>
+            <dt>{t("search.mass")}</dt>
+            <dd className="mono">{c.mass.toFixed(1)}</dd>
+          </>
+        )}
         <dt>{t("metric.alive_fraction")}</dt>
         <dd className="mono">{c.alive_fraction.toFixed(3)}</dd>
       </dl>
+      {c.lineage !== undefined && (
+        <p className="small muted" data-testid={`${testId}-lineage`}>
+          {t("search.lineage")}:{" "}
+          {c.lineage.length === 0
+            ? t("search.no_parent")
+            : c.lineage.map((a) => `#${a.index} (${t("search.generation")} ${a.generation}, ${a.score.toFixed(3)})`).join(" ← ") +
+              ((c.lineage_depth ?? 0) > c.lineage.length ? " ← …" : "")}
+        </p>
+      )}
       {c.out_of_box && <p className="muted small">{t("search.out_of_box")}</p>}
       {onOpenSpec && c.spec && (
         <button type="button" className="small" data-testid={`${testId}-open`} onClick={() => onOpenSpec(c.spec!)}>
@@ -78,7 +98,23 @@ export function SearchInspector({ data, onOpenSpec }: { data: SearchInspection; 
           {data.axes[1] ? ` / ${t("search.axis_y")} ${short(data.axes[1])}` : ""}
         </span>
       </p>
+      {data.qd && (
+        <p className="small muted" data-testid="search-qd">
+          {t("search.archive_summary").replace("{filled}", String(data.qd.filled)).replace("{cells}", String(data.qd.cells))} (
+          {data.qd.descriptors.map((d) => `${d.name} ${d.low}–${d.high}`).join(" × ")})
+        </p>
+      )}
       {data.region === "map" && !data.candidate && <p className="muted small">{t("search.no_candidate")}</p>}
+      {data.region === "archive" && data.archive_cell && (
+        <p className="small mono" data-testid="search-archive-cell">
+          {t("search.archive_cell")}:{" "}
+          {Object.entries(data.archive_cell)
+            .filter(([, v]) => Array.isArray(v))
+            .map(([k, v]) => `${k} ${(v as number[])[0].toFixed(2)}–${(v as number[])[1].toFixed(2)}`)
+            .join(", ")}
+          {!data.candidate && <span className="muted"> · {t("search.archive_empty")}</span>}
+        </p>
+      )}
       {data.candidate && <Candidate c={data.candidate} title={t("search.clicked")} testId="search-candidate" onOpenSpec={onOpenSpec} />}
       {data.best && <Candidate c={data.best} title={t("search.best")} testId="search-best" onOpenSpec={onOpenSpec} />}
       {data.cma && (

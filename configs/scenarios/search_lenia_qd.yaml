@@ -1,0 +1,46 @@
+# Quality-diversity search over Lenia (m, s, R), every candidate starting from the catalogued
+# Orbium pattern in a 64 x 64 world. The QD grid (speed x mass) is pre-declared and fixed:
+# bounds were chosen from a pilot random search with seed 99 (viable candidates: speed
+# 0-0.78 cells/tick, mass 38-91) with headroom; seeds 99, 101 and 102 were used for pilots and
+# are not used by the comparison sweep. Quality = objective score (lenia_moving_localized v1);
+# only candidates viable on every search seed enter the grid.
+schema_version: 1
+experiment:
+  name: search_lenia_qd
+  mode: exploratory
+  substrate: search
+  seed: 1
+  target:
+    name: qd_candidate
+    mode: exploratory
+    substrate: lenia
+    seed: 0
+    world: {width: 64, height: 64, boundary: periodic}
+    dynamics:
+      T: 10
+      kernel: {R: 13, b: [1.0], core: polynomial}
+      growth: {m: 0.15, s: 0.015, function: polynomial}
+    initialization: {preset: pattern, pattern: O2u}
+  space:
+    - {path: dynamics.growth.m, low: 0.1, high: 0.3, scale: linear}
+    - {path: dynamics.growth.s, low: 0.005, high: 0.05, scale: log}
+    - {path: dynamics.kernel.R, low: 8, high: 20, scale: linear}
+  dynamics:
+    algorithm: map_elites
+    population: 20
+    sigma0: 0.3
+    objective: lenia_moving_localized
+    max_alive_fraction: 0.3
+    eval_steps: 300
+    eval_seeds: 1
+    holdout_seeds: 0
+  qd:
+    descriptors:
+      - {name: speed, low: 0.0, high: 1.0, bins: 10}
+      - {name: mass, low: 0.0, high: 160.0, bins: 16}
+    mutation_sigma: 0.1
+    archive_version: 1
+  runner: {max_steps: 100, checkpoint_interval: 10}
+  observations:
+    metrics: [best_score, generation_best, generation_mean, viable_fraction, evaluations,
+              holdout_best, sigma, coverage, qd_score, archive_size]

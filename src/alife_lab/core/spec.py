@@ -14,7 +14,15 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from alife_lab.core.hashing import sha256_json
 
@@ -1200,8 +1208,9 @@ class SearchDynamics(_Frozen):
     clock_unit: Literal["generation"] = "generation"
     numeric_policy: Literal["float64_cpu"] = "float64_cpu"
     # random: uniform sampling of the box (baseline); cma_es: CMA-ES (Hansen's purecma
-    # equations, positive weights) in the normalised box with a quadratic bound penalty.
-    algorithm: Literal["random", "cma_es"] = "cma_es"
+    # equations, positive weights) in the normalised box with a quadratic bound penalty;
+    # map_elites: MAP-Elites over the ``qd`` descriptor grid (requires ``qd``).
+    algorithm: Literal["random", "cma_es", "map_elites"] = "cma_es"
     population: Annotated[int, Field(ge=2, le=256)] = 12
     sigma0: Annotated[float, Field(gt=0.0, le=1.0)] = 0.3  # in normalised [0, 1] units
     # Pre-declared objective (versioned in the adapter); never changed during a run.
@@ -1222,7 +1231,41 @@ SearchMetric = Literal[
     "evaluations",
     "holdout_best",
     "sigma",
+    "coverage",
+    "qd_score",
+    "archive_size",
 ]
+
+
+class QDDescriptor(_Frozen):
+    """One behaviour descriptor axis with pre-declared, fixed bounds (spec §7.2)."""
+
+    name: Literal["speed", "mass", "alive_fraction"]
+    low: float
+    high: float
+    bins: Annotated[int, Field(ge=2, le=64)] = 10
+
+    @model_validator(mode="after")
+    def _check(self) -> QDDescriptor:
+        if not self.low < self.high:
+            raise ValueError(f"descriptor {self.name}: low must be < high")
+        return self
+
+
+class SearchQD(_Frozen):
+    """Quality-diversity archive: a fixed grid over two descriptors. Every algorithm reports
+    coverage and QD-score on it; ``map_elites`` also selects parents from it. Only candidates
+    viable on every search seed enter; quality = the objective score."""
+
+    descriptors: Annotated[list[QDDescriptor], Field(min_length=2, max_length=2)]
+    mutation_sigma: Annotated[float, Field(gt=0.0, le=1.0)] = 0.1  # normalised units
+    archive_version: Annotated[int, Field(ge=1)] = 1  # bump if the grid definition changes
+
+    @model_validator(mode="after")
+    def _check(self) -> SearchQD:
+        if self.descriptors[0].name == self.descriptors[1].name:
+            raise ValueError("the two QD descriptors must differ")
+        return self
 
 
 class SearchObservation(_Frozen):
@@ -1249,6 +1292,9 @@ class SearchExperiment(_Frozen):
     target: LeniaExperiment
     space: Annotated[list[SearchParam], Field(min_length=1, max_length=MAX_SEARCH_PARAMS)]
     dynamics: SearchDynamics = SearchDynamics()
+    # Optional, additive section: omitted from the canonical dump when absent so specs written
+    # before it existed keep their digest.
+    qd: SearchQD | None = None
     runner: RunnerSpec = RunnerSpec(max_steps=25, checkpoint_interval=5)
     observations: SearchObservation = SearchObservation()
 
@@ -1262,12 +1308,24 @@ class SearchExperiment(_Frozen):
             if p.path not in allowed:
                 raise ValueError(f"{p.path!r} is not searchable for {self.target.substrate!r}")
         d = self.dynamics
+        if d.algorithm == "map_elites" and self.qd is None:
+            raise ValueError("map_elites needs a qd section (descriptor grid)")
+        qd_metrics = {"coverage", "qd_score", "archive_size"}
+        if self.qd is None and qd_metrics & set(self.observations.metrics):
+            raise ValueError("QD metrics need a qd section")
         if d.objective.split("_", 1)[0] != self.target.substrate:
             raise ValueError("the objective does not belong to the target substrate")
         evaluations = d.population * d.eval_seeds * self.runner.max_steps
         if evaluations * d.eval_steps > 2_000_000_000:
             raise ValueError("search budget too large (population*seeds*generations*steps)")
         return self
+
+    @model_serializer(mode="wrap")
+    def _omit_absent_sections(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        out: dict[str, Any] = handler(self)
+        if out.get("qd") is None:
+            out.pop("qd", None)
+        return out
 
 
 AnyExperiment = Annotated[

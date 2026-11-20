@@ -15,11 +15,26 @@ from alife_lab.evolution.space import candidate_spec, decode, encode, seeds_for
 from alife_lab.substrates.lenia.lenia import LeniaAdapter
 from alife_lab.substrates.search.adapter import SearchAdapter
 
+QD = {
+    "descriptors": [
+        {"name": "speed", "low": 0.0, "high": 1.0, "bins": 5},
+        {"name": "mass", "low": 0.0, "high": 160.0, "bins": 8},
+    ],
+    "mutation_sigma": 0.15,
+}
 
-def search_spec(**dyn: Any) -> ExperimentSpec:
+
+def search_spec(qd: dict[str, Any] | None = None, **dyn: Any) -> ExperimentSpec:
+    extra: dict[str, Any] = {}
+    if qd is not None:
+        extra = {
+            "qd": qd,
+            "observations": {"metrics": ["best_score", "coverage", "qd_score", "archive_size"]},
+        }
     return ExperimentSpec.model_validate(
         {
             "experiment": {
+                **extra,
                 "name": "t_search",
                 "substrate": "search",
                 "seed": 7,
@@ -162,3 +177,105 @@ def test_invalid_search_specs() -> None:
         raw["experiment"].update(patch)
         with pytest.raises(ValueError):
             ExperimentSpec.model_validate(raw)
+
+
+def qd_spec(**dyn: Any) -> ExperimentSpec:
+    """Orbium-pattern target (viable candidates are common enough for a small test)."""
+    raw = search_spec(QD, algorithm="map_elites", **dyn).model_dump(mode="json")
+    raw["experiment"]["target"]["initialization"] = {"preset": "pattern"}
+    raw["experiment"]["dynamics"]["population"] = 10
+    raw["experiment"]["dynamics"]["eval_steps"] = 120
+    raw["experiment"]["dynamics"]["eval_seeds"] = 1
+    return ExperimentSpec.model_validate(raw)
+
+
+def test_qd_section_is_optional_and_digest_stable() -> None:
+    plain = search_spec()
+    assert "qd" not in plain.model_dump(mode="json")["experiment"]
+    with pytest.raises(ValueError, match="map_elites needs a qd"):
+        search_spec(algorithm="map_elites")
+    raw = plain.model_dump(mode="json")
+    raw["experiment"]["observations"] = {"metrics": ["coverage"]}
+    with pytest.raises(ValueError, match="QD metrics need"):
+        ExperimentSpec.model_validate(raw)
+
+
+def test_qd_archive_invariants_and_lineage() -> None:
+    from alife_lab.evolution import qd as qdmod
+    from alife_lab.substrates.search.render import lineage
+
+    spec = qd_spec()
+    exp = spec.experiment
+    assert isinstance(exp, SearchExperiment) and exp.qd is not None
+    a, st = run(spec, 6)
+    elites = st.elites
+    assert elites is not None and (elites >= 0).any()
+    assert np.array_equal(elites, qdmod.build(st, exp.qd))  # incremental == rebuilt
+    cell = qdmod.cells(qdmod.descriptors(st, exp.qd), exp.qd)
+    eligible = st.viable >= 1.0
+    for c, e in enumerate(elites):
+        members = np.flatnonzero(eligible & (cell == c))
+        if e < 0:
+            assert members.size == 0
+        else:
+            assert eligible[e] and cell[e] == c
+            assert st.score[e] == st.score[members].max()
+            assert e == members[np.argmax(st.score[members])]  # ties keep the earliest
+    m = a.metrics(st, spec)
+    assert m["archive_size"] == (elites >= 0).sum()
+    assert m["coverage"] == pytest.approx(m["archive_size"] / elites.size)
+    assert m["qd_score"] == pytest.approx(st.score[elites[elites >= 0]].sum())
+    # Children come from elites of earlier generations; the first generation has no parent.
+    children = np.flatnonzero(st.parent >= 0)
+    assert children.size and np.all(
+        st.generation[st.parent[children].astype(int)] < st.generation[children]
+    )
+    assert np.all(st.parent[st.generation == 1] == -1)
+    deepest = max(range(st.score.size), key=lambda i: len(lineage(st, i)))
+    assert len(lineage(st, deepest)) >= 1
+
+
+def test_qd_passive_for_other_algorithms_and_continuation() -> None:
+    for algorithm in ("map_elites", "random", "cma_es"):
+        spec = qd_spec()
+        raw = spec.model_dump(mode="json")
+        raw["experiment"]["dynamics"]["algorithm"] = algorithm
+        spec = ExperimentSpec.model_validate(raw)
+        a, full = run(spec, 4)
+        _, half = run(spec, 2)
+        resumed = a.deserialize_state(a.serialize_state(half), spec)
+        for _ in range(2):
+            resumed = a.step(resumed, spec)
+        assert a.state_distance(full, resumed)["exact_equal"]
+        assert np.array_equal(full.elites, resumed.elites)
+        assert "coverage" in a.metrics(full, spec)
+        if algorithm != "map_elites":
+            assert np.all(full.parent == -1)
+
+
+def test_version1_checkpoint_loads() -> None:
+    spec = search_spec()
+    a, st = run(spec, 2)
+    payload = a.serialize_state(st)
+    payload["meta"]["serialize_version"] = 1
+    for k in ("mass", "parent"):
+        del payload["arrays"][k]
+    old = a.deserialize_state(payload, spec)
+    assert np.all(np.isnan(old.mass)) and np.all(old.parent == -1)
+    a.step(old, spec)  # continues
+
+
+def test_inspect_archive_cell() -> None:
+    spec = qd_spec()
+    a, st = run(spec, 4)
+    assert st.grid == (5, 8) and st.elites is not None
+    side = 64
+    e = int(np.flatnonzero(st.elites >= 0)[0])
+    col, row = e % 5, e // 5
+    x = side + int((col + 0.5) * side / 5)
+    y = side - 1 - int((row + 0.5) * side / 8)
+    info = a.inspect(st, spec, {"x": x, "y": y})
+    assert info["region"] == "archive" and info["candidate"]["index"] == st.elites[e]
+    assert info["qd"]["filled"] == int((st.elites >= 0).sum())
+    header, _ = a.render(st)
+    assert header["width"] == 3 * side

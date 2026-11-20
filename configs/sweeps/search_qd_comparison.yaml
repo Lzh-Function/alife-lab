@@ -1,0 +1,20 @@
+# Coverage of the pre-declared (speed x mass) grid at an equal budget of 2000 evaluations
+# (20 candidates x 100 generations x 1 seed). Pilot seeds 99, 101, 102 are excluded.
+schema_version: 1
+sweep:
+  name: search_qd_comparison
+  base_preset: search_lenia_qd_map_elites
+  seeds: [1, 2, 3, 4, 5]
+  factors:
+    - path: dynamics.algorithm
+      values: [map_elites, random, cma_es]
+      labels: [map_elites, random, cma_es]
+  reference_condition: 1
+  endpoint: {metric: coverage, at: final}
+  design: confirmatory
+  hypothesis: >-
+    With the same budget of 2000 evaluations, MAP-Elites fills a larger fraction of the
+    pre-declared speed x mass grid (coverage) than uniform random search on Lenia (m, s, R)
+    from the Orbium pattern; one value per seeded search run. The CMA-ES condition is
+    reported against the same reference.
+  profile_id: cpu_dev

@@ -16,11 +16,12 @@ SMALL = {"population": 6, "eval_steps": 60}
 
 
 @pytest.mark.integration
-def test_search_restart_replay(settings: Settings) -> None:
+@pytest.mark.parametrize("preset", ["search_lenia_orbium_cma", "search_lenia_qd_map_elites"])
+def test_search_restart_replay(settings: Settings, preset: str) -> None:
     async def main() -> None:
         c = Controller(settings, LocalExecutor())
         await c.start()
-        raw = c.presets["search_lenia_orbium_cma"].spec.model_dump(mode="json")
+        raw = c.presets[preset].spec.model_dump(mode="json")
         raw["experiment"]["dynamics"].update(SMALL)
         raw["experiment"]["runner"] = {"max_steps": 10, "checkpoint_interval": 3}
         rid = c.create_run(ExperimentSpec.model_validate(raw), "cpu_dev", 0)["id"]

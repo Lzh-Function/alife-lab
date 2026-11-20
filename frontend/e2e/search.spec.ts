@@ -39,3 +39,31 @@ test("search: CMA-ES over Lenia parameters, inspect and open a candidate", async
     await stopServer(server);
   }
 });
+
+test("search: MAP-Elites grid, archive inspection and lineage", async ({ page }) => {
+  const server = startServer();
+  await waitHealthy();
+  try {
+    await page.goto(`${BASE}/#/catalog`);
+    await openPreset(page, "search_lenia_qd_map_elites");
+    await page.getByTestId("field-dynamics.population").fill("10");
+    await page.getByTestId("field-dynamics.eval_steps").fill("120");
+    await page.getByTestId("field-runner.max_steps").fill("6");
+    await page.getByTestId("input-tps").fill("0");
+    await expect(page.getByTestId("validation")).toContainText("OK");
+    await page.getByTestId("btn-create").click();
+    await expect(page).toHaveURL(/#\/lab\/run_[0-9a-f]{16}/);
+    await expectState(page, "completed");
+    await expect(page.getByTestId("metric-coverage")).not.toHaveText("0");
+    await page.getByTestId("brush-inspect").check();
+    const box = (await page.getByTestId("world-canvas").boundingBox())!;
+    // Middle third = archive panel; the best candidate's lineage is always reported.
+    await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.5);
+    await expect(page.getByTestId("search-qd")).toContainText("/ 160");
+    await expect(page.getByTestId("search-archive-cell")).toBeVisible();
+    await expect(page.getByTestId("search-best-lineage")).toBeVisible();
+    await page.screenshot({ path: path.join(DATA, "search_qd.png") });
+  } finally {
+    await stopServer(server);
+  }
+});

@@ -1,0 +1,14 @@
+preset:
+  id: search_lenia_qd_cma
+  scenario: search_lenia_qd.yaml
+  title_key: preset.search_lenia_qd_cma.title
+  description_key: preset.search_lenia_qd_cma.description
+  overrides:
+    experiment:
+      name: search_lenia_qd_cma
+      dynamics: {algorithm: cma_es}
+  expected_observation: >-
+    Single-objective comparison: CMA-ES finds the highest score but converges to one region,
+    so coverage stops growing (pilot: about 20 of 160 cells). It also costs about 3 x the CPU
+    time of MAP-Elites per evaluation, because viable candidates run all 300 ticks.
+  negative_control: preset search_lenia_qd_random

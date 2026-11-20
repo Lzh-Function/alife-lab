@@ -1,0 +1,11 @@
+preset:
+  id: search_lenia_qd_map_elites
+  scenario: search_lenia_qd.yaml
+  title_key: preset.search_lenia_qd_map_elites.title
+  description_key: preset.search_lenia_qd_map_elites.description
+  overrides: {}
+  expected_observation: >-
+    MAP-Elites keeps filling new (speed, mass) cells after the first viable candidates are
+    found; in pilot runs (seeds 101, 102; 2000 evaluations) it filled 23-27 of 160 cells,
+    uniform random search 5-8 (1000 evaluations) and CMA-ES stopped near 20 once converged.
+  negative_control: preset search_lenia_qd_random (same budget, uniform sampling)

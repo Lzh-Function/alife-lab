@@ -25,9 +25,11 @@ export function displayWorld(substrate: string, experiment: Record<string, unkno
   }
   if (substrate === "search") {
     // Parameter map (side = target height) + the best candidate's world, side by side.
+    // With a QD grid, its archive panel (same side) sits between the two.
     const target = experiment.target as { world?: { width: number; height: number } } | undefined;
     const w = target?.world ?? { width: 64, height: 64 };
-    return { width: w.height + w.width, height: w.height };
+    const panels = experiment.qd ? 2 : 1;
+    return { width: panels * w.height + w.width, height: w.height };
   }
   if (substrate === "reaction_network") {
     const species = ((experiment.dynamics as { species?: unknown[] } | undefined)?.species ?? []).length;
@@ -171,6 +173,7 @@ export const FORM_FIELDS: Record<SubstrateId, FormField[]> = {
       kind: "select",
       options: [
         { value: "cma_es", labelKey: "form.search.algorithm.cma_es" },
+        { value: "map_elites", labelKey: "form.search.algorithm.map_elites" },
         { value: "random", labelKey: "form.search.algorithm.random" },
       ],
     },
