@@ -121,3 +121,46 @@ def test_discovery_ledger(settings: Settings) -> None:
             await c2.shutdown()
 
     arun(main)
+
+
+def _clip_gpu_ready() -> bool:
+    try:
+        import torch
+    except ImportError:
+        return False
+    from tests.reference.test_asal import weights_present
+
+    return weights_present() and torch.cuda.is_available()
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not _clip_gpu_ready(), reason="needs PyTorch, CUDA and the CLIP weights")
+def test_asal_search_on_gpu_restart_replay(settings: Settings) -> None:
+    async def main() -> None:
+        c = Controller(settings, LocalExecutor())
+        await c.start()
+        raw = c.presets["search_asal_lenia_cell"].spec.model_dump(mode="json")
+        raw["experiment"]["dynamics"].update(population=4, eval_steps=40)
+        raw["experiment"]["target"]["world"] = {"width": 64, "height": 64}
+        raw["experiment"]["runner"] = {"max_steps": 5, "checkpoint_interval": 2}
+        rid = c.create_run(ExperimentSpec.model_validate(raw), "local_gpu", 0)["id"]
+        assert c.run_summary(rid)["backend"] == "torch_cuda"
+        await c.start_run(rid, start_paused=True)
+        await wait_for(lambda: state_of(c, rid) == "paused", 60)
+        await c.control(rid, "step", {"count": 3})
+        await c.shutdown()
+
+        c2 = Controller(settings, LocalExecutor())
+        await c2.start()
+        try:
+            await c2.restore_run(rid)
+            await wait_for(lambda: state_of(c2, rid) == "paused", 60)
+            await c2.control(rid, "step", {"count": 2})
+            report = await c2.verify_replay(rid)
+            assert report["status"] == "verified", report["segments"]
+            info = await c2.inspect(rid, {"x": 0, "y": 0})
+            assert info["asal"]["prompts"] == ["a biological cell"]
+        finally:
+            await c2.shutdown()
+
+    arun(main)

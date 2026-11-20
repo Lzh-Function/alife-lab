@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, ApiError, type Preset } from "../lib/api";
 import { FORM_FIELDS, getPath, setPath, type FormField, type SubstrateId } from "../lib/substrates";
-import { CPU_PROFILE, GPU_PROFILE, gpuBackendFor, requiredPolicy, useCompute } from "../lib/compute";
+import { CPU_PROFILE, GPU_BACKENDS, GPU_PROFILE, OVERRIDABLE_POLICIES, gpuBackendFor, requiredPolicy, useCompute } from "../lib/compute";
 import { CATEGORIES, SUBSTRATE_GUIDE } from "../guide/content";
 import { useT } from "../i18n";
 import { TargetEditor } from "./TargetEditor";
@@ -92,17 +92,22 @@ export function Catalog({ onOpen }: { onOpen: (runId: string) => void }) {
   }, [presetList]);
 
   const manifest = form ? substrateList.find((s) => s.slug === form.preset.substrate) : undefined;
-  const gpuBackend = manifest ? gpuBackendFor(manifest.backends, targetBackends) : null;
+  const presetPolicy = form ? (getPath(form.preset.spec.experiment as Record<string, unknown>, "dynamics.numeric_policy") as string | undefined) : undefined;
+  const anyGpuBackend = manifest ? gpuBackendFor(manifest.backends, targetBackends) : null;
+  // A GPU backend is usable if it accepts the preset's numeric policy, or a policy the preset
+  // may be switched to without changing its meaning beyond float rounding (JAX CPU -> CUDA).
+  const gpuPolicy = requiredPolicy(manifest?.backend_numeric_policies, anyGpuBackend);
+  const gpuCompatible = !gpuPolicy || gpuPolicy === presetPolicy || OVERRIDABLE_POLICIES[presetPolicy ?? ""] === gpuPolicy;
+  const gpuBackend = gpuCompatible ? anyGpuBackend : null;
   const autoProfile = computeMode === "gpu" && gpuBackend ? GPU_PROFILE : CPU_PROFILE;
   const profileId = form?.profile_override ?? autoProfile;
   const policy = profileId === GPU_PROFILE ? requiredPolicy(manifest?.backend_numeric_policies, gpuBackend) : null;
-  const presetPolicy = form ? (getPath(form.preset.spec.experiment as Record<string, unknown>, "dynamics.numeric_policy") as string | undefined) : undefined;
   const policyOverride = policy && presetPolicy !== policy ? policy : null;
 
   const body = useMemo(() => {
     if (!form) return null;
     let overrides: Record<string, unknown> = { name: form.name };
-    for (const [path, value] of Object.entries(form.values)) overrides = setPath(overrides, path, value);
+    for (const [path, value] of Object.entries(form.values)) if (value !== undefined) overrides = setPath(overrides, path, value);
     if (policyOverride) overrides = setPath(overrides, "dynamics.numeric_policy", policyOverride);
     return { preset_id: form.preset.id, overrides, profile_id: profileId };
   }, [form, profileId, policyOverride]);
@@ -278,7 +283,7 @@ export function Catalog({ onOpen }: { onOpen: (runId: string) => void }) {
                 </span>
                 <input data-testid="input-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} maxLength={120} />
               </label>
-              {fieldsFor(form.preset.substrate).map((f) => (
+              {fieldsFor(form.preset.substrate).filter((f) => form.values[f.path] !== undefined && !(f.path === "asal.prompts" && form.values["asal.frames"] !== undefined && getPath(form.preset.spec.experiment as Record<string, unknown>, "dynamics.objective") !== "lenia_clip_target")).map((f) => (
                 <label key={f.path}>
                   <span className="label-row">
                     {t(f.labelKey)} <Help text={paramHelp(form.preset.substrate, f.path)} testId={`help-${f.path}`} />
@@ -291,6 +296,20 @@ export function Catalog({ onOpen }: { onOpen: (runId: string) => void }) {
                         </option>
                       ))}
                     </select>
+                  ) : f.kind === "textlist" ? (
+                    <input
+                      data-testid={`field-${f.path}`}
+                      value={((form.values[f.path] as string[] | undefined) ?? []).join("; ")}
+                      onChange={(e) =>
+                        setValue(
+                          f.path,
+                          e.target.value
+                            .split(";")
+                            .map((v) => v.trim())
+                            .filter(Boolean),
+                        )
+                      }
+                    />
                   ) : (
                     <input
                       type="number"
@@ -326,9 +345,11 @@ export function Catalog({ onOpen }: { onOpen: (runId: string) => void }) {
                 {profileId === GPU_PROFILE && gpuBackend
                   ? t("compute.note.gpu").replace("{backend}", gpuBackend)
                   : computeMode === "gpu" && !gpuBackend
-                    ? manifest?.backends.some((b) => b === "cupy" || b === "jax_cuda")
-                      ? t("compute.gpu_unavailable")
-                      : t("compute.note.no_gpu")
+                    ? anyGpuBackend && !gpuCompatible
+                      ? t("compute.note.gpu_incompatible")
+                      : manifest?.backends.some((b) => (GPU_BACKENDS as readonly string[]).includes(b))
+                        ? t("compute.gpu_unavailable")
+                        : t("compute.note.no_gpu")
                     : t("compute.note.cpu")}
                 {policyOverride && <div className="notice">{t("compute.note.policy").split("{policy}").join(policyOverride)}</div>}
               </div>

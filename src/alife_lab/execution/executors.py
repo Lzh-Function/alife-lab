@@ -23,7 +23,7 @@ from alife_lab.substrates import get_manifest, has_substrate
 IMPLEMENTED_ROLES = ("cpu_dev", "local_interactive")
 
 
-GPU_BACKENDS = frozenset({"cupy", "jax_cuda"})
+GPU_BACKENDS = frozenset({"cupy", "jax_cuda", "torch_cuda"})
 
 
 def available_backends(gpu_count: int = 0) -> tuple[str, ...]:
@@ -37,6 +37,10 @@ def available_backends(gpu_count: int = 0) -> tuple[str, ...]:
         out.append("cupy")
     if gpu_count > 0 and importlib.util.find_spec("jax_cuda13_plugin") is not None:
         out.append("jax_cuda")
+    if importlib.util.find_spec("torch") is not None and importlib.util.find_spec("open_clip"):
+        out.append("torch")  # PyTorch on the CPU (optional extra "asal")
+        if gpu_count > 0:
+            out.append("torch_cuda")
     return tuple(out)
 
 
@@ -118,11 +122,17 @@ def _validate(
         manifest = get_manifest(substrate)
         if selector.backend in ("auto", "gpu"):
             # "auto" never picks a GPU backend; "gpu" picks the substrate's first GPU backend.
+            # "auto" also skips backends that do not accept the spec's numeric policy.
+            policy_now = getattr(spec.experiment.dynamics, "numeric_policy", None)
             candidates = [
                 b
                 for b in manifest.backends
                 if b in target.capabilities.backends
                 and (b in GPU_BACKENDS) == (selector.backend == "gpu")
+                and (
+                    selector.backend == "gpu"
+                    or policy_now in manifest.backend_numeric_policies.get(b, (policy_now,))
+                )
             ]
             resolved_backend = candidates[0] if candidates else None
         elif selector.backend in manifest.backends:

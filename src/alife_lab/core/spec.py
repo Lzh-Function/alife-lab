@@ -1204,9 +1204,14 @@ class SearchParam(_Frozen):
         return self
 
 
+CLIP_OBJECTIVES = ("lenia_clip_target", "lenia_clip_open_endedness")
+
+
 class SearchDynamics(_Frozen):
     clock_unit: Literal["generation"] = "generation"
-    numeric_policy: Literal["float64_cpu"] = "float64_cpu"
+    # float64_cpu: NumPy objectives; float32_clip_torch: objectives that embed frames with CLIP
+    # in PyTorch (backends torch / torch_cuda; results depend on the recorded device).
+    numeric_policy: Literal["float64_cpu", "float32_clip_torch"] = "float64_cpu"
     # random: uniform sampling of the box (baseline); cma_es: CMA-ES (Hansen's purecma
     # equations, positive weights) in the normalised box with a quadratic bound penalty;
     # map_elites: MAP-Elites over the ``qd`` descriptor grid (requires ``qd``).
@@ -1214,7 +1219,9 @@ class SearchDynamics(_Frozen):
     population: Annotated[int, Field(ge=2, le=256)] = 12
     sigma0: Annotated[float, Field(gt=0.0, le=1.0)] = 0.3  # in normalised [0, 1] units
     # Pre-declared objective (versioned in the adapter); never changed during a run.
-    objective: Literal["lenia_moving_localized"] = "lenia_moving_localized"
+    objective: Literal[
+        "lenia_moving_localized", "lenia_clip_target", "lenia_clip_open_endedness"
+    ] = "lenia_moving_localized"
     max_alive_fraction: Annotated[float, Field(gt=0.0, le=1.0)] = 0.3
     eval_steps: Annotated[int, Field(ge=10, le=20_000)] = 300
     # Common random numbers: every candidate is scored on the same search seeds; the best
@@ -1234,6 +1241,7 @@ SearchMetric = Literal[
     "coverage",
     "qd_score",
     "archive_size",
+    "blank_score",
 ]
 
 
@@ -1280,6 +1288,18 @@ class SearchObservation(_Frozen):
     )
 
 
+class SearchASAL(_Frozen):
+    """Foundation-model scoring (ASAL). Frames are sampled at the ends of ``frames`` equal
+    chunks of the evaluation (ASAL ``time_sampling=(frames, True)``)."""
+
+    model: Literal["openai_vit_b32"] = "openai_vit_b32"
+    prompts: Annotated[
+        list[Annotated[str, Field(min_length=1, max_length=200, pattern=r"^[^\x00-\x1f]+$")]],
+        Field(max_length=8),
+    ] = []
+    frames: Annotated[int, Field(ge=1, le=64)] = 1
+
+
 class SearchExperiment(_Frozen):
     """Optimisation run: proposes target-world specs, runs them headless and scores them with a
     pre-declared objective. The target substrate itself is unchanged (no reward inside it)."""
@@ -1295,6 +1315,7 @@ class SearchExperiment(_Frozen):
     # Optional, additive section: omitted from the canonical dump when absent so specs written
     # before it existed keep their digest.
     qd: SearchQD | None = None
+    asal: SearchASAL | None = None
     runner: RunnerSpec = RunnerSpec(max_steps=25, checkpoint_interval=5)
     observations: SearchObservation = SearchObservation()
 
@@ -1308,8 +1329,26 @@ class SearchExperiment(_Frozen):
             if p.path not in allowed:
                 raise ValueError(f"{p.path!r} is not searchable for {self.target.substrate!r}")
         d = self.dynamics
+        clip = d.objective in CLIP_OBJECTIVES
+        if clip != (self.asal is not None):
+            raise ValueError("CLIP objectives need an asal section (and only they may have one)")
+        if d.numeric_policy != ("float32_clip_torch" if clip else "float64_cpu"):
+            raise ValueError(
+                "numeric_policy must be float32_clip_torch for CLIP objectives, else float64_cpu"
+            )
+        if self.asal is not None:
+            a = self.asal
+            if d.objective == "lenia_clip_target":
+                if not a.prompts or a.frames % len(a.prompts):
+                    raise ValueError("lenia_clip_target needs prompts and frames = k x prompts")
+            elif a.prompts or a.frames < 2:
+                raise ValueError("lenia_clip_open_endedness takes no prompts and >= 2 frames")
+            if d.eval_steps < a.frames:
+                raise ValueError("eval_steps must be >= the number of sampled frames")
         if d.algorithm == "map_elites" and self.qd is None:
             raise ValueError("map_elites needs a qd section (descriptor grid)")
+        if "blank_score" in self.observations.metrics and d.objective not in CLIP_OBJECTIVES:
+            raise ValueError("blank_score is defined for CLIP objectives only")
         qd_metrics = {"coverage", "qd_score", "archive_size"}
         if self.qd is None and qd_metrics & set(self.observations.metrics):
             raise ValueError("QD metrics need a qd section")
@@ -1323,8 +1362,9 @@ class SearchExperiment(_Frozen):
     @model_serializer(mode="wrap")
     def _omit_absent_sections(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
         out: dict[str, Any] = handler(self)
-        if out.get("qd") is None:
-            out.pop("qd", None)
+        for key in ("qd", "asal"):
+            if out.get(key) is None:
+                out.pop(key, None)
         return out
 
 

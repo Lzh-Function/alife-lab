@@ -26,6 +26,11 @@ gpu = ["cupy-cuda13x[ctk]>=14.2"]
 nca = ["jax>=0.8"]
 # CUDA 13 build of JAX for NCA training/runs on the GPU (with pip CUDA libraries, ~4 GB).
 nca-gpu = ["jax[cuda13]>=0.8"]
+asal = [
+    "open-clip-torch>=3.3",
+    "safetensors>=0.6",
+    "torch>=2.14",
+]
 
 [project.scripts]
 alife = "alife_lab.cli:main"
@@ -82,7 +87,9 @@ plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
 # pyarrow ships without type information.
-module = ["pyarrow", "pyarrow.*", "brotli", "numba", "numba.*", "cupy", "cupy.*", "jax", "jax.*"]
+module = ["pyarrow", "pyarrow.*", "brotli", "numba", "numba.*", "cupy", "cupy.*", "jax", "jax.*",
+          "torch", "torch.*", "open_clip", "open_clip.*", "safetensors", "safetensors.*",
+          "huggingface_hub", "huggingface_hub.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

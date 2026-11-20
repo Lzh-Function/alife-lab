@@ -168,6 +168,8 @@ _ALLOWED_OVERRIDE_KEYS = {
     "dynamics",
     "observations",
     "space",
+    "qd",
+    "asal",
 }
 
 

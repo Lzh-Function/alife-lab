@@ -67,3 +67,41 @@ test("search: MAP-Elites grid, archive inspection and lineage", async ({ page })
     await stopServer(server);
   }
 });
+
+test("search: ASAL (CLIP) objective with the blank-world reference", async ({ page }) => {
+  const server = startServer();
+  await waitHealthy();
+  try {
+    await page.goto(`${BASE}/#/catalog`);
+    await page.getByTestId("compute-cpu").click();
+    await openPreset(page, "search_asal_lenia_cell");
+    await expect(page.getByTestId("field-asal.prompts")).toHaveValue("a biological cell");
+    await page.getByTestId("field-asal.prompts").fill("a biological cell; two biological cells");
+    await page.getByTestId("field-asal.frames").fill("2");
+    await page.getByTestId("field-dynamics.population").fill("4");
+    await page.getByTestId("field-dynamics.eval_steps").fill("40");
+    await page.getByTestId("field-runner.max_steps").fill("2");
+    await page.getByTestId("input-tps").fill("0");
+    await expect(page.getByTestId("validation")).toContainText("OK");
+    await page.getByTestId("btn-create").click();
+    await expect(page).toHaveURL(/#\/lab\/run_[0-9a-f]{16}/);
+    await expectState(page, "completed");
+    await expect(page.getByTestId("metric-blank_score")).not.toHaveText("null");
+    await page.getByTestId("brush-inspect").check();
+    const box = (await page.getByTestId("world-canvas").boundingBox())!;
+    await page.mouse.click(box.x + box.width * 0.75, box.y + box.height * 0.5);
+    await expect(page.getByTestId("search-asal")).toContainText("two biological cells");
+    // The non-CLIP search falls back to the CPU when the GPU switch is on.
+    await page.goto(`${BASE}/#/catalog`);
+    if (await page.getByTestId("compute-gpu").isEnabled()) {
+      await page.getByTestId("compute-gpu").click();
+      await openPreset(page, "search_lenia_orbium_cma");
+      await expect(page.getByTestId("input-profile")).toHaveValue("local_cpu");
+      await openPreset(page, "search_asal_lenia_cell");
+      await expect(page.getByTestId("input-profile")).toHaveValue("local_gpu");
+      await page.getByTestId("compute-cpu").click();
+    }
+  } finally {
+    await stopServer(server);
+  }
+});

@@ -1,0 +1,12 @@
+preset:
+  id: search_asal_lenia_cell
+  scenario: search_asal_lenia.yaml
+  title_key: preset.search_asal_lenia_cell.title
+  description_key: preset.search_asal_lenia_cell.description
+  overrides: {}
+  expected_observation: >-
+    Exploratory (E0-E1). CLIP similarity to "a biological cell" stays in a narrow band
+    (pilot seeds 101-102: best 0.263-0.287 vs blank_score 0.254). In the pilot the best
+    pattern was about as similar to "a car" as to "a biological cell", so a high score is not
+    evidence of cell-likeness; check prompt specificity before any claim.
+  negative_control: preset search_asal_lenia_cell_random (same budget) and blank_score

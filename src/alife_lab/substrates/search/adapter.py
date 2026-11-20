@@ -25,13 +25,15 @@ import numpy as np
 import numpy.typing as npt
 
 from alife_lab import API_CONTRACT_VERSION
-from alife_lab.core.spec import ExperimentSpec, SearchExperiment
+from alife_lab.core.spec import CLIP_OBJECTIVES, ExperimentSpec, SearchExperiment
 from alife_lab.evolution import OBJECTIVE_VERSIONS, cmaes, qd
 from alife_lab.evolution.space import bound_violation, candidate_spec, decode, seeds_for
 from alife_lab.substrates.base import Capabilities, MetricDefinition, PluginManifest
 
 F64 = npt.NDArray[np.float64]
-SERIALIZE_VERSION = 2  # 2: + mass, parent (version 1 checkpoints load with NaN / -1)
+# 2: + mass, parent (v1 loads with NaN / -1); 3: + embedding (v1/v2 load without it)
+SERIALIZE_VERSION = 3
+EMBED_DIM = 512  # CLIP ViT-B/32
 BOUND_PENALTY = 10.0  # CMA-ES f = -score + BOUND_PENALTY * |u - clip(u)|^2
 _ARCHIVE = ("u", "x", "score", "viable", "alive_fraction", "speed", "mass", "parent",
             "generation")  # fmt: skip
@@ -60,6 +62,8 @@ class SearchState:
     generation: F64  # (n,) generation index (1-based)
     elites: npt.NDArray[np.int64] | None = field(default=None, repr=False)  # derived (QD grid)
     grid: tuple[int, int] | None = None  # QD bins (descriptor 0, descriptor 1), from the spec
+    # (n, D) CLIP embedding of the last sampled frame (first search seed); (0, 0) otherwise.
+    embedding: F64 = field(default_factory=lambda: np.zeros((0, 0)), repr=False)
     holdout: dict[int, float] = field(default_factory=dict)  # archive index -> holdout score
     best_field: F64 | None = field(default=None, repr=False)
     last: dict[str, float] = field(default_factory=dict)
@@ -99,6 +103,10 @@ _METRICS = (
     _M("archive_size", "metric.archive_size", "cells", "generation",
        "Number of filled QD grid cells (needs a qd section).", "none", "every generation", 1,
        "absent without qd"),
+    _M("blank_score", "metric.blank_score", "score", "generation",
+       "Score of an empty (all-zero) world under the same CLIP objective: a reference level "
+       "that a dead candidate reaches for free.", "none", "every generation", 1,
+       "CLIP objectives only"),
 )  # fmt: skip
 
 SEARCH_MANIFEST = PluginManifest(
@@ -121,10 +129,15 @@ SEARCH_MANIFEST = PluginManifest(
         supports_deterministic_cpu=True,
         intervention_types=(),
     ),
-    backends=("numpy",),
+    backends=("numpy", "torch", "torch_cuda"),
     gpu_required=False,
     serialize_version=SERIALIZE_VERSION,
     metrics=_METRICS,
+    backend_numeric_policies={
+        "numpy": ("float64_cpu",),
+        "torch": ("float32_clip_torch",),
+        "torch_cuda": ("float32_clip_torch",),
+    },
     reference={
         "description": "External search over target-world parameters. random = uniform "
         "baseline; cma_es = CMA-ES with the update of Hansen's purecma (oracle-tested). "
@@ -187,31 +200,63 @@ class SearchAdapter:
 
     # ------------------------------------------------------------------ evaluation
 
+    def _embedder(self, exp: SearchExperiment) -> Any:
+        from alife_lab.evolution.clip_model import get_embedder
+
+        assert exp.asal is not None
+        if self.backend not in ("torch", "torch_cuda"):
+            raise RuntimeError("CLIP objectives need the torch or torch_cuda backend")
+        return get_embedder(exp.asal.model, "cuda" if self.backend == "torch_cuda" else "cpu")
+
     def _evaluate(
         self, exp: SearchExperiment, params: dict[str, float | int], seeds: list[int]
-    ) -> tuple[float, float, float, float, float, F64 | None]:
-        """Mean score, viable fraction, alive fraction, speed, mass over seeds; first field."""
-        from alife_lab.evolution.objectives import evaluate_lenia  # target adapters import us
+    ) -> tuple[float, float, float, float, float, F64 | None, F64 | None]:
+        """Mean score, viable fraction, alive fraction, speed, mass over seeds; the first
+        seed's final field and (CLIP objectives) its last-frame embedding."""
+        from alife_lab.evolution import asal as asal_scores  # target adapters import us
+        from alife_lab.evolution.objectives import evaluate_lenia, rollout_lenia_frames
 
-        scores, viable, alive, speed, mass = [], [], [], [], []
+        d = exp.dynamics
+        clip = d.objective in CLIP_OBJECTIVES
+        scores: list[float] = []
+        viable: list[float] = []
+        alive: list[float] = []
+        speed: list[float] = []
+        mass: list[float] = []
         first: F64 | None = None
+        first_z: F64 | None = None
         for s in seeds:
             cand = candidate_spec(exp, params, s)
             if cand is None:  # invalid combination (e.g. kernel larger than the world)
-                scores.append(0.0)
-                viable.append(0.0)
-                alive.append(0.0)
-                speed.append(0.0)
-                mass.append(0.0)
+                for col in (scores, viable, alive, speed, mass):
+                    col.append(0.0)
                 continue
-            ev = evaluate_lenia(cand, exp.dynamics.eval_steps, exp.dynamics.max_alive_fraction)
-            scores.append(ev.score)
-            viable.append(float(ev.viable))
-            alive.append(ev.alive_fraction)
-            speed.append(ev.speed)
-            mass.append(ev.mass)
+            if clip:
+                assert exp.asal is not None
+                ro = rollout_lenia_frames(cand, d.eval_steps, exp.asal.frames, d.max_alive_fraction)
+                emb = self._embedder(exp)
+                z = emb.embed_fields(ro.frames)
+                if d.objective == "lenia_clip_target":
+                    sc = asal_scores.supervised_target(z, emb.embed_texts(list(exp.asal.prompts)))
+                else:
+                    sc = asal_scores.open_endedness(z)
+                scores.append(sc)
+                viable.append(float(ro.alive))
+                alive.append(ro.alive_fraction)
+                speed.append(ro.speed)
+                mass.append(ro.mass)
+                field, last_z = ro.field, z[-1]
+            else:
+                ev = evaluate_lenia(cand, d.eval_steps, d.max_alive_fraction)
+                scores.append(ev.score)
+                viable.append(float(ev.viable))
+                alive.append(ev.alive_fraction)
+                speed.append(ev.speed)
+                mass.append(ev.mass)
+                field, last_z = ev.field, None
             if first is None:
-                first = np.asarray(ev.field)
+                first = np.asarray(field)
+                first_z = last_z
         return (
             float(np.mean(scores)),
             float(np.mean(viable)),
@@ -219,6 +264,7 @@ class SearchAdapter:
             float(np.mean(speed)),
             float(np.mean(mass)),
             first,
+            first_z,
         )
 
     def step(self, state: SearchState, spec: ExperimentSpec) -> SearchState:
@@ -242,12 +288,14 @@ class SearchAdapter:
         search_seeds = seeds_for(exp, 1, d.eval_seeds)
         xs, stats = [], []
         fields: list[F64 | None] = []
+        embs: list[F64 | None] = []
         for ui in u:
             params = decode(exp, ui)
-            score, viable, alive, speed, mass, fld = self._evaluate(exp, params, search_seeds)
+            score, viable, alive, speed, mass, fld, z = self._evaluate(exp, params, search_seeds)
             xs.append([float(v) for v in params.values()])
             stats.append((score, viable, alive, speed, mass))
             fields.append(fld)
+            embs.append(z)
         st = np.array(stats)  # (pop, 5)
         new_score = st[:, 0]
         gen = state.tick + 1
@@ -260,6 +308,10 @@ class SearchAdapter:
         state.speed = np.concatenate([state.speed, st[:, 3]])
         state.mass = np.concatenate([state.mass, st[:, 4]])
         state.parent = np.concatenate([state.parent, parents])
+        if exp.dynamics.objective in CLIP_OBJECTIVES:
+            new_z = np.stack([e if e is not None else np.full(EMBED_DIM, np.nan) for e in embs])
+            prev = state.embedding if state.embedding.size else np.zeros((0, EMBED_DIM))
+            state.embedding = np.vstack([prev, new_z])
         state.generation = np.concatenate([state.generation, np.full(len(u), gen, dtype=float)])
         if d.algorithm == "cma_es":
             assert state.cma is not None
@@ -292,7 +344,21 @@ class SearchAdapter:
         }
         if exp.qd is not None and state.elites is not None:
             state.last.update(qd.stats(state.elites, state))
+        if exp.dynamics.objective in CLIP_OBJECTIVES:
+            state.last["blank_score"] = self._blank_score(exp)
         return state
+
+    def _blank_score(self, exp: SearchExperiment) -> float:
+        """Score of an all-zero (empty) world: the level a dead candidate gets for free."""
+        from alife_lab.evolution import asal as asal_scores
+
+        assert exp.asal is not None
+        w = exp.target.world
+        emb = self._embedder(exp)
+        z = emb.embed_fields(np.zeros((exp.asal.frames, w.height, w.width)))
+        if exp.dynamics.objective == "lenia_clip_target":
+            return asal_scores.supervised_target(z, emb.embed_texts(list(exp.asal.prompts)))
+        return asal_scores.open_endedness(z)
 
     # ------------------------------------------------------------------ observation
 
@@ -325,6 +391,7 @@ class SearchAdapter:
             and np.array_equal(a.u, b.u)
             and np.array_equal(a.score, b.score)
             and np.array_equal(a.parent, b.parent)
+            and np.array_equal(a.embedding, b.embedding, equal_nan=True)
             and a.holdout == b.holdout
         )
         if a.cma is not None and b.cma is not None:
@@ -337,6 +404,8 @@ class SearchAdapter:
 
     def serialize_state(self, state: SearchState) -> dict[str, Any]:
         arrays: dict[str, Any] = {k: getattr(state, k) for k in _ARCHIVE}
+        if state.embedding.size:
+            arrays["embedding"] = state.embedding
         if state.best_field is not None:
             arrays["best_field"] = state.best_field
         return {
@@ -356,7 +425,7 @@ class SearchAdapter:
     def deserialize_state(self, payload: dict[str, Any], spec: ExperimentSpec) -> SearchState:
         exp = _se(spec)
         meta = payload["meta"]
-        if meta["serialize_version"] not in (1, SERIALIZE_VERSION):
+        if meta["serialize_version"] not in (1, 2, SERIALIZE_VERSION):
             raise ValueError("incompatible search checkpoint serialize_version")
         arr = dict(payload["arrays"])
         n = len(arr["score"])
@@ -379,6 +448,8 @@ class SearchAdapter:
             alive_fraction=archive["alive_fraction"], speed=archive["speed"],
             mass=archive["mass"], parent=archive["parent"], generation=archive["generation"],
         )  # fmt: skip
+        if "embedding" in arr:
+            state.embedding = np.asarray(arr["embedding"], dtype=np.float64).copy()
         if exp.qd is not None:
             state.elites = qd.build(state, exp.qd)
             state.grid = _grid(exp)

@@ -101,3 +101,42 @@ def evaluate_lenia(spec: ExperimentSpec, steps: int, max_alive_fraction: float) 
         survived=survived,
         field=st.cells,
     )
+
+
+@dataclass
+class FrameRollout:
+    frames: Any  # (K, H, W) float64 snapshots at the ends of K equal chunks
+    alive: bool  # some cell > 0.01 at the end and alive fraction <= max_alive_fraction
+    alive_fraction: float
+    speed: float  # centroid displacement over the second half / ticks
+    mass: float
+    field: Any
+
+
+def rollout_lenia_frames(
+    spec: ExperimentSpec, steps: int, frames: int, max_alive_fraction: float
+) -> FrameRollout:
+    """Run the unchanged Lenia adapter and keep ``frames`` snapshots at ticks
+    ``steps * k / frames`` (k = 1..frames), as ASAL's ``time_sampling=(frames, True)``."""
+    adapter = LeniaAdapter()
+    st = adapter.initialize(spec)
+    half = steps // 2
+    marks = {steps * (k + 1) // frames for k in range(frames)}
+    shots = []
+    hx = hy = 0.0
+    for t in range(1, steps + 1):
+        st = adapter.step(st, spec)
+        if t == half:
+            hx, hy = st.dx, st.dy
+        if t in marks:
+            shots.append(np.array(st.cells, dtype=np.float64))
+    frac = float((st.cells > ALIVE_THRESHOLD).mean())
+    alive = 0.0 < frac <= max_alive_fraction
+    return FrameRollout(
+        frames=np.stack(shots),
+        alive=alive,
+        alive_fraction=frac,
+        speed=math.hypot(st.dx - hx, st.dy - hy) / max(1, steps - half) if alive else 0.0,
+        mass=float(st.cells.sum()),
+        field=st.cells,
+    )

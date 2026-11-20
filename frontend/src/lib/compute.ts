@@ -6,7 +6,10 @@ import { create } from "zustand";
 export type ComputeMode = "cpu" | "gpu";
 
 /** Backends that run on a GPU (must match the controller's backend registry). */
-export const GPU_BACKENDS = ["cupy", "jax_cuda"] as const;
+export const GPU_BACKENDS = ["cupy", "jax_cuda", "torch_cuda"] as const;
+
+/** Numeric policies a preset may be switched to for a GPU backend (only float rounding differs). */
+export const OVERRIDABLE_POLICIES: Record<string, string> = { float32_jax_cpu: "float32_jax" };
 
 export const CPU_PROFILE = "local_cpu"; // GPU-free local_interactive profile
 export const GPU_PROFILE = "local_gpu";

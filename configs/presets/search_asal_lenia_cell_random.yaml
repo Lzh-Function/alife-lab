@@ -1,0 +1,13 @@
+preset:
+  id: search_asal_lenia_cell_random
+  scenario: search_asal_lenia.yaml
+  title_key: preset.search_asal_lenia_cell_random.title
+  description_key: preset.search_asal_lenia_cell_random.description
+  overrides:
+    experiment:
+      name: search_asal_lenia_cell_random
+      dynamics: {algorithm: random}
+  expected_observation: >-
+    Baseline with the same budget. In the pilot (seeds 101-102) random search matched or beat
+    CMA-ES on this objective.
+  negative_control: null

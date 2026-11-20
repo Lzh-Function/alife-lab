@@ -167,6 +167,8 @@ def inspect(state: SearchState, exp: SearchExperiment, query: dict[str, Any]) ->
         "search_seeds": seeds_for(exp, 1, exp.dynamics.eval_seeds),
         "holdout_seeds": seeds_for(exp, 2, exp.dynamics.holdout_seeds),
     }
+    if exp.asal is not None:
+        out["asal"] = exp.asal.model_dump(mode="json")
     if exp.qd is not None and state.elites is not None:
         filled = state.elites[state.elites >= 0]
         out["qd"] = {

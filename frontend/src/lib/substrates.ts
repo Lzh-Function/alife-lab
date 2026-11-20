@@ -152,7 +152,7 @@ export function initialTool(substrate: string): ToolState {
 export interface FormField {
   path: string; // dotted path under experiment.*
   labelKey: string;
-  kind: "int" | "float" | "select";
+  kind: "int" | "float" | "select" | "textlist"; // textlist: "a; b" <-> ["a", "b"]
   min?: number;
   max?: number;
   step?: number;
@@ -182,6 +182,8 @@ export const FORM_FIELDS: Record<SubstrateId, FormField[]> = {
     { path: "dynamics.eval_steps", labelKey: "form.search.eval_steps", kind: "int", min: 10, max: 20000 },
     { path: "dynamics.eval_seeds", labelKey: "form.search.eval_seeds", kind: "int", min: 1, max: 16 },
     { path: "dynamics.holdout_seeds", labelKey: "form.search.holdout_seeds", kind: "int", min: 0, max: 16 },
+    { path: "asal.prompts", labelKey: "form.search.prompts", kind: "textlist" },
+    { path: "asal.frames", labelKey: "form.search.frames", kind: "int", min: 1, max: 64 },
     { path: "runner.max_steps", labelKey: "form.search.generations", kind: "int", min: 1 },
     { path: "runner.checkpoint_interval", labelKey: "form.checkpoint_interval", kind: "int", min: 1 },
   ],

@@ -35,6 +35,7 @@ export interface SearchInspection {
   candidate?: SearchCandidate;
   best?: SearchCandidate;
   cma?: { mean: Record<string, number>; sigma: number };
+  asal?: { model: string; prompts: string[]; frames: number };
 }
 
 const short = (path: string) => path.split(".").pop() ?? path;
@@ -113,6 +114,11 @@ export function SearchInspector({ data, onOpenSpec, onRegister }: { data: Search
           {data.axes[1] ? ` / ${t("search.axis_y")} ${short(data.axes[1])}` : ""}
         </span>
       </p>
+      {data.asal && (
+        <p className="small muted" data-testid="search-asal">
+          CLIP ({data.asal.model}) · {data.objective === "lenia_clip_target" ? `${t("search.prompts")}: ${data.asal.prompts.map((p) => `"${p}"`).join(", ")}` : data.objective} · {data.asal.frames} frames
+        </p>
+      )}
       {data.qd && (
         <p className="small muted" data-testid="search-qd">
           {t("search.archive_summary").replace("{filled}", String(data.qd.filled)).replace("{cells}", String(data.qd.cells))} (

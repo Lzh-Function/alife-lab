@@ -65,6 +65,27 @@ than themselves fail `baseline` → rejected. On the development DB, the best ca
 random search seed 1 (m 0.1309, s 0.0162, speed 0.750) is also validated, so faster variants
 form a region rather than a single point.
 
+## ASAL objectives (ADR 0026, tests/reference/test_asal.py)
+Ports of the ASAL scores are checked on hand-computed cases (prompt tiling t mod P, zero-masked
+lower triangle of open-endedness, illumination). CLIP ViT-B/32 (OpenAI weights, SHA-256
+pinned) on a synthetic disc / stripes / noise set ranks each image's own description first.
+A CLIP search is deterministic and continues bitwise from a checkpoint; on the GPU a worker
+restart passes replay verification. Measured (RTX 5070, 128² Lenia, 200 ticks, 12 candidates
+per generation): ≈ 0.8–0.9 s per generation, peak torch pool 690 MiB, worker RSS 1.7 GB,
+16 CLIP images in 14 ms.
+
+Findings (exploratory, E0–E1):
+- The empty world scores 0.254 against "a biological cell"; best candidates reach only
+  0.26–0.29. Before `blank_score` existed, CMA-ES started in a region where every candidate
+  died and stayed on this blank plateau.
+- With random initial patches the best scores did not survive holdout seeds (0.27–0.285 →
+  0.247–0.258): they were lucky initial states. The presets therefore start from Orbium.
+- Prompt specificity: the best pattern of a pilot was as similar to "a car" (0.246) as to "a
+  biological cell" (0.245) and most similar to "a microscope image of cells" (0.274).
+- Sweep `search_asal_cma_vs_random` (seeds 1–3, 240 evaluations each): random 0.281 vs
+  CMA-ES 0.261 (Cliff's δ = −1, exact p = 0.10, the minimum for 3 vs 3); one CMA-ES run
+  stayed at the blank level. On this weak, rugged objective uniform sampling did better.
+
 ## Limitations
 Lenia is the only target. The centroid speed is not a creature tracker (separate blobs share a
 centroid). With the seed-free pattern initialisation, extra search/holdout seeds repeat the same

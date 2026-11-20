@@ -1,0 +1,47 @@
+# ASAL-style search (Kumar et al. 2024; scores ported from SakanaAI/asal @ 677ba0e, Apache-2.0)
+# applied to ALife Lab's single-channel Lenia. Deviations from the paper: single-channel
+# Lenia shown as grey RGB (the paper's Lenia has 3 channels and its own creature), parameters
+# m, s, R in a box instead of a 45+ dimensional genotype, full CMA-ES (purecma equations)
+# instead of Sep-CMA-ES, open_clip (PyTorch) instead of the Flax CLIP of `transformers`.
+# Every candidate starts from the catalogued Orbium pattern (seed-free, as ASAL starts from a
+# known creature), so holdout seeds would only repeat the same evaluation.
+# blank_score = the score of an empty world: a dead candidate reaches it for free.
+schema_version: 1
+experiment:
+  name: search_asal_lenia
+  mode: exploratory
+  substrate: search
+  seed: 1
+  target:
+    name: asal_candidate
+    mode: exploratory
+    substrate: lenia
+    seed: 0
+    world: {width: 128, height: 128, boundary: periodic}
+    dynamics:
+      T: 10
+      kernel: {R: 13, b: [1.0], core: polynomial}
+      growth: {m: 0.15, s: 0.015, function: polynomial}
+    initialization: {preset: pattern, pattern: O2u}
+  space:
+    - {path: dynamics.growth.m, low: 0.1, high: 0.4, scale: linear}
+    - {path: dynamics.growth.s, low: 0.01, high: 0.08, scale: log}
+    - {path: dynamics.kernel.R, low: 6, high: 20, scale: linear}
+  dynamics:
+    algorithm: cma_es
+    population: 12
+    sigma0: 0.3
+    objective: lenia_clip_target
+    numeric_policy: float32_clip_torch
+    max_alive_fraction: 1.0
+    eval_steps: 200
+    eval_seeds: 1
+    holdout_seeds: 0
+  asal:
+    model: openai_vit_b32
+    prompts: [a biological cell]
+    frames: 1
+  runner: {max_steps: 20, checkpoint_interval: 5}
+  observations:
+    metrics: [best_score, generation_best, generation_mean, viable_fraction, evaluations,
+              sigma, blank_score]

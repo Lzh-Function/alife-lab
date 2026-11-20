@@ -1,0 +1,16 @@
+preset:
+  id: search_asal_lenia_open_endedness
+  scenario: search_asal_lenia.yaml
+  title_key: preset.search_asal_lenia_open_endedness.title
+  description_key: preset.search_asal_lenia_open_endedness.description
+  overrides:
+    experiment:
+      name: search_asal_lenia_open_endedness
+      dynamics: {objective: lenia_clip_open_endedness}
+      asal: {model: openai_vit_b32, prompts: [], frames: 8}
+  expected_observation: >-
+    Exploratory. Rewards rollouts whose 8 sampled frames look unlike all earlier frames (ASAL
+    open-endedness). In the pilot the best candidates were ring patterns spreading over the
+    world (-0.79 vs blank_score -0.875). Growth and visual noise also score here; compare
+    with a static pattern before calling anything open-ended.
+  negative_control: blank_score (an empty world)

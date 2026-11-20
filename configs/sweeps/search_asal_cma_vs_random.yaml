@@ -1,0 +1,17 @@
+# Exploratory comparison on the ASAL "a biological cell" objective (CLIP on the GPU), equal
+# budget 12 x 20 evaluations. Pilot seeds 101-102 (random >= CMA-ES) are excluded. No
+# hypothesis is pre-declared: the objective is weak (best scores only ~0.01-0.03 above the
+# blank-world score) and not prompt-specific in the pilot.
+schema_version: 1
+sweep:
+  name: search_asal_cma_vs_random
+  base_preset: search_asal_lenia_cell
+  seeds: [1, 2, 3]
+  factors:
+    - path: dynamics.algorithm
+      values: [cma_es, random]
+      labels: [cma_es, random]
+  reference_condition: 1
+  endpoint: {metric: best_score, at: final}
+  design: exploratory
+  profile_id: local_gpu

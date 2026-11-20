@@ -40,7 +40,27 @@ class GpuMemoryTracker:
                 self.peak_pool_bytes, int(cp.get_default_memory_pool().total_bytes())
             )
 
+    def _torch_snapshot(self) -> dict[str, Any] | None:
+        torch = sys.modules.get("torch") if self.backend == "torch_cuda" else None
+        if torch is None or not torch.cuda.is_initialized():
+            return None
+        used = int(torch.cuda.memory_allocated())
+        held = int(torch.cuda.memory_reserved())
+        self.peak_pool_bytes = max(self.peak_pool_bytes, int(torch.cuda.max_memory_reserved()))
+        free, total = torch.cuda.mem_get_info()
+        return {
+            "pool_used_mib": round(used / MIB, 3),
+            "pool_held_mib": round(held / MIB, 3),
+            "peak_pool_held_mib": round(self.peak_pool_bytes / MIB, 3),
+            "peak_pool_held_bytes": self.peak_pool_bytes,
+            "device_used_mib": round((total - free) / MIB, 1),
+            "device_total_mib": round(total / MIB, 1),
+            "method": "torch caching allocator (reserved) + cudaMemGetInfo",
+        }
+
     def snapshot(self) -> dict[str, Any] | None:
+        if self.backend == "torch_cuda":
+            return self._torch_snapshot()
         stats = self._jax_stats()
         if stats is not None:  # XLA allocator statistics (preallocation disabled)
             in_use = int(stats.get("bytes_in_use", 0))
