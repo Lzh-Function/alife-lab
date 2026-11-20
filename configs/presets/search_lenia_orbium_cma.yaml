@@ -1,0 +1,11 @@
+preset:
+  id: search_lenia_orbium_cma
+  scenario: search_lenia_orbium.yaml
+  title_key: preset.search_lenia_orbium_cma.title
+  description_key: preset.search_lenia_orbium_cma.description
+  overrides: {}
+  expected_observation: >-
+    CMA-ES concentrates its samples on the narrow diagonal band of (m, s) where Orbium
+    survives; best_score rises above the 0.72 of the catalogued parameters (seeds 1-3 of the
+    development run reached 0.87 near m = 0.137, s = 0.018 within 25 generations).
+  negative_control: preset search_lenia_orbium_random (same budget, uniform sampling)

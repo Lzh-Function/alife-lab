@@ -5,6 +5,7 @@ import { useRunStream, type GpuMemory } from "../lib/stream";
 import { useT } from "../i18n";
 import { ToolBar, WorldView, type WorldViewHandle } from "./WorldView";
 import { Help, metricHelp } from "./Help";
+import { CPU_PROFILE } from "../lib/compute";
 import { SUBSTRATE_GUIDE } from "../guide/content";
 import { displayWorld, initialTool, type ToolState } from "../lib/substrates";
 import { Sparkline } from "./Sparkline";
@@ -167,6 +168,16 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
       .then((d) => {
         setTrace(d.trace ?? null);
         setInspectError(null);
+      })
+      .catch((e) => setInspectError(e instanceof ApiError ? e.message : String(e)));
+  };
+
+  // search: open a candidate as an ordinary run of the target world (paused, on the CPU).
+  const onOpenSpec = (spec: Record<string, unknown>) => {
+    api
+      .create({ spec, profile_id: CPU_PROFILE, ticks_per_second: 20, auto_start: true, start_paused: true })
+      .then((run) => {
+        window.location.hash = `/lab/${run.id}`;
       })
       .catch((e) => setInspectError(e instanceof ApiError ? e.message : String(e)));
   };
@@ -334,6 +345,7 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
           onTrace={summary.substrate === "bff" ? onTrace : undefined}
           onAssay={summary.substrate === "bff" ? onAssay : undefined}
           assayPending={assayPending}
+          onOpenSpec={summary.substrate === "search" ? onOpenSpec : undefined}
           onReactionToggle={
             summary.substrate === "reaction_network" && live
               ? (id, enable) => {

@@ -1,0 +1,36 @@
+# Search (external optimisation) over the growth parameters of Lenia, starting every candidate
+# from the catalogued Orbium (O2u) pattern in a 64 x 64 world. The objective
+# lenia_moving_localized (v1) rewards candidates that stay alive and concentrated for the whole
+# evaluation and move fast; the Lenia rule itself is unchanged and has no reward.
+# The pattern initialisation is seed-free, so one search seed suffices and holdout seeds
+# would repeat the same evaluation (0 here).
+schema_version: 1
+experiment:
+  name: search_lenia_orbium
+  mode: exploratory
+  substrate: search
+  seed: 1
+  target:
+    name: orbium_candidate
+    mode: exploratory
+    substrate: lenia
+    seed: 0
+    world: {width: 64, height: 64, boundary: periodic}
+    dynamics:
+      T: 10
+      kernel: {R: 13, b: [1.0], core: polynomial}
+      growth: {m: 0.15, s: 0.015, function: polynomial}
+    initialization: {preset: pattern, pattern: O2u}
+  space:
+    - {path: dynamics.growth.m, low: 0.1, high: 0.3, scale: linear}
+    - {path: dynamics.growth.s, low: 0.005, high: 0.05, scale: log}
+  dynamics:
+    algorithm: cma_es
+    population: 12
+    sigma0: 0.3
+    objective: lenia_moving_localized
+    max_alive_fraction: 0.3
+    eval_steps: 300
+    eval_seeds: 1
+    holdout_seeds: 0
+  runner: {max_steps: 25, checkpoint_interval: 5}

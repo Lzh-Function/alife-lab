@@ -1,11 +1,12 @@
 import { useT } from "../i18n";
 import { MultiLine } from "./MultiLine";
+import { SearchInspector, type SearchInspection } from "./SearchInspector";
 
 // Read-only inspection results (conway cell / boids neighbourhood).
 type Vec = { x: number; y: number; magnitude: number };
 type Boid = { id: number; x: number; y: number; vx: number; vy: number; speed: number; heading_deg: number; distance: number };
 
-export interface Inspection {
+export interface Inspection extends Partial<SearchInspection> {
   substrate: string;
   tick: number;
   source?: { method: string; base_tick?: number; interventions_replayed?: number };
@@ -120,6 +121,7 @@ export function InspectorPanel({
   onAssay,
   assayPending = false,
   onReactionToggle,
+  onOpenSpec,
 }: {
   data: Inspection | null;
   error: string | null;
@@ -127,6 +129,7 @@ export function InspectorPanel({
   onAssay?: () => void;
   assayPending?: boolean;
   onReactionToggle?: (reactionId: string, enable: boolean) => void;
+  onOpenSpec?: (spec: Record<string, unknown>) => void;
 }) {
   const t = useT();
   return (
@@ -252,6 +255,7 @@ export function InspectorPanel({
               )}
             </>
           )}
+          {data.substrate === "search" && data.axes && <SearchInspector data={data as SearchInspection} onOpenSpec={onOpenSpec} />}
           {data.substrate === "lenia" && data.value !== undefined && (
             <dl className="stats small" data-testid="inspector-field">
               <dt>{t("inspector.cell")}</dt>

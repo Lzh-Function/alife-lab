@@ -39,6 +39,7 @@ dev = [
     "mypy>=1.18",
     "types-pyyaml>=6.0",
     "types-psutil>=7.0",
+    "cma>=4.5",
 ]
 
 [build-system]

@@ -36,6 +36,7 @@ ALWAYS_COMPUTED = {
     "pd_nca": set(),
     "protocell": {"population"},
     "agent_world": {"population"},
+    "search": set(),
 }
 UNIT_NOTE = (
     "Unit of analysis: one independently seeded run per value. Time points within a run are not "

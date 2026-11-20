@@ -1,0 +1,18 @@
+# Fair comparison of two search algorithms with the same evaluation budget
+# (12 candidates x 25 generations x 1 seed, 300 Lenia ticks each).
+schema_version: 1
+sweep:
+  name: search_cma_vs_random
+  base_preset: search_lenia_orbium_cma
+  seeds: [1, 2, 3, 4, 5]
+  factors:
+    - path: dynamics.algorithm
+      values: [cma_es, random]
+      labels: [cma_es, random]
+  reference_condition: 1
+  endpoint: {metric: best_score, at: final}
+  design: confirmatory
+  hypothesis: >-
+    With the same budget of 300 evaluations, CMA-ES reaches a higher final best_score than
+    uniform random search on the Orbium (m, s) task; one value per seeded search run.
+  profile_id: cpu_dev

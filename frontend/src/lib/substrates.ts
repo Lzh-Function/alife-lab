@@ -4,12 +4,12 @@
 import type { Frame } from "./api";
 import { popcount } from "./api";
 
-export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network" | "nca_train" | "nca" | "pd_nca" | "protocell" | "agent_world";
+export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network" | "nca_train" | "nca" | "pd_nca" | "protocell" | "agent_world" | "search";
 
 /** Substrates rendered as continuous particles (vs. grids). */
 export const PARTICLE_SUBSTRATES = new Set(["boids", "particle_life"]);
 /** Substrates rendered as a continuous scalar field (codec field_u8). */
-export const FIELD_SUBSTRATES = new Set(["lenia", "flow_lenia", "gray_scott", "physarum", "reaction_network", "nca_train", "nca", "pd_nca", "protocell", "agent_world"]);
+export const FIELD_SUBSTRATES = new Set(["lenia", "flow_lenia", "gray_scott", "physarum", "reaction_network", "nca_train", "nca", "pd_nca", "protocell", "agent_world", "search"]);
 /** Non-spatial substrates whose display is a species x time image (rows = species). */
 export const ROW_DISPLAY_SUBSTRATES = new Set(["reaction_network"]);
 
@@ -22,6 +22,12 @@ export function displayWorld(substrate: string, experiment: Record<string, unkno
     const pad = (substrate === "nca" ? experiment.pad : (experiment.dynamics as { pad?: number } | undefined)?.pad) as number | undefined;
     const side = (target?.size ?? 40) + 2 * (pad ?? 8);
     return { width: side, height: side };
+  }
+  if (substrate === "search") {
+    // Parameter map (side = target height) + the best candidate's world, side by side.
+    const target = experiment.target as { world?: { width: number; height: number } } | undefined;
+    const w = target?.world ?? { width: 64, height: 64 };
+    return { width: w.height + w.width, height: w.height };
   }
   if (substrate === "reaction_network") {
     const species = ((experiment.dynamics as { species?: unknown[] } | undefined)?.species ?? []).length;
@@ -123,6 +129,11 @@ export const TOOLS: Record<SubstrateId, ToolDescriptor> = {
     radius: { min: 1, max: 24, step: 1, initial: 6 },
     noteKey: "lab.tool.nca_note",
   },
+  search: {
+    modes: ["off", "inspect"],
+    radius: { min: 0, max: 0, step: 1, initial: 0 },
+    noteKey: "lab.tool.search_note",
+  },
   particle_life: {
     modes: ["off", "inspect", "spawn", "remove"],
     radius: { min: 1, max: 40, step: 1, initial: 6 },
@@ -152,6 +163,25 @@ const RUNNER: FormField[] = [
 ];
 
 export const FORM_FIELDS: Record<SubstrateId, FormField[]> = {
+  search: [
+    { path: "seed", labelKey: "form.seed", kind: "int", min: 0 },
+    {
+      path: "dynamics.algorithm",
+      labelKey: "form.search.algorithm",
+      kind: "select",
+      options: [
+        { value: "cma_es", labelKey: "form.search.algorithm.cma_es" },
+        { value: "random", labelKey: "form.search.algorithm.random" },
+      ],
+    },
+    { path: "dynamics.population", labelKey: "form.search.population", kind: "int", min: 2, max: 256 },
+    { path: "dynamics.sigma0", labelKey: "form.search.sigma0", kind: "float", min: 0.01, max: 1, step: 0.05 },
+    { path: "dynamics.eval_steps", labelKey: "form.search.eval_steps", kind: "int", min: 10, max: 20000 },
+    { path: "dynamics.eval_seeds", labelKey: "form.search.eval_seeds", kind: "int", min: 1, max: 16 },
+    { path: "dynamics.holdout_seeds", labelKey: "form.search.holdout_seeds", kind: "int", min: 0, max: 16 },
+    { path: "runner.max_steps", labelKey: "form.search.generations", kind: "int", min: 1 },
+    { path: "runner.checkpoint_interval", labelKey: "form.checkpoint_interval", kind: "int", min: 1 },
+  ],
   conway: [
     { path: "seed", labelKey: "form.seed", kind: "int", min: 0 },
     { path: "world.width", labelKey: "form.width", kind: "int", min: 8, max: 1024 },

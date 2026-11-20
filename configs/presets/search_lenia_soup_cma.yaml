@@ -1,0 +1,11 @@
+preset:
+  id: search_lenia_soup_cma
+  scenario: search_lenia_soup.yaml
+  title_key: preset.search_lenia_soup_cma.title
+  description_key: preset.search_lenia_soup_cma.description
+  overrides: {}
+  expected_observation: >-
+    Exploratory: random patches rarely settle into a single moving creature, so most
+    candidates only earn survival credit. Compare best_score with holdout_best: a large gap
+    means the best score came from lucky initial patches.
+  negative_control: preset search_lenia_orbium_random (uniform sampling baseline)

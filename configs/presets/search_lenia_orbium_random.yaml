@@ -1,0 +1,13 @@
+preset:
+  id: search_lenia_orbium_random
+  scenario: search_lenia_orbium.yaml
+  title_key: preset.search_lenia_orbium_random.title
+  description_key: preset.search_lenia_orbium_random.description
+  overrides:
+    experiment:
+      name: search_lenia_orbium_random
+      dynamics: {algorithm: random}
+  expected_observation: >-
+    Baseline with the same budget (12 x 25 evaluations): uniform samples outline the whole
+    viable band but rarely land in its best part; only a few percent of samples are viable.
+  negative_control: null

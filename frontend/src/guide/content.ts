@@ -18,7 +18,7 @@ export interface SubstrateGuide {
   figure?: string;
 }
 
-export type CategoryId = "ca" | "chem" | "swarm" | "evo" | "nca";
+export type CategoryId = "ca" | "chem" | "swarm" | "evo" | "nca" | "search";
 
 export const CATEGORIES: Array<{ id: CategoryId; title: string; note: string }> = [
   { id: "ca", title: "セルオートマトン", note: "マス目の世界。近くのマスだけを見て、全部のマスが同時に変わる。" },
@@ -26,6 +26,7 @@ export const CATEGORIES: Array<{ id: CategoryId; title: string; note: string }> 
   { id: "swarm", title: "粒子・群れ", note: "動き回る粒や個体が、近くの相手や環境に反応する世界。" },
   { id: "evo", title: "プログラム・進化", note: "コピーされ、少し変わり、増えたり減ったりする世界。" },
   { id: "nca", title: "学習するセル（NCA）", note: "マスの更新ルールそのものをニューラルネットで学習させる世界。" },
+  { id: "search", title: "自動探索", note: "ほかの世界の設定を、コンピュータに自動で試させて「面白い設定」を探す道具。" },
 ];
 
 export const SUBSTRATE_GUIDE: Record<string, SubstrateGuide> = {
@@ -321,6 +322,33 @@ export const SUBSTRATE_GUIDE: Record<string, SubstrateGuide> = {
     canSay: "この条件では、学習を続けるNCAどうしが共存しながら陣地を変え続けた（少数seedでの観察）。",
     cannotSay: "協力が生まれた。協力と言うには、相手を取り除いたときに損をするかなどの検証が必要です。",
   },
+  search: {
+    slug: "search",
+    title: "自動探索（CMA-ES とランダム探索）",
+    category: "search",
+    level: 2,
+    atlas: "E13",
+    oneLine: "ほかの世界（今は Lenia）の設定をたくさん自動で試し、「決めておいた条件」によく合う設定を探す道具です。",
+    what:
+      "1世代ごとに、Lenia の設定（成長の中心 m、成長の幅 s など）の候補をいくつか作り、それぞれの Lenia を裏で数百ステップ動かして採点します。採点のルールは実験を始める前に決めておき、途中では変えません。CMA-ES は、点数の良かった候補の近くを次に重点的に試す「進化戦略」です。ランダム探索は、範囲の中からでたらめに選ぶだけの比較用の方法です。Lenia のルールそのものには手を加えず、採点は外から眺めて行います。",
+    watch: [
+      "左の地図：横軸が m、縦軸が s。点が1つの候補で、色が明るいほど高得点、灰色は途中で崩れた候補です（明るい灰色ほど長く生き延びた）。",
+      "CMA-ES では、点が「生き物が住める細い帯」に集まっていきます。赤い点は CMA-ES が今いちばん有望だと考えている場所です。",
+      "右側は、これまでの最良候補の最後の様子です。",
+      "「これまでの最高得点」のグラフが上がっていくかを見ます。",
+    ],
+    tryThis: [
+      "CMA-ES とランダム探索（比較用）を同じ回数で動かして、最高得点と「生き残った候補の割合」を比べる。",
+      "「検査」を選んで地図の点をクリックし、その候補を「普通の実験として開く」で実際に動かしてみる。",
+      "スイープで seed を変えて何回か探索し、CMA-ES の方が本当に良いのかを統計で確かめる。",
+      "難しい版（ランダムな初期状態）で、最高得点と holdout 得点の差を見る。",
+    ],
+    controls:
+      "同じ評価回数のランダム探索が比較用です。「賢い探索方法」と言うには、同じ手間でランダムより良い結果を出す必要があります。また、探索に使っていない seed（holdout）で最良候補を採点し直し、高得点がまぐれでないかを確かめます。",
+    canSay: "決めておいた採点ルールのもとでは、この範囲でこの設定がいちばん高い点を取った（探索で見つけた「候補」）。",
+    cannotSay:
+      "新しい生き物を発見した。採点ルールはずる賢くすり抜けられることがあります（実際、最初の採点ルールは、世界中に輪を敷き詰めた模様に高得点を与えてしまいました）。見つけた候補は、普通の実験として開いて自分の目と別の計測で確かめましょう。",
+  },
 };
 
 // 設定パラメータのやさしい説明。キーは "<基盤>:<path>"、全基盤共通は "*:<path>"。
@@ -390,6 +418,14 @@ export const PARAM_HELP: Record<string, string> = {
   "agent_world:dynamics.controller.kind": "行動を決める仕組み。小さなMLP（学習・進化できる）、手書きの基準、ランダム（比較用）。",
   "agent_world:dynamics.controller.mode": "MLP の変わり方。集団進化：子に少し変えて受け継ぐ。寿命内学習：一生のうちに学ぶ（子には伝わらない）。固定：変わらない。",
   "agent_world:dynamics.food.regrowth": "食べられた食物が元に戻る速さ。",
+  "search:seed": "探索の乱数の種。候補の選び方が変わります。違う seed で何回か探索すると、結果が偶然かどうか分かります。",
+  "search:dynamics.algorithm": "候補の選び方。CMA-ES：点数の良かった候補の近くを重点的に試す。ランダム探索：範囲の中からでたらめに選ぶ（比較用）。",
+  "search:dynamics.population": "1世代で試す候補の数。多いほど1世代が遅くなりますが、見落としが減ります。",
+  "search:dynamics.sigma0": "CMA-ES が最初にどれくらい広く探すか（範囲全体を1としたときの大きさ）。",
+  "search:dynamics.eval_steps": "1つの候補の世界を何ステップ動かして採点するか。長いほど「すぐ崩れる」候補を見分けやすいが、遅くなります。",
+  "search:dynamics.eval_seeds": "1つの候補を何通りの初期状態（seed）で採点し、平均するか。初期状態がでたらめな場合は多いほど公平です。",
+  "search:dynamics.holdout_seeds": "最良の候補だけを、探索に使っていない別の seed で採点し直す数。高得点がまぐれでないかの確認用で、探索そのものには影響しません。",
+  "search:runner.max_steps": "何世代まで探索するか。評価の総回数は「候補数 × seed の数 × 世代数」です。",
 };
 
 // 計測値のやさしい説明。キーは計測値ID、または "<基盤>:<ID>"（基盤ごとに意味が違う場合）。
@@ -462,6 +498,13 @@ export const METRIC_HELP: Record<string, string> = {
   forward_rate: "まっすぐ進んだ個体の割合。",
   mean_reward: "平均の報酬（その tick に自分のエネルギーがどれだけ増えたか）。",
   genome_spread: "遺伝的な多様性（重みのばらつき）。",
+  best_score: "これまでに試した全候補の中での最高得点。止まっている Orbium は 0.1、動くと 0.1 ＋ 速さ。途中で崩れた候補は、生き延びた時間に応じて最大 0.1 未満。",
+  generation_best: "この世代で試した候補の最高得点。",
+  generation_mean: "この世代の候補の平均得点。探索が良い場所に集まると上がります。",
+  viable_fraction: "この世代で、最後まで崩れず・広がりすぎず・1か所にまとまっていた候補の割合。",
+  evaluations: "これまでに世界を動かして採点した回数（候補 × seed）。比べる探索どうしは、この回数をそろえます。",
+  holdout_best: "最良候補を、探索に使っていない seed で採点し直した点。最高得点より大きく低いなら、高得点はまぐれだった可能性があります。",
+  sigma: "CMA-ES が今どれくらい広く探しているか。良い場所が見つかると小さくなります（範囲全体を1とした大きさ）。",
 };
 
 export const BASICS: Array<{ title: string; body: string[] }> = [

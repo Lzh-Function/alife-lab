@@ -16,7 +16,7 @@ from alife_lab.core.spec import ExperimentSpec
 @dataclass(frozen=True)
 class Capabilities:
     state_kind: Literal["grid", "particles", "rigid_body", "program_soup", "network"]
-    clock_unit: Literal["tick", "epoch", "physics_step", "optimizer_step"]
+    clock_unit: Literal["tick", "epoch", "physics_step", "optimizer_step", "generation"]
     supports_pause: bool
     supports_interventions: bool
     supports_inspection: bool

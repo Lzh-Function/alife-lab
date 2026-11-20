@@ -154,6 +154,7 @@ _ALLOWED_OVERRIDE_KEYS = {
     "runner",
     "dynamics",
     "observations",
+    "space",
 }
 
 

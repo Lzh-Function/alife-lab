@@ -1,0 +1,34 @@
+# Harder, exploratory search: random initial patches (seeded), so a candidate is scored on
+# three common search seeds and its best is re-scored on four disjoint holdout seeds. The gap
+# between best_score and holdout_best measures how much of the best score was luck.
+schema_version: 1
+experiment:
+  name: search_lenia_soup
+  mode: exploratory
+  substrate: search
+  seed: 1
+  target:
+    name: soup_candidate
+    mode: exploratory
+    substrate: lenia
+    seed: 0
+    world: {width: 64, height: 64, boundary: periodic}
+    dynamics:
+      T: 10
+      kernel: {R: 13, b: [1.0], core: polynomial}
+      growth: {m: 0.15, s: 0.015, function: polynomial}
+    initialization: {preset: random, size: 32, density: 0.5}
+  space:
+    - {path: dynamics.growth.m, low: 0.1, high: 0.3, scale: linear}
+    - {path: dynamics.growth.s, low: 0.005, high: 0.05, scale: log}
+    - {path: initialization.density, low: 0.1, high: 1.0, scale: linear}
+  dynamics:
+    algorithm: cma_es
+    population: 12
+    sigma0: 0.3
+    objective: lenia_moving_localized
+    max_alive_fraction: 0.3
+    eval_steps: 300
+    eval_seeds: 3
+    holdout_seeds: 4
+  runner: {max_steps: 30, checkpoint_interval: 5}

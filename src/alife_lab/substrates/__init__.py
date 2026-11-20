@@ -23,6 +23,7 @@ from alife_lab.substrates.reaction_network.adapter import (
     REACTION_NETWORK_MANIFEST,
     ReactionNetworkAdapter,
 )
+from alife_lab.substrates.search.adapter import SEARCH_MANIFEST, SearchAdapter
 
 _REGISTRY: dict[str, tuple[PluginManifest, type[SubstrateAdapter]]] = {
     "conway": (CONWAY_MANIFEST, ConwayAdapter),
@@ -39,6 +40,7 @@ _REGISTRY: dict[str, tuple[PluginManifest, type[SubstrateAdapter]]] = {
     "pd_nca": (PD_NCA_MANIFEST, PDNCAAdapter),
     "protocell": (PROTOCELL_MANIFEST, ProtocellAdapter),
     "agent_world": (AGENT_WORLD_MANIFEST, AgentWorldAdapter),
+    "search": (SEARCH_MANIFEST, SearchAdapter),
 }
 
 

@@ -1163,6 +1163,113 @@ class AgentWorldExperiment(_Frozen):
         return self
 
 
+# --------------------------------------------------------------------------- #
+# Search: an external optimisation run over the parameters of a target world
+# --------------------------------------------------------------------------- #
+
+MAX_SEARCH_PARAMS = 8
+# Parameters a search may vary, per target substrate: path -> integer-valued?
+SEARCH_PATHS: dict[str, dict[str, bool]] = {
+    "lenia": {
+        "dynamics.growth.m": False,
+        "dynamics.growth.s": False,
+        "dynamics.T": True,
+        "dynamics.kernel.R": True,
+        "initialization.density": False,
+        "initialization.size": True,
+    },
+}
+
+
+class SearchParam(_Frozen):
+    path: Annotated[str, Field(pattern=r"^[a-z_]{1,32}(\.[a-zA-Z_]{1,32}){1,3}$")]
+    low: float
+    high: float
+    scale: Literal["linear", "log"] = "linear"
+
+    @model_validator(mode="after")
+    def _check(self) -> SearchParam:
+        if not self.low < self.high:
+            raise ValueError(f"{self.path}: low must be < high")
+        if self.scale == "log" and self.low <= 0:
+            raise ValueError(f"{self.path}: log scale needs low > 0")
+        return self
+
+
+class SearchDynamics(_Frozen):
+    clock_unit: Literal["generation"] = "generation"
+    numeric_policy: Literal["float64_cpu"] = "float64_cpu"
+    # random: uniform sampling of the box (baseline); cma_es: CMA-ES (Hansen's purecma
+    # equations, positive weights) in the normalised box with a quadratic bound penalty.
+    algorithm: Literal["random", "cma_es"] = "cma_es"
+    population: Annotated[int, Field(ge=2, le=256)] = 12
+    sigma0: Annotated[float, Field(gt=0.0, le=1.0)] = 0.3  # in normalised [0, 1] units
+    # Pre-declared objective (versioned in the adapter); never changed during a run.
+    objective: Literal["lenia_moving_localized"] = "lenia_moving_localized"
+    max_alive_fraction: Annotated[float, Field(gt=0.0, le=1.0)] = 0.3
+    eval_steps: Annotated[int, Field(ge=10, le=20_000)] = 300
+    # Common random numbers: every candidate is scored on the same search seeds; the best
+    # candidate is re-scored on disjoint holdout seeds that never drive the search.
+    eval_seeds: Annotated[int, Field(ge=1, le=16)] = 2
+    holdout_seeds: Annotated[int, Field(ge=0, le=16)] = 4
+
+
+SearchMetric = Literal[
+    "best_score",
+    "generation_best",
+    "generation_mean",
+    "viable_fraction",
+    "evaluations",
+    "holdout_best",
+    "sigma",
+]
+
+
+class SearchObservation(_Frozen):
+    metrics: tuple[SearchMetric, ...] = (
+        "best_score",
+        "generation_best",
+        "generation_mean",
+        "viable_fraction",
+        "evaluations",
+        "holdout_best",
+        "sigma",
+    )
+
+
+class SearchExperiment(_Frozen):
+    """Optimisation run: proposes target-world specs, runs them headless and scores them with a
+    pre-declared objective. The target substrate itself is unchanged (no reward inside it)."""
+
+    name: _NAME
+    mode: Literal["exploratory"] = "exploratory"
+    substrate: Literal["search"]
+    seed: _SEED
+    # The base world; its seed is replaced by the evaluation seeds.
+    target: LeniaExperiment
+    space: Annotated[list[SearchParam], Field(min_length=1, max_length=MAX_SEARCH_PARAMS)]
+    dynamics: SearchDynamics = SearchDynamics()
+    runner: RunnerSpec = RunnerSpec(max_steps=25, checkpoint_interval=5)
+    observations: SearchObservation = SearchObservation()
+
+    @model_validator(mode="after")
+    def _check(self) -> SearchExperiment:
+        allowed = SEARCH_PATHS[self.target.substrate]
+        paths = [p.path for p in self.space]
+        if len(set(paths)) != len(paths):
+            raise ValueError("search parameters must be distinct")
+        for p in self.space:
+            if p.path not in allowed:
+                raise ValueError(f"{p.path!r} is not searchable for {self.target.substrate!r}")
+        d = self.dynamics
+        if d.objective.split("_", 1)[0] != self.target.substrate:
+            raise ValueError("the objective does not belong to the target substrate")
+        evaluations = d.population * d.eval_seeds * self.runner.max_steps
+        if evaluations * d.eval_steps > 2_000_000_000:
+            raise ValueError("search budget too large (population*seeds*generations*steps)")
+        return self
+
+
 AnyExperiment = Annotated[
     ConwayExperiment
     | BoidsExperiment
@@ -1177,7 +1284,8 @@ AnyExperiment = Annotated[
     | NCAExperiment
     | PDNCAExperiment
     | ProtocellExperiment
-    | AgentWorldExperiment,
+    | AgentWorldExperiment
+    | SearchExperiment,
     Field(discriminator="substrate"),
 ]
 
