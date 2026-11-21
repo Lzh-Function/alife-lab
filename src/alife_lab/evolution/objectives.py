@@ -113,24 +113,56 @@ class FrameRollout:
     field: Any
 
 
+def centred_crop(img: Any, weights: Any, side: int) -> Any:
+    """Square of ``side`` around the circular centroid of ``weights`` (periodic world).
+    ``img`` is (H, W) or (H, W, 3); an empty world is cropped around the world centre."""
+    h, w = weights.shape
+    centre = _circular_centroid(weights)
+    cx, cy = (w / 2, h / 2) if centre is None else centre
+    rolled = np.roll(img, (h // 2 - round(cy), w // 2 - round(cx)), axis=(0, 1))
+    y0, x0 = h // 2 - side // 2, w // 2 - side // 2
+    return rolled[y0 : y0 + side, x0 : x0 + side]
+
+
 def rollout_lenia_frames(
-    spec: ExperimentSpec, steps: int, frames: int, max_alive_fraction: float
+    spec: ExperimentSpec,
+    steps: int,
+    frames: int,
+    max_alive_fraction: float,
+    crop: int | None = None,
 ) -> FrameRollout:
-    """Run the unchanged Lenia adapter and keep ``frames`` snapshots at ticks
-    ``steps * k / frames`` (k = 1..frames), as ASAL's ``time_sampling=(frames, True)``."""
-    adapter = LeniaAdapter()
+    """Run the target's unchanged adapter (Lenia or multichannel Lenia) and keep ``frames``
+    snapshots at ticks ``steps * k / frames`` (k = 1..frames), as ASAL's
+    ``time_sampling=(frames, True)``. Lenia frames are grey (H, W); multichannel frames are RGB
+    (H, W, 3) with channels 0/1/2 as red/green/blue. ``crop`` cuts a square centred on the
+    pattern (ASAL shows its multichannel Lenia as a 64 x 64 centred "phenotype")."""
+    from alife_lab.core.spec import LeniaMCExperiment
+    from alife_lab.substrates.lenia_mc.adapter import ALIVE_THRESHOLD as MC_ALIVE
+    from alife_lab.substrates.lenia_mc.adapter import LeniaMCAdapter
+
+    multi = isinstance(spec.experiment, LeniaMCExperiment)
+    adapter: Any = LeniaMCAdapter() if multi else LeniaAdapter()
     st = adapter.initialize(spec)
     half = steps // 2
     marks = {steps * (k + 1) // frames for k in range(frames)}
     shots = []
     hx = hy = 0.0
+
+    def snapshot() -> tuple[Any, Any]:
+        if multi:
+            return LeniaMCAdapter.rgb(st.cells), st.cells.sum(axis=0)
+        cells = np.array(st.cells, dtype=np.float64)
+        return cells, cells
+
     for t in range(1, steps + 1):
         st = adapter.step(st, spec)
         if t == half:
             hx, hy = st.dx, st.dy
         if t in marks:
-            shots.append(np.array(st.cells, dtype=np.float64))
-    frac = float((st.cells > ALIVE_THRESHOLD).mean())
+            img, weights = snapshot()
+            shots.append(centred_crop(img, weights, crop) if crop else img)
+    img, weights = snapshot()
+    frac = float((weights > (MC_ALIVE if multi else ALIVE_THRESHOLD)).mean())
     alive = 0.0 < frac <= max_alive_fraction
     return FrameRollout(
         frames=np.stack(shots),
@@ -138,5 +170,5 @@ def rollout_lenia_frames(
         alive_fraction=frac,
         speed=math.hypot(st.dx - hx, st.dy - hy) / max(1, steps - half) if alive else 0.0,
         mass=float(st.cells.sum()),
-        field=st.cells,
+        field=img,
     )

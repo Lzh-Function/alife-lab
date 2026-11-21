@@ -90,6 +90,11 @@ class DiscoveryService:
         search = spec.experiment
         if not isinstance(search, SearchExperiment):
             raise ControllerError("discoveries are registered from search runs")
+        if search.target.substrate != "lenia" or search.asal is not None:
+            raise ControllerError(
+                "assay plan v1 covers single-channel Lenia candidates of non-CLIP searches only "
+                "(a prompt-specificity assay for CLIP searches is planned)"
+            )
         source_tick = int(run["clock"]["value"]) if tick is None else int(tick)
         info = await self.c.inspect(run_id, {"candidate": int(candidate)}, source_tick)
         cand = info.get("candidate")

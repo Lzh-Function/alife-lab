@@ -86,6 +86,19 @@ Findings (exploratory, E0–E1):
   CMA-ES 0.261 (Cliff's δ = −1, exact p = 0.10, the minimum for 3 vs 3); one CMA-ES run
   stayed at the blank level. On this weak, rugged objective uniform sampling did better.
 
+## ASAL on multichannel Lenia (ADR 0027)
+Configured like `SakanaAI/asal` (5N7KKM, 128², 256 ticks, prompts "a biological cell" /
+"two biological cells" on 2 frames, 64 × 64 centred RGB crop, 45 kernel parameters within
+±1 logit, population 16, step 0.1 logit). Pilot seed 101 (excluded from the sweep): CMA-ES
+0.293 vs random 0.285 after 40 generations; the creature itself scores 0.244, an empty
+crop 0.253. Prompt specificity of the pilot's best CMA-ES pattern: cell prompts 0.290–0.301
+vs "a car" 0.212, "a city at night" 0.195, "a cat" 0.208 (single-channel Lenia: 0.245 vs
+0.246). Confirmatory sweep `search_asal_lenia_mc_cma_vs_random` (seeds 1–5, 640 evaluations
+each, GPU): CMA-ES 0.2948 ± 0.0035 vs random 0.2869 ± 0.0056, Cliff's δ = 0.84, exact
+p = 0.024 — the pre-declared hypothesis holds. Per run ≈ 158 s with 4 runs sharing the GPU,
+peak torch pool 884 MiB, worker RSS 2.1 GB. Evidence: E1 for "CLIP rates these patterns as
+more cell-like"; nothing here says they are cells.
+
 ## Limitations
 Lenia is the only target. The centroid speed is not a creature tracker (separate blobs share a
 centroid). With the seed-free pattern initialisation, extra search/holdout seeds repeat the same

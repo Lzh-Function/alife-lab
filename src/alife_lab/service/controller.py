@@ -41,7 +41,7 @@ from alife_lab.core.states import (
     check_transition,
 )
 from alife_lab.execution import replay as replay_mod
-from alife_lab.execution.executors import Executor, JobHandle, ValidationReport
+from alife_lab.execution.executors import GPU_BACKENDS, Executor, JobHandle, ValidationReport
 from alife_lab.execution.worker import WorkerJob
 from alife_lab.provenance import environment_record
 from alife_lab.service.catalog import Preset, load_presets, load_profiles
@@ -1555,14 +1555,36 @@ class Controller:
             },
         )
 
+    def _gpu_slots_free(self, row: dict[str, Any]) -> bool:
+        """Honour the profile's ``max_active_gpu_jobs`` for runs on a GPU backend."""
+        if row["backend"] not in GPU_BACKENDS:
+            return True
+        limit = ExecutionProfile.model_validate_json(
+            row["profile_json"]
+        ).execution.scheduling.max_active_gpu_jobs
+        if limit is None:
+            return True
+        active_gpu = 0
+        for job in self.jobs.values():
+            if job.finished:
+                continue
+            other = self.db.one("SELECT backend FROM runs WHERE id=?", (job.run_id,))
+            if other is not None and other["backend"] in GPU_BACKENDS:
+                active_gpu += 1
+        return active_gpu < limit
+
     def _dispatch_queue(self) -> None:
+        deferred: list[tuple[str, bool]] = []  # GPU runs waiting for a free GPU slot
         while self.queue:
             active = len([j for j in self.jobs.values() if not j.finished])
             if active >= self.settings.max_active_jobs:
-                return
+                break
             run_id, start_paused = self.queue.popleft()
             row = self._run_row(run_id)
             if row["state"] != RunState.QUEUED.value:
+                continue
+            if not self._gpu_slots_free(row):
+                deferred.append((run_id, start_paused))
                 continue
             try:
                 self._launch(row, start_paused)
@@ -1572,6 +1594,7 @@ class Controller:
                 self._set_state(run_id, RunState.FAILED, reason="launch_failed", force=True)
                 self.db.execute("UPDATE runs SET last_error=? WHERE id=?", (str(exc), run_id))
                 self._emit_event(run_id, "run_failed", {"error": str(exc)}, severity="error")
+        self.queue.extendleft(reversed(deferred))  # keep their order at the queue head
 
     def _launch(self, row: dict[str, Any], start_paused: bool) -> None:
         run_id = row["id"]

@@ -1,0 +1,13 @@
+preset:
+  id: search_asal_lenia_mc_cell_random
+  scenario: search_asal_lenia_mc.yaml
+  title_key: preset.search_asal_lenia_mc_cell_random.title
+  description_key: preset.search_asal_lenia_mc_cell_random.description
+  overrides:
+    experiment:
+      name: search_asal_lenia_mc_cell_random
+      dynamics: {algorithm: random}
+  expected_observation: >-
+    Baseline with the same budget (16 x 40 evaluations): uniform samples of the +-1 logit box
+    around the creature; pilot seed 101 reached 0.285.
+  negative_control: null

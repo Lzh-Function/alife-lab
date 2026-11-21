@@ -1172,10 +1172,131 @@ class AgentWorldExperiment(_Frozen):
 
 
 # --------------------------------------------------------------------------- #
+# Multichannel Lenia (Chan 2020 "expanded universe"; semantics of SakanaAI/asal lenia_impl.py,
+# itself from maxencefaldor/Leniabreeder): c channels, k kernels from channel c0 to c1.
+# --------------------------------------------------------------------------- #
+
+MAX_MC_CHANNELS = 4
+MAX_MC_KERNELS = 32
+LENIA_MC_PATTERNS = ("5N7KKM", "5N7KKM_2", "5N7KKM_g", "VT049W")
+
+
+class LeniaMCWorld(_Frozen):
+    size: Annotated[int, Field(ge=32, le=MAX_WORLD_SIDE)] = 128  # square, periodic (FFT)
+    boundary: Literal["periodic"] = "periodic"
+
+    @property
+    def width(self) -> int:
+        return self.size
+
+    @property
+    def height(self) -> int:
+        return self.size
+
+
+class LeniaMCKernel(_Frozen):
+    b: Annotated[list[Annotated[float, Field(ge=0.0, le=1.0)]], Field(min_length=1, max_length=4)]
+    m: Annotated[float, Field(gt=0.0, le=1.0)]  # growth centre
+    s: Annotated[float, Field(gt=0.0, le=1.0)]  # growth width
+    h: Annotated[float, Field(ge=0.0, le=1.0)]  # growth weight
+    r: Annotated[float, Field(gt=0.0, le=1.0)]  # relative radius
+    c0: Annotated[int, Field(ge=0, lt=MAX_MC_CHANNELS)]  # source channel
+    c1: Annotated[int, Field(ge=0, lt=MAX_MC_CHANNELS)]  # target channel
+
+
+class LeniaMCDynamics(_Frozen):
+    clock_unit: Literal["tick"] = "tick"
+    numeric_policy: Literal["float64_fft_cpu"] = "float64_fft_cpu"
+    channels: Annotated[int, Field(ge=1, le=MAX_MC_CHANNELS)] = 3
+    R: Annotated[float, Field(gt=1.0, le=200.0)] = 12.0
+    T: Annotated[float, Field(gt=0.0, le=1000.0)] = 2.0  # dt = 1 / T
+    kernels: Annotated[list[LeniaMCKernel], Field(min_length=1, max_length=MAX_MC_KERNELS)]
+
+
+class LeniaMCInitialization(_Frozen):
+    # "pattern": a catalogued creature (cells padded to 32 x 32 and centred, as Leniabreeder);
+    # "random": uniform noise in a centred square of side `size` in every channel.
+    preset: Literal["pattern", "random", "empty"] = "pattern"
+    pattern: Literal["5N7KKM", "5N7KKM_2", "5N7KKM_g", "VT049W"] = "5N7KKM"
+    size: Annotated[int, Field(ge=1, le=MAX_WORLD_SIDE)] = 32
+    density: Annotated[float, Field(ge=0.0, le=1.0)] = 0.5
+
+
+LeniaMCMetric = Literal["mass", "alive_fraction", "max_value", "centroid_displacement"]
+
+
+class LeniaMCObservation(_Frozen):
+    metrics: tuple[LeniaMCMetric, ...] = (
+        "mass",
+        "alive_fraction",
+        "max_value",
+        "centroid_displacement",
+    )
+
+
+def _lenia_mc_defaults(data: Any) -> Any:
+    """Fill R, T, channels and kernels from the pattern when they are omitted, so that the
+    canonical spec (and its hash) always lists every value used."""
+    if not isinstance(data, dict):
+        return data
+    init = data.get("initialization") or {}
+    if hasattr(init, "model_dump"):
+        init = init.model_dump()
+    dyn = data.get("dynamics") or {}
+    if hasattr(dyn, "model_dump"):
+        return data
+    if dyn.get("kernels") is not None:
+        return data
+    from alife_lab.substrates.lenia_mc.patterns import load_pattern
+
+    pat = load_pattern(init.get("pattern", "5N7KKM"))
+    filled = {
+        "channels": len(pat["cells"]),
+        "R": float(pat["R"]),
+        "T": float(pat["T"]),
+        **{k: v for k, v in dyn.items() if v is not None},
+        "kernels": [dict(kern) for kern in pat["kernels"]],
+    }
+    return {**data, "dynamics": filled}
+
+
+class LeniaMCExperiment(_Frozen):
+    name: _NAME
+    mode: Literal["reference", "exploratory"] = "reference"
+    substrate: Literal["lenia_mc"]
+    seed: _SEED
+    world: LeniaMCWorld = LeniaMCWorld()
+    initialization: LeniaMCInitialization = LeniaMCInitialization()
+    dynamics: LeniaMCDynamics
+    runner: RunnerSpec = RunnerSpec()
+    observations: LeniaMCObservation = LeniaMCObservation()
+
+    @model_validator(mode="before")
+    @classmethod
+    def _defaults(cls, data: Any) -> Any:
+        return _lenia_mc_defaults(data)
+
+    @model_validator(mode="after")
+    def _check(self) -> LeniaMCExperiment:
+        d = self.dynamics
+        for i, k in enumerate(d.kernels):
+            if k.c0 >= d.channels or k.c1 >= d.channels:
+                raise ValueError(f"kernel {i} uses a channel >= channels ({d.channels})")
+        if self.world.size < 2 * d.R + 1:
+            raise ValueError("kernel diameter 2R+1 must fit in the world")
+        if self.initialization.preset == "pattern":
+            from alife_lab.substrates.lenia_mc.patterns import load_pattern
+
+            if len(load_pattern(self.initialization.pattern)["cells"]) != d.channels:
+                raise ValueError("the pattern's number of channels differs from dynamics.channels")
+        return self
+
+
+# --------------------------------------------------------------------------- #
 # Search: an external optimisation run over the parameters of a target world
 # --------------------------------------------------------------------------- #
 
-MAX_SEARCH_PARAMS = 8
+MAX_SEARCH_PARAMS = 64
 # Parameters a search may vary, per target substrate: path -> integer-valued?
 SEARCH_PATHS: dict[str, dict[str, bool]] = {
     "lenia": {
@@ -1189,11 +1310,29 @@ SEARCH_PATHS: dict[str, dict[str, bool]] = {
 }
 
 
+_MC_KERNEL_PATH = re.compile(r"^dynamics\.kernels\.(\d{1,2})\.(m|s|h|r)$")
+_MC_PATHS = {"dynamics.T": False, "dynamics.R": False, "initialization.density": False,
+             "initialization.size": True}  # fmt: skip
+
+
+def search_path_kind(target: Any, path: str) -> bool | None:
+    """None if ``path`` cannot be searched for this target, else whether it is integer-valued.
+    Multichannel Lenia exposes every kernel's m, s, h, r (``dynamics.kernels.<i>.<name>``)."""
+    if target.substrate == "lenia_mc":
+        m = _MC_KERNEL_PATH.match(path)
+        if m:
+            return False if int(m.group(1)) < len(target.dynamics.kernels) else None
+        return _MC_PATHS.get(path)
+    return SEARCH_PATHS.get(target.substrate, {}).get(path)
+
+
 class SearchParam(_Frozen):
-    path: Annotated[str, Field(pattern=r"^[a-z_]{1,32}(\.[a-zA-Z_]{1,32}){1,3}$")]
+    path: Annotated[str, Field(pattern=r"^[a-z_]{1,32}(\.[a-zA-Z0-9_]{1,32}){1,3}$")]
     low: float
     high: float
-    scale: Literal["linear", "log"] = "linear"
+    # linear / log, or logit: uniform in logit(value) between logit(low) and logit(high)
+    # (ASAL perturbs Lenia parameters as sigmoid(logit(base) + delta)).
+    scale: Literal["linear", "log", "logit"] = "linear"
 
     @model_validator(mode="after")
     def _check(self) -> SearchParam:
@@ -1201,10 +1340,17 @@ class SearchParam(_Frozen):
             raise ValueError(f"{self.path}: low must be < high")
         if self.scale == "log" and self.low <= 0:
             raise ValueError(f"{self.path}: log scale needs low > 0")
+        if self.scale == "logit" and not (self.low > 0 and self.high < 1):
+            raise ValueError(f"{self.path}: logit scale needs 0 < low < high < 1")
         return self
 
 
 CLIP_OBJECTIVES = ("lenia_clip_target", "lenia_clip_open_endedness")
+OBJECTIVE_TARGETS = {
+    "lenia_moving_localized": ("lenia",),
+    "lenia_clip_target": ("lenia", "lenia_mc"),
+    "lenia_clip_open_endedness": ("lenia", "lenia_mc"),
+}
 
 
 class SearchDynamics(_Frozen):
@@ -1298,6 +1444,16 @@ class SearchASAL(_Frozen):
         Field(max_length=8),
     ] = []
     frames: Annotated[int, Field(ge=1, le=64)] = 1
+    # None: the whole world is shown to CLIP; an int: a square of this side centred on the
+    # circular centroid of the pattern (ASAL's Lenia "phenotype", 64 for a 128 world).
+    crop: Annotated[int, Field(ge=8, le=MAX_WORLD_SIDE)] | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_absent(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        out: dict[str, Any] = handler(self)
+        if out.get("crop") is None:
+            out.pop("crop", None)  # specs written before ``crop`` existed keep their digest
+        return out
 
 
 class SearchExperiment(_Frozen):
@@ -1309,7 +1465,7 @@ class SearchExperiment(_Frozen):
     substrate: Literal["search"]
     seed: _SEED
     # The base world; its seed is replaced by the evaluation seeds.
-    target: LeniaExperiment
+    target: Annotated[LeniaExperiment | LeniaMCExperiment, Field(discriminator="substrate")]
     space: Annotated[list[SearchParam], Field(min_length=1, max_length=MAX_SEARCH_PARAMS)]
     dynamics: SearchDynamics = SearchDynamics()
     # Optional, additive section: omitted from the canonical dump when absent so specs written
@@ -1321,12 +1477,11 @@ class SearchExperiment(_Frozen):
 
     @model_validator(mode="after")
     def _check(self) -> SearchExperiment:
-        allowed = SEARCH_PATHS[self.target.substrate]
         paths = [p.path for p in self.space]
         if len(set(paths)) != len(paths):
             raise ValueError("search parameters must be distinct")
         for p in self.space:
-            if p.path not in allowed:
+            if search_path_kind(self.target, p.path) is None:
                 raise ValueError(f"{p.path!r} is not searchable for {self.target.substrate!r}")
         d = self.dynamics
         clip = d.objective in CLIP_OBJECTIVES
@@ -1352,8 +1507,11 @@ class SearchExperiment(_Frozen):
         qd_metrics = {"coverage", "qd_score", "archive_size"}
         if self.qd is None and qd_metrics & set(self.observations.metrics):
             raise ValueError("QD metrics need a qd section")
-        if d.objective.split("_", 1)[0] != self.target.substrate:
-            raise ValueError("the objective does not belong to the target substrate")
+        if self.target.substrate not in OBJECTIVE_TARGETS[d.objective]:
+            raise ValueError(f"objective {d.objective!r} is not defined for this target")
+        crop = self.asal.crop if self.asal is not None else None
+        if crop is not None and crop > min(self.target.world.width, self.target.world.height):
+            raise ValueError("asal.crop must fit in the target world")
         evaluations = d.population * d.eval_seeds * self.runner.max_steps
         if evaluations * d.eval_steps > 2_000_000_000:
             raise ValueError("search budget too large (population*seeds*generations*steps)")
@@ -1383,6 +1541,7 @@ AnyExperiment = Annotated[
     | PDNCAExperiment
     | ProtocellExperiment
     | AgentWorldExperiment
+    | LeniaMCExperiment
     | SearchExperiment,
     Field(discriminator="substrate"),
 ]

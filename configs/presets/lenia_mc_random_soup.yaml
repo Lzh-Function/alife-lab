@@ -1,0 +1,17 @@
+preset:
+  id: lenia_mc_random_soup
+  scenario: lenia_mc_aquarium.yaml
+  title_key: preset.lenia_mc_random_soup.title
+  description_key: preset.lenia_mc_random_soup.description
+  overrides:
+    experiment:
+      name: lenia_mc_random_soup
+      mode: exploratory
+      initialization:
+        preset: random
+        pattern: 5N7KKM
+        size: 48
+        density: 0.5
+  expected_observation: 'Exploratory: the swarm''s rule from seeded random patches in all channels;
+    the outcome depends on the seed.'
+  negative_control: null

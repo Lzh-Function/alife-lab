@@ -152,7 +152,7 @@ export function DiscoveryDetailView({ id }: { id: string }) {
           </dd>
           {Object.entries(d.source.params ?? {}).map(([k, v]) => (
             <div key={k} style={{ display: "contents" }}>
-              <dt className="mono">{k.split(".").pop()}</dt>
+              <dt className="mono">{k.replace(/^dynamics\.kernels\.(\d+)\./, "k$1.").split(".").slice(-2).join(".").replace(/^(dynamics|growth|kernel|initialization)\./, "")}</dt>
               <dd className="mono">{Number(v).toPrecision(4)}</dd>
             </div>
           ))}

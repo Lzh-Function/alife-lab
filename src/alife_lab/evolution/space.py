@@ -9,21 +9,23 @@ import numpy as np
 import numpy.typing as npt
 from pydantic import ValidationError
 
-from alife_lab.core.spec import SEARCH_PATHS, ExperimentSpec, SearchExperiment
+from alife_lab.core.spec import ExperimentSpec, SearchExperiment, search_path_kind
 
 F64 = npt.NDArray[np.float64]
 
 
 def decode(exp: SearchExperiment, u: F64) -> dict[str, float | int]:
     """Parameter values for normalised coordinates (clipped to the box)."""
-    ints = SEARCH_PATHS[exp.target.substrate]
     out: dict[str, float | int] = {}
     for p, ui in zip(exp.space, np.clip(u, 0.0, 1.0), strict=True):
         if p.scale == "log":
             value = math.exp(math.log(p.low) + float(ui) * (math.log(p.high) - math.log(p.low)))
+        elif p.scale == "logit":
+            lo, hi = _logit(p.low), _logit(p.high)
+            value = 1.0 / (1.0 + math.exp(-(lo + float(ui) * (hi - lo))))
         else:
             value = p.low + float(ui) * (p.high - p.low)
-        out[p.path] = round(value) if ints[p.path] else value
+        out[p.path] = round(value) if search_path_kind(exp.target, p.path) else value
     return out
 
 
@@ -34,9 +36,15 @@ def encode(exp: SearchExperiment, params: dict[str, float]) -> F64:
         v = float(params[p.path])
         if p.scale == "log":
             u.append((math.log(v) - math.log(p.low)) / (math.log(p.high) - math.log(p.low)))
+        elif p.scale == "logit":
+            u.append((_logit(v) - _logit(p.low)) / (_logit(p.high) - _logit(p.low)))
         else:
             u.append((v - p.low) / (p.high - p.low))
     return np.asarray(u, dtype=np.float64)
+
+
+def _logit(v: float) -> float:
+    return math.log(v) - math.log1p(-v)
 
 
 def bound_violation(u: F64) -> float:
@@ -53,8 +61,11 @@ def candidate_spec(
         node = body
         keys = path.split(".")
         for k in keys[:-1]:
-            node = node[k]
-        node[keys[-1]] = value
+            node = node[int(k)] if isinstance(node, list) else node[k]
+        if isinstance(node, list):
+            node[int(keys[-1])] = value
+        else:
+            node[keys[-1]] = value
     body["seed"] = int(seed)
     body["mode"] = "exploratory"
     body["name"] = name or f"{exp.name}-candidate"

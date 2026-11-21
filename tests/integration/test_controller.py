@@ -253,3 +253,32 @@ def test_worker_kill_marks_interrupted_and_restores(settings: Settings) -> None:
             await c.shutdown()
 
     arun(main)
+
+
+def test_max_active_gpu_jobs_is_enforced(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Runs on GPU backends wait while the profile's max_active_gpu_jobs slots are taken; other
+    runs still start. (numpy is declared a GPU backend here so the test needs no GPU.)"""
+    import alife_lab.service.controller as ctl_mod
+
+    monkeypatch.setattr(ctl_mod, "GPU_BACKENDS", frozenset({"numpy"}))
+
+    async def main() -> None:
+        c = Controller(settings, LocalExecutor())
+        await c.start()
+        try:
+            assert c.profiles["local_cpu"].execution.scheduling.max_active_gpu_jobs == 1
+            ids = [c.create_run(spec(max_steps=100_000), "local_cpu", 5)["id"] for _ in range(3)]
+            for rid in ids:
+                await c.start_run(rid)
+            await wait_for(lambda: state_of(c, ids[0]) == "running", 30)
+            await asyncio.sleep(0.5)
+            assert [state_of(c, r) for r in ids[1:]] == ["queued", "queued"]
+            await c.cancel_run(ids[0])
+            await wait_for(lambda: state_of(c, ids[1]) == "running", 30)
+            assert state_of(c, ids[2]) == "queued"
+        finally:
+            await c.shutdown()
+
+    arun(main)

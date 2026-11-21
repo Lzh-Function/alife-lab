@@ -1,0 +1,90 @@
+preset:
+  id: lenia_mc_no_cross_channel
+  scenario: lenia_mc_aquarium.yaml
+  title_key: preset.lenia_mc_no_cross_channel.title
+  description_key: preset.lenia_mc_no_cross_channel.description
+  overrides:
+    experiment:
+      name: lenia_mc_no_cross_channel
+      mode: exploratory
+      dynamics:
+        kernels:
+        - b:
+          - 1
+          m: 0.22
+          s: 0.0628
+          h: 0.174
+          r: 0.87
+          c0: 0
+          c1: 0
+        - b:
+          - 1
+          m: 0.351
+          s: 0.1539
+          h: 0.46
+          r: 0.52
+          c0: 0
+          c1: 0
+        - b:
+          - 1
+          - 0.25
+          m: 0.177
+          s: 0.0333
+          h: 0.31
+          r: 0.58
+          c0: 0
+          c1: 0
+        - b:
+          - 0
+          - 1
+          m: 0.126
+          s: 0.0525
+          h: 0.242
+          r: 0.89
+          c0: 1
+          c1: 1
+        - b:
+          - 1
+          m: 0.437
+          s: 0.0797
+          h: 0.508
+          r: 0.78
+          c0: 1
+          c1: 1
+        - b:
+          - 0.75
+          - 1
+          m: 0.234
+          s: 0.0369
+          h: 0.566
+          r: 0.79
+          c0: 1
+          c1: 1
+        - b:
+          - 1
+          m: 0.179
+          s: 0.0653
+          h: 0.406
+          r: 1.0
+          c0: 2
+          c1: 2
+        - b:
+          - 1
+          m: 0.489
+          s: 0.1213
+          h: 0.27
+          r: 0.64
+          c0: 2
+          c1: 2
+        - b:
+          - 1
+          m: 0.419
+          s: 0.1775
+          h: 0.588
+          r: 0.96
+          c0: 2
+          c1: 2
+  expected_observation: 'Negative control: the 6 kernels that couple different channels are removed;
+    the pattern loses its shape and the channels fill most of the world (alive fraction about 0.7
+    after 500 ticks).'
+  negative_control: null

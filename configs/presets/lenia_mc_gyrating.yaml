@@ -1,0 +1,13 @@
+preset:
+  id: lenia_mc_gyrating
+  scenario: lenia_mc_aquarium.yaml
+  title_key: preset.lenia_mc_gyrating.title
+  description_key: preset.lenia_mc_gyrating.description
+  overrides:
+    experiment:
+      name: lenia_mc_gyrating
+      initialization:
+        preset: pattern
+        pattern: 5N7KKM_g
+  expected_observation: Gyrating variant of the swarm (same rule, other initial cells).
+  negative_control: preset lenia_mc_off_niche

@@ -4,19 +4,20 @@
 import type { Frame } from "./api";
 import { popcount } from "./api";
 
-export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network" | "nca_train" | "nca" | "pd_nca" | "protocell" | "agent_world" | "search";
+export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network" | "nca_train" | "nca" | "pd_nca" | "protocell" | "agent_world" | "lenia_mc" | "search";
 
 /** Substrates rendered as continuous particles (vs. grids). */
 export const PARTICLE_SUBSTRATES = new Set(["boids", "particle_life"]);
 /** Substrates rendered as a continuous scalar field (codec field_u8). */
-export const FIELD_SUBSTRATES = new Set(["lenia", "flow_lenia", "gray_scott", "physarum", "reaction_network", "nca_train", "nca", "pd_nca", "protocell", "agent_world", "search"]);
+export const FIELD_SUBSTRATES = new Set(["lenia", "flow_lenia", "gray_scott", "physarum", "reaction_network", "nca_train", "nca", "pd_nca", "protocell", "agent_world", "lenia_mc", "search"]);
 /** Non-spatial substrates whose display is a species x time image (rows = species). */
 export const ROW_DISPLAY_SUBSTRATES = new Set(["reaction_network"]);
 
 /** World size used for display/pointer mapping; non-spatial substrates get a display size. */
 export function displayWorld(substrate: string, experiment: Record<string, unknown>): { width: number; height: number } {
-  const world = experiment.world as { width: number; height: number } | undefined;
-  if (world) return world;
+  const world = experiment.world as { width?: number; height?: number; size?: number } | undefined;
+  if (world?.size) return { width: world.size, height: world.size }; // square worlds (lenia_mc)
+  if (world?.width && world.height) return { width: world.width, height: world.height };
   if (substrate === "nca_train" || substrate === "nca") {
     const target = experiment.target as { size?: number } | undefined;
     const pad = (substrate === "nca" ? experiment.pad : (experiment.dynamics as { pad?: number } | undefined)?.pad) as number | undefined;
@@ -26,8 +27,9 @@ export function displayWorld(substrate: string, experiment: Record<string, unkno
   if (substrate === "search") {
     // Parameter map (side = target height) + the best candidate's world, side by side.
     // With a QD grid, its archive panel (same side) sits between the two.
-    const target = experiment.target as { world?: { width: number; height: number } } | undefined;
-    const w = target?.world ?? { width: 64, height: 64 };
+    const target = experiment.target as { world?: { width?: number; height?: number; size?: number } } | undefined;
+    const tw = target?.world;
+    const w = tw?.size ? { width: tw.size, height: tw.size } : { width: tw?.width ?? 64, height: tw?.height ?? 64 };
     const panels = experiment.qd ? 2 : 1;
     return { width: panels * w.height + w.width, height: w.height };
   }
@@ -86,6 +88,13 @@ export const TOOLS: Record<SubstrateId, ToolDescriptor> = {
     value: { initial: 1 },
     channelSelect: true,
     noteKey: "lab.tool.flow_lenia_note",
+  },
+  lenia_mc: {
+    modes: ["off", "inspect", "paint", "erase"],
+    radius: { min: 1, max: 30, step: 1, initial: 4 },
+    value: { initial: 1 },
+    channelSelect: true,
+    noteKey: "lab.tool.lenia_mc_note",
   },
   gray_scott: {
     modes: ["off", "inspect", "seed", "erase"],
@@ -275,6 +284,22 @@ export const FORM_FIELDS: Record<SubstrateId, FormField[]> = {
     { path: "initialization.size", labelKey: "form.flow_lenia.init_size", kind: "int", min: 1, max: 1024 },
     { path: "dynamics.dt", labelKey: "form.flow_lenia.dt", kind: "float", min: 0.001, max: 10, step: 0.01 },
     { path: "dynamics.sigma", labelKey: "form.flow_lenia.sigma", kind: "float", min: 0.01, max: 5, step: 0.05 },
+    ...RUNNER,
+  ],
+  lenia_mc: [
+    { path: "seed", labelKey: "form.seed", kind: "int", min: 0 },
+    { path: "world.size", labelKey: "form.lenia_mc.size", kind: "int", min: 32, max: 1024 },
+    {
+      path: "initialization.preset",
+      labelKey: "form.lenia.init",
+      kind: "select",
+      options: [
+        { value: "pattern", labelKey: "form.lenia_mc.init.pattern" },
+        { value: "random", labelKey: "form.lenia.init.random" },
+        { value: "empty", labelKey: "form.lenia.init.empty" },
+      ],
+    },
+    { path: "dynamics.T", labelKey: "form.lenia_mc.T", kind: "float", min: 0.1, max: 1000, step: 0.5 },
     ...RUNNER,
   ],
   gray_scott: [

@@ -114,7 +114,8 @@ def render(state: SearchState) -> tuple[dict[str, Any], bytes]:
             panel[y0, x0:x1] = _GRID
         img[:, side : side + aw] = panel
     if state.best_field is not None:
-        img[:, side + aw :, :] = (np.clip(state.best_field, 0.0, 1.0) * 255.0)[..., None]
+        best = np.clip(state.best_field, 0.0, 1.0) * 255.0
+        img[:, side + aw :, :] = best if best.ndim == 3 else best[..., None]  # RGB or grey
     data = np.rint(img).astype(np.uint8).tobytes()
     scale = "left: parameter map (colour = score)"
     if aw:
@@ -214,7 +215,8 @@ def inspect(state: SearchState, exp: SearchExperiment, query: dict[str, Any]) ->
         out["region"] = "best"
         x = qx - side - aw
         if state.best_field is not None and 0 <= qy < side and 0 <= x < fw:
-            out["cell_value"] = float(state.best_field[qy, x])
+            v = state.best_field[qy, x]
+            out["cell_value"] = [float(c) for c in v] if np.ndim(v) else float(v)
     out["best"] = _candidate(state, exp, best)
     if state.cma is not None:
         out["cma"] = {"mean": decode(exp, state.cma.mean), "sigma": state.cma.sigma}

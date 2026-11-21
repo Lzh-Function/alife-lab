@@ -233,7 +233,9 @@ class SearchAdapter:
                 continue
             if clip:
                 assert exp.asal is not None
-                ro = rollout_lenia_frames(cand, d.eval_steps, exp.asal.frames, d.max_alive_fraction)
+                ro = rollout_lenia_frames(
+                    cand, d.eval_steps, exp.asal.frames, d.max_alive_fraction, exp.asal.crop
+                )
                 emb = self._embedder(exp)
                 z = emb.embed_fields(ro.frames)
                 if d.objective == "lenia_clip_target":
@@ -267,6 +269,79 @@ class SearchAdapter:
             first_z,
         )
 
+    def _evaluate_many(
+        self, exp: SearchExperiment, params_list: list[dict[str, float | int]], seeds: list[int]
+    ) -> list[tuple[float, float, float, float, float, F64 | None, F64 | None]]:
+        """Evaluate candidates; multichannel Lenia with CLIP objectives is batched in torch
+        (float64, the search backend's device), everything else candidate by candidate."""
+        batched = (
+            exp.target.substrate == "lenia_mc"
+            and exp.dynamics.objective in CLIP_OBJECTIVES
+            and self.backend in ("torch", "torch_cuda")
+        )
+        if not batched:
+            return [self._evaluate(exp, p, seeds) for p in params_list]
+        return self._evaluate_mc_batch(exp, params_list, seeds)
+
+    def _evaluate_mc_batch(
+        self, exp: SearchExperiment, params_list: list[dict[str, float | int]], seeds: list[int]
+    ) -> list[tuple[float, float, float, float, float, F64 | None, F64 | None]]:
+        from alife_lab.core.spec import LeniaMCExperiment
+        from alife_lab.evolution import asal as asal_scores
+        from alife_lab.substrates.lenia_mc import torch_batch
+
+        assert exp.asal is not None
+        d = exp.dynamics
+        emb = self._embedder(exp)
+        device = "cuda" if self.backend == "torch_cuda" else "cpu"
+        n = len(params_list)
+        per_seed: list[dict[str, Any]] = []
+        for s in seeds:
+            specs = [candidate_spec(exp, p, s) for p in params_list]
+            ok = [i for i, sp in enumerate(specs) if sp is not None]
+            res: dict[str, Any] = {k: np.zeros(n) for k in ("score", "viable", "alive",
+                                                             "speed", "mass")}  # fmt: skip
+            res["field"], res["z"] = [None] * n, [None] * n
+            if ok:
+                exps = [specs[i].experiment for i in ok]  # type: ignore[union-attr]
+                assert all(isinstance(e, LeniaMCExperiment) for e in exps)
+                ro = torch_batch.rollout(
+                    exps,  # type: ignore[arg-type]
+                    d.eval_steps,
+                    exp.asal.frames,
+                    exp.asal.crop,
+                    device,
+                )
+                k, fh, fw = ro.frames.shape[1:4]
+                z = emb.embed_fields(ro.frames.reshape(len(ok) * k, fh, fw, 3))
+                z = z.reshape(len(ok), k, -1)
+                txt = emb.embed_texts(list(exp.asal.prompts)) if exp.asal.prompts else None
+                for j, i in enumerate(ok):
+                    if txt is not None:
+                        res["score"][i] = asal_scores.supervised_target(z[j], txt)
+                    else:
+                        res["score"][i] = asal_scores.open_endedness(z[j])
+                    alive = float(ro.alive_fraction[j])
+                    res["viable"][i] = float(0.0 < alive <= d.max_alive_fraction)
+                    res["alive"][i] = alive
+                    res["speed"][i] = float(ro.speed[j]) if res["viable"][i] else 0.0
+                    res["mass"][i] = float(ro.mass[j])
+                    res["field"][i] = ro.field[j]
+                    res["z"][i] = z[j][-1]
+            per_seed.append(res)
+        out = []
+        for i in range(n):
+            out.append((
+                float(np.mean([r["score"][i] for r in per_seed])),
+                float(np.mean([r["viable"][i] for r in per_seed])),
+                float(np.mean([r["alive"][i] for r in per_seed])),
+                float(np.mean([r["speed"][i] for r in per_seed])),
+                float(np.mean([r["mass"][i] for r in per_seed])),
+                per_seed[0]["field"][i],
+                per_seed[0]["z"][i],
+            ))  # fmt: skip
+        return out
+
     def step(self, state: SearchState, spec: ExperimentSpec) -> SearchState:
         exp = _se(spec)
         d = exp.dynamics
@@ -289,9 +364,10 @@ class SearchAdapter:
         xs, stats = [], []
         fields: list[F64 | None] = []
         embs: list[F64 | None] = []
-        for ui in u:
-            params = decode(exp, ui)
-            score, viable, alive, speed, mass, fld, z = self._evaluate(exp, params, search_seeds)
+        all_params = [decode(exp, ui) for ui in u]
+        for params, (score, viable, alive, speed, mass, fld, z) in zip(
+            all_params, self._evaluate_many(exp, all_params, search_seeds), strict=True
+        ):
             xs.append([float(v) for v in params.values()])
             stats.append((score, viable, alive, speed, mass))
             fields.append(fld)
@@ -331,7 +407,7 @@ class SearchAdapter:
             if d.holdout_seeds:
                 params = decode(exp, state.u[best])
                 holdout_seeds = seeds_for(exp, 2, d.holdout_seeds)
-                state.holdout[best] = self._evaluate(exp, params, holdout_seeds)[0]
+                state.holdout[best] = self._evaluate_many(exp, [params], holdout_seeds)[0][0]
         state.tick = gen
         state.last = {
             "best_score": float(state.score[best]),
@@ -355,7 +431,11 @@ class SearchAdapter:
         assert exp.asal is not None
         w = exp.target.world
         emb = self._embedder(exp)
-        z = emb.embed_fields(np.zeros((exp.asal.frames, w.height, w.width)))
+        side_h, side_w = (exp.asal.crop, exp.asal.crop) if exp.asal.crop else (w.height, w.width)
+        shape: tuple[int, ...] = (exp.asal.frames, side_h, side_w)
+        if exp.target.substrate == "lenia_mc":
+            shape = (*shape, 3)
+        z = emb.embed_fields(np.zeros(shape))
         if exp.dynamics.objective == "lenia_clip_target":
             return asal_scores.supervised_target(z, emb.embed_texts(list(exp.asal.prompts)))
         return asal_scores.open_endedness(z)

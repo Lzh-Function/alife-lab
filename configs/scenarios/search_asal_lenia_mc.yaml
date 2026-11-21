@@ -1,0 +1,236 @@
+# ASAL on multichannel Lenia, configured like SakanaAI/asal (main_opt.py defaults, substrate
+# "lenia"): creature 5N7KKM in a 128 x 128 world, 256 ticks, prompts "a biological cell" then
+# "two biological cells" (2 frames at the chunk ends, frame t paired with prompt t mod 2), the
+# 64 x 64 crop centred on the pattern shown to CLIP ViT-B/32, the 45 kernel parameters m, s, h
+# perturbed within +-1 in logit space of the creature's values (ASAL clip1 = 1), population 16,
+# step size 0.1 logit units (= 0.05 of the box).
+# Deviations: full CMA-ES (ASAL: Sep-CMA-ES), the 3072 initial-cell parameters are not searched
+# (ASAL perturbs them too; clip2 = inf), centring by circular centroid (ASAL: mass centre with
+# Leniabreeder's re-centring roll), 40 generations by default (ASAL: 1000 iterations).
+schema_version: 1
+experiment:
+  name: search_asal_lenia_mc
+  mode: exploratory
+  substrate: search
+  seed: 1
+  target:
+    name: asal_mc_candidate
+    mode: exploratory
+    substrate: lenia_mc
+    seed: 0
+    world:
+      size: 128
+      boundary: periodic
+    initialization:
+      preset: pattern
+      pattern: 5N7KKM
+  space:
+  - path: dynamics.kernels.0.m
+    low: 0.09400666
+    high: 0.4339713
+    scale: logit
+  - path: dynamics.kernels.0.s
+    low: 0.02405786
+    high: 0.15408146
+    scale: logit
+  - path: dynamics.kernels.0.h
+    low: 0.07192161
+    high: 0.36411697
+    scale: logit
+  - path: dynamics.kernels.1.m
+    low: 0.16594451
+    high: 0.59516365
+    scale: logit
+  - path: dynamics.kernels.1.s
+    low: 0.06271807
+    high: 0.33085191
+    scale: logit
+  - path: dynamics.kernels.1.h
+    low: 0.23860503
+    high: 0.69839305
+    scale: logit
+  - path: dynamics.kernels.2.m
+    low: 0.07331785
+    high: 0.36893079
+    scale: logit
+  - path: dynamics.kernels.2.s
+    low: 0.0125138
+    high: 0.08561973
+    scale: logit
+  - path: dynamics.kernels.2.h
+    low: 0.14183654
+    high: 0.54980447
+    scale: logit
+  - path: dynamics.kernels.3.m
+    low: 0.05036417
+    high: 0.28154749
+    scale: logit
+  - path: dynamics.kernels.3.s
+    low: 0.01997662
+    high: 0.13090122
+    scale: logit
+  - path: dynamics.kernels.3.h
+    low: 0.10510508
+    high: 0.4646228
+    scale: logit
+  - path: dynamics.kernels.4.m
+    low: 0.22212139
+    high: 0.67844909
+    scale: logit
+  - path: dynamics.kernels.4.s
+    low: 0.0308755
+    high: 0.19055158
+    scale: logit
+  - path: dynamics.kernels.4.h
+    low: 0.27527987
+    high: 0.73730398
+    scale: logit
+  - path: dynamics.kernels.5.m
+    low: 0.10102738
+    high: 0.45366804
+    scale: logit
+  - path: dynamics.kernels.5.s
+    low: 0.01389895
+    high: 0.09432402
+    scale: logit
+  - path: dynamics.kernels.5.h
+    low: 0.32421887
+    high: 0.77997995
+    scale: logit
+  - path: dynamics.kernels.6.m
+    low: 0.074252
+    high: 0.37211892
+    scale: logit
+  - path: dynamics.kernels.6.s
+    low: 0.02505681
+    high: 0.15959647
+    scale: logit
+  - path: dynamics.kernels.6.h
+    low: 0.20092451
+    high: 0.65009887
+    scale: logit
+  - path: dynamics.kernels.7.m
+    low: 0.26037756
+    high: 0.7223188
+    scale: logit
+  - path: dynamics.kernels.7.s
+    low: 0.0483295
+    high: 0.27285672
+    scale: logit
+  - path: dynamics.kernels.7.h
+    low: 0.11976867
+    high: 0.50134435
+    scale: logit
+  - path: dynamics.kernels.8.m
+    low: 0.20967595
+    high: 0.66220146
+    scale: logit
+  - path: dynamics.kernels.8.s
+    low: 0.07355114
+    high: 0.3697294
+    scale: logit
+  - path: dynamics.kernels.8.h
+    low: 0.34427598
+    high: 0.79506053
+    scale: logit
+  - path: dynamics.kernels.9.m
+    low: 0.15991763
+    high: 0.58447202
+    scale: logit
+  - path: dynamics.kernels.9.s
+    low: 0.05597261
+    high: 0.30464132
+    scale: logit
+  - path: dynamics.kernels.9.h
+    low: 0.13284491
+    high: 0.53095151
+    scale: logit
+  - path: dynamics.kernels.10.m
+    low: 0.2452406
+    high: 0.70595958
+    scale: logit
+  - path: dynamics.kernels.10.s
+    low: 0.04154227
+    high: 0.24257491
+    scale: logit
+  - path: dynamics.kernels.10.h
+    low: 0.18912175
+    high: 0.63280588
+    scale: logit
+  - path: dynamics.kernels.11.m
+    low: 0.1770433
+    high: 0.61384196
+    scale: logit
+  - path: dynamics.kernels.11.s
+    low: 0.02779069
+    high: 0.17438401
+    scale: logit
+  - path: dynamics.kernels.11.h
+    low: 0.37508762
+    high: 0.81601045
+    scale: logit
+  - path: dynamics.kernels.12.m
+    low: 0.09351069
+    high: 0.43253804
+    scale: logit
+  - path: dynamics.kernels.12.s
+    low: 0.03502367
+    high: 0.21147132
+    scale: logit
+  - path: dynamics.kernels.12.h
+    low: 0.16412619
+    high: 0.5919803
+    scale: logit
+  - path: dynamics.kernels.13.m
+    low: 0.18718913
+    high: 0.62986112
+    scale: logit
+  - path: dynamics.kernels.13.s
+    low: 0.04357579
+    high: 0.25186319
+    scale: logit
+  - path: dynamics.kernels.13.h
+    low: 0.22141972
+    high: 0.67756152
+    scale: logit
+  - path: dynamics.kernels.14.m
+    low: 0.08810277
+    high: 0.41653273
+    scale: logit
+  - path: dynamics.kernels.14.s
+    low: 0.02892358
+    high: 0.18038401
+    scale: logit
+  - path: dynamics.kernels.14.h
+    low: 0.19041556
+    high: 0.63475895
+    scale: logit
+  dynamics:
+    algorithm: cma_es
+    population: 16
+    sigma0: 0.05
+    objective: lenia_clip_target
+    numeric_policy: float32_clip_torch
+    max_alive_fraction: 1.0
+    eval_steps: 256
+    eval_seeds: 1
+    holdout_seeds: 0
+  asal:
+    model: openai_vit_b32
+    prompts:
+    - a biological cell
+    - two biological cells
+    frames: 2
+    crop: 64
+  runner:
+    max_steps: 40
+    checkpoint_interval: 5
+  observations:
+    metrics:
+    - best_score
+    - generation_best
+    - generation_mean
+    - viable_fraction
+    - evaluations
+    - sigma
+    - blank_score

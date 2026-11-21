@@ -136,11 +136,12 @@ class ClipEmbedder:
         self._text_cache: dict[tuple[str, ...], F64] = {}
 
     def embed_fields(self, fields: npt.NDArray[Any]) -> F64:
-        """(N, H, W) values in [0, 1] -> (N, D) unit vectors (float64 on the host)."""
+        """(N, H, W) grey or (N, H, W, 3) RGB values in [0, 1] -> (N, D) unit vectors."""
         import torch
 
         x = torch.as_tensor(np.clip(fields, 0.0, 1.0), dtype=torch.float32, device=self.device)
-        x = x[:, None].expand(-1, 3, -1, -1)  # grey RGB
+        # RGB (multichannel Lenia) or grey shown as RGB
+        x = x.permute(0, 3, 1, 2).contiguous() if x.ndim == 4 else x[:, None].expand(-1, 3, -1, -1)
         x = torch.nn.functional.interpolate(x, size=(IMAGE_SIZE, IMAGE_SIZE), mode="nearest")
         x = (x - self.mean) / self.std
         with torch.inference_mode():

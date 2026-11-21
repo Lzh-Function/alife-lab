@@ -1,0 +1,9 @@
+preset:
+  id: lenia_mc_swarm
+  scenario: lenia_mc_aquarium.yaml
+  title_key: preset.lenia_mc_swarm.title
+  description_key: preset.lenia_mc_swarm.description
+  overrides: {}
+  expected_observation: The 5N7KKM swarm keeps its mass (about 343-350 over 1000 ticks) and wanders;
+    its numerics agree with SakanaAI/asal lenia_impl.py to 2.7e-9 after 256 ticks (float64).
+  negative_control: presets lenia_mc_no_cross_channel and lenia_mc_off_niche

@@ -38,10 +38,14 @@ export interface SearchInspection {
   asal?: { model: string; prompts: string[]; frames: number };
 }
 
-const short = (path: string) => path.split(".").pop() ?? path;
+// "dynamics.kernels.3.m" -> "k3.m"; other paths -> their last segment.
+const short = (path: string) => {
+  const k = /^dynamics\.kernels\.(\d+)\.(\w+)$/.exec(path);
+  return k ? `k${k[1]}.${k[2]}` : (path.split(".").pop() ?? path);
+};
 const num = (v: number) => (Math.abs(v) >= 100 ? v.toFixed(1) : v.toPrecision(4));
 
-function Candidate({ c, title, testId, onOpenSpec, onRegister }: { c: SearchCandidate; title: string; testId: string; onOpenSpec?: (spec: Record<string, unknown>) => void; onRegister?: Register }) {
+function Candidate({ c, title, testId, onOpenSpec, onRegister, registerDisabled = false }: { c: SearchCandidate; title: string; testId: string; onOpenSpec?: (spec: Record<string, unknown>) => void; onRegister?: Register; registerDisabled?: boolean }) {
   const t = useT();
   const [claim, setClaim] = useState("moving_localized");
   return (
@@ -88,7 +92,7 @@ function Candidate({ c, title, testId, onOpenSpec, onRegister }: { c: SearchCand
           {t("search.open_as_run")}
         </button>
       )}
-      {onRegister && c.spec && c.viable_fraction > 0 && (
+      {onRegister && c.spec && c.viable_fraction > 0 && (c.spec as { experiment?: { substrate?: string } }).experiment?.substrate === "lenia" && !registerDisabled && (
         <div className="register-row">
           <select value={claim} onChange={(e) => setClaim(e.target.value)} data-testid={`${testId}-claim`}>
             <option value="moving_localized">{t("discovery.claim.moving_localized")}</option>
@@ -136,8 +140,8 @@ export function SearchInspector({ data, onOpenSpec, onRegister }: { data: Search
           {!data.candidate && <span className="muted"> · {t("search.archive_empty")}</span>}
         </p>
       )}
-      {data.candidate && <Candidate c={data.candidate} title={t("search.clicked")} testId="search-candidate" onOpenSpec={onOpenSpec} onRegister={onRegister} />}
-      {data.best && <Candidate c={data.best} title={t("search.best")} testId="search-best" onOpenSpec={onOpenSpec} onRegister={onRegister} />}
+      {data.candidate && <Candidate c={data.candidate} title={t("search.clicked")} testId="search-candidate" onOpenSpec={onOpenSpec} onRegister={onRegister} registerDisabled={!!data.asal} />}
+      {data.best && <Candidate c={data.best} title={t("search.best")} testId="search-best" onOpenSpec={onOpenSpec} onRegister={onRegister} registerDisabled={!!data.asal} />}
       {data.cma && (
         <p className="small muted mono">
           CMA-ES mean: {Object.entries(data.cma.mean).map(([k, v]) => `${short(k)}=${num(v)}`).join(", ")} · σ={data.cma.sigma.toFixed(3)}

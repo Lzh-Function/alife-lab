@@ -1,0 +1,21 @@
+# ASAL "a biological cell; two biological cells" on multichannel Lenia (5N7KKM, 45 kernel
+# parameters), equal budget 16 x 40 evaluations, CLIP on the GPU. Pilot seed 101 (CMA-ES
+# 0.293, random 0.285) is excluded.
+schema_version: 1
+sweep:
+  name: search_asal_lenia_mc_cma_vs_random
+  base_preset: search_asal_lenia_mc_cell
+  seeds: [1, 2, 3, 4, 5]
+  factors:
+    - path: dynamics.algorithm
+      values: [cma_es, random]
+      labels: [cma_es, random]
+  reference_condition: 1
+  endpoint: {metric: best_score, at: final}
+  design: confirmatory
+  hypothesis: >-
+    With the same budget of 640 evaluations, CMA-ES reaches a higher final best_score (mean
+    CLIP similarity of the two sampled frames to "a biological cell" / "two biological cells")
+    than uniform random search over the +-1 logit box of the 5N7KKM kernel parameters; one
+    value per seeded search run.
+  profile_id: local_gpu

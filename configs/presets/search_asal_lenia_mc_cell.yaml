@@ -1,0 +1,12 @@
+preset:
+  id: search_asal_lenia_mc_cell
+  scenario: search_asal_lenia_mc.yaml
+  title_key: preset.search_asal_lenia_mc_cell.title
+  description_key: preset.search_asal_lenia_mc_cell.description
+  overrides: {}
+  expected_observation: >-
+    Exploratory. CLIP similarity to "a biological cell" / "two biological cells" rises above
+    the creature's own value (0.244) and the blank world (0.253); pilot seed 101 reached
+    0.293 in 40 generations, and the best pattern was more similar to cell prompts
+    (0.29-0.30) than to unrelated prompts such as "a car" (0.21).
+  negative_control: preset search_asal_lenia_mc_cell_random (same budget) and blank_score

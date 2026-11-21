@@ -1,0 +1,13 @@
+# Multichannel Lenia (Chan 2020 "expanded universe") with the update of SakanaAI/asal
+# substrates/lenia_impl.py @ 677ba0e (from maxencefaldor/Leniabreeder): 3 channels, 15 kernels.
+# Creature 5N7KKM "Aquarium (swarm)" by Bert Chan, centred in a 128 x 128 torus (as ASAL).
+# R, T and the kernels are filled from the pattern when omitted (the canonical spec lists them).
+schema_version: 1
+experiment:
+  name: lenia_mc_aquarium
+  mode: reference
+  substrate: lenia_mc
+  seed: 0
+  world: {size: 128, boundary: periodic}
+  initialization: {preset: pattern, pattern: 5N7KKM}
+  runner: {max_steps: 100000, checkpoint_interval: 500}

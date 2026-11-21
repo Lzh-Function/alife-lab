@@ -102,6 +102,10 @@ export interface Inspection extends Partial<SearchInspection> {
   selected_species?: { name: string; count: number; constant: boolean; consumed_by: string[]; produced_by: string[] } | null;
   reactions?: Array<{ id: string; label: string; equation: string; products: string; rate: number; enabled: boolean; propensity: number; fired: number }>;
   cycle_candidates?: { autocatalysis: Array<{ species: string; reaction: string }>; cycles: Array<{ species: string[]; reactions: string[] }>; truncated: boolean; rule: string };
+  // lenia_mc
+  values?: number[];
+  next_values?: number[];
+  kernels?: Array<{ index: number; c0: number; c1: number; potential: number; growth: number; m: number; s: number; h: number }>;
   // flow_lenia
   channels?: Array<{
     value: number;
@@ -522,6 +526,34 @@ export function InspectorPanel({
                 {data.du_dt?.toExponential(3)} / {data.dv_dt?.toExponential(3)}
               </dd>
             </dl>
+          )}
+          {data.substrate === "lenia_mc" && data.values && (
+            <div data-testid="inspector-lenia-mc">
+              <dl className="stats small">
+                <dt>{t("inspector.cell")}</dt>
+                <dd className="mono">
+                  ({data.query?.x}, {data.query?.y})
+                </dd>
+                <dt>{t("inspector.lenia_mc.values")}</dt>
+                <dd className="mono">{data.values.map((v) => v.toFixed(3)).join(" / ")}</dd>
+                <dt>{t("inspector.lenia_mc.next")}</dt>
+                <dd className="mono">{data.next_values?.map((v) => v.toFixed(3)).join(" / ")}</dd>
+              </dl>
+              <p className="small muted">{t("inspector.lenia_mc.kernels")}</p>
+              <table className="table small mono">
+                <tbody>
+                  {data.kernels?.map((k) => (
+                    <tr key={k.index}>
+                      <td>
+                        #{k.index} {"RGB"[k.c0]}→{"RGB"[k.c1]}
+                      </td>
+                      <td>U {k.potential.toFixed(3)}</td>
+                      <td>G {k.growth.toFixed(3)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
           {data.substrate === "flow_lenia" && data.channels && (
             <>
