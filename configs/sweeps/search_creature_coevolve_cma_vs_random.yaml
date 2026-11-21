@@ -1,0 +1,28 @@
+# Pilot seeds 101-102 excluded.
+schema_version: 1
+sweep:
+  name: search_creature_coevolve_cma_vs_random
+  base_preset: search_creature_coevolve_cma
+  seeds:
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  factors:
+  - path: dynamics.algorithm
+    values:
+    - cma_es
+    - random
+    labels:
+    - cma_es
+    - random
+  reference_condition: 1
+  endpoint:
+    metric: best_score
+    at: final
+  design: confirmatory
+  hypothesis: With the same budget of 640 evaluations, CMA-ES reaches a higher final best_score (creature_distance
+    v1) than uniform random search when the CPG and the body are searched together; one value per seeded
+    search run.
+  profile_id: cpu_dev

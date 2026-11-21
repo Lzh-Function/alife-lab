@@ -1,0 +1,13 @@
+preset:
+  id: search_creature_coevolve_random
+  scenario: search_creature_coevolve.yaml
+  title_key: preset.search_creature_coevolve_random.title
+  description_key: preset.search_creature_coevolve_random.description
+  overrides:
+    experiment:
+      name: search_creature_coevolve_random
+      dynamics:
+        algorithm: random
+  expected_observation: 'Baseline with the same budget (16 x 40 evaluations): pilot seeds 101-102
+    reached 13.6 / 11.2 m.'
+  negative_control: null

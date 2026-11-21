@@ -25,7 +25,12 @@ import numpy as np
 import numpy.typing as npt
 
 from alife_lab import API_CONTRACT_VERSION
-from alife_lab.core.spec import CLIP_OBJECTIVES, ExperimentSpec, SearchExperiment
+from alife_lab.core.spec import (
+    CLIP_OBJECTIVES,
+    CreatureExperiment,
+    ExperimentSpec,
+    SearchExperiment,
+)
 from alife_lab.evolution import OBJECTIVE_VERSIONS, cmaes, explore, qd
 from alife_lab.evolution.space import bound_violation, candidate_spec, decode, seeds_for
 from alife_lab.substrates.base import Capabilities, MetricDefinition, PluginManifest
@@ -258,6 +263,18 @@ class SearchAdapter:
                 speed.append(ro.speed)
                 mass.append(ro.mass)
                 field, last_z = ro.field, z[-1]
+            elif exp.target.substrate == "creature":
+                from alife_lab.evolution.objectives import evaluate_creature
+
+                cev = evaluate_creature(cand, d.eval_steps)
+                # Archive columns for creatures: alive_fraction = upright fraction, mass = body
+                # mass (kg), speed = displacement / time.
+                scores.append(cev.score)
+                viable.append(float(cev.viable))
+                alive.append(cev.upright_fraction)
+                speed.append(cev.speed)
+                mass.append(cev.mass)
+                field, last_z = None, None
             else:
                 ev = evaluate_lenia(cand, d.eval_steps, d.max_alive_fraction)
                 scores.append(ev.score)
@@ -266,7 +283,7 @@ class SearchAdapter:
                 speed.append(ev.speed)
                 mass.append(ev.mass)
                 field, last_z = ev.field, None
-            if first is None:
+            if first is None and field is not None:
                 first = np.asarray(field)
                 first_z = last_z
         return (
@@ -455,6 +472,7 @@ class SearchAdapter:
         from alife_lab.evolution import asal as asal_scores
 
         assert exp.asal is not None
+        assert not isinstance(exp.target, CreatureExperiment)  # CLIP objectives: Lenia only
         w = exp.target.world
         emb = self._embedder(exp)
         side_h, side_w = (exp.asal.crop, exp.asal.crop) if exp.asal.crop else (w.height, w.width)

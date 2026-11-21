@@ -3,6 +3,8 @@ inspection, and a CMA-ES vs random sweep with a pre-declared endpoint."""
 
 from __future__ import annotations
 
+import importlib.util
+
 import pytest
 
 from alife_lab.core.spec import ExperimentSpec
@@ -16,7 +18,19 @@ SMALL = {"population": 6, "eval_steps": 60}
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("preset", ["search_lenia_orbium_cma", "search_lenia_qd_map_elites"])
+@pytest.mark.parametrize(
+    "preset",
+    [
+        "search_lenia_orbium_cma",
+        "search_lenia_qd_map_elites",
+        pytest.param(
+            "search_creature_coevolve_cma",
+            marks=pytest.mark.skipif(
+                importlib.util.find_spec("mujoco") is None, reason="MuJoCo not installed"
+            ),
+        ),
+    ],
+)
 def test_search_restart_replay(settings: Settings, preset: str) -> None:
     async def main() -> None:
         c = Controller(settings, LocalExecutor())
@@ -41,7 +55,8 @@ def test_search_restart_replay(settings: Settings, preset: str) -> None:
             past = await c2.inspect(rid, {"x": 100, "y": 10}, tick=2)
             assert past["source"]["method"] == "deterministic_replay"
             assert past["evaluated"] == 2 * 6
-            assert past["best"]["spec"]["experiment"]["substrate"] == "lenia"
+            target = raw["experiment"]["target"]["substrate"]
+            assert past["best"]["spec"]["experiment"]["substrate"] == target
         finally:
             await c2.shutdown()
 

@@ -29,3 +29,28 @@ test("creature: 3D view, push intervention and leg inspection", async ({ page })
     await stopServer(server);
   }
 });
+
+test("creature evolution: MAP-Elites search, lineage, best opened in 3D", async ({ page }) => {
+  const server = startServer();
+  await waitHealthy();
+  try {
+    await page.goto(`${BASE}/#/catalog`);
+    await openPreset(page, "search_creature_qd_map_elites");
+    await page.getByTestId("field-dynamics.population").fill("8");
+    await page.getByTestId("field-dynamics.eval_steps").fill("100");
+    await page.getByTestId("field-runner.max_steps").fill("4");
+    await page.getByTestId("input-profile").selectOption("cpu_dev");
+    await page.getByTestId("input-tps").fill("0");
+    await expect(page.getByTestId("validation")).toContainText("OK");
+    await page.getByTestId("btn-create").click();
+    await expectState(page, "completed");
+    await page.getByTestId("btn-lineage").click();
+    await expect(page.locator("[data-testid^=node-]")).toHaveCount(32);
+    await page.getByTestId("lineage-axis").selectOption("mass");
+    await page.getByTestId("lineage-candidate-open").click();
+    await expect(page.locator("div.scene3d canvas")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("run-name")).toContainText("cand");
+  } finally {
+    await stopServer(server);
+  }
+});

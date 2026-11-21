@@ -103,3 +103,52 @@ def test_push_determinism_and_checkpoint() -> None:
     assert header["codec"] == "scene3d_f32" and len(data) == header["count"] * 12 * 4
     insp = a.inspect(st, s, {})
     assert len(insp["legs"]) == 4 and insp["mass_kg"] > 0
+
+
+def search_spec(preset: str, gens: int = 3) -> ExperimentSpec:
+    raw = PRESETS[preset].spec.model_dump(mode="json")
+    raw["experiment"]["dynamics"].update(population=6, eval_steps=60)
+    raw["experiment"]["runner"] = {"max_steps": gens, "checkpoint_interval": gens}
+    return ExperimentSpec.model_validate(raw)
+
+
+def test_creature_objective_and_search_paths() -> None:
+    from alife_lab.evolution.objectives import evaluate_creature
+    from alife_lab.evolution.space import candidate_spec, decode
+
+    off = evaluate_creature(spec("creature_quadruped_off"), 200)
+    assert off.score < 0.1 and off.viable and off.mass == pytest.approx(26.8, abs=0.1)
+    s = search_spec("search_creature_coevolve_cma")
+    exp = s.experiment
+    params = decode(exp, np.full(len(exp.space), 0.5))  # type: ignore[arg-type]
+    assert params["dynamics.controller.amplitudes.3"] == pytest.approx(0.5)
+    cand = candidate_spec(exp, params, 0)  # type: ignore[arg-type]
+    assert cand is not None
+    assert cand.experiment.dynamics.body.legs[2].upper == pytest.approx(0.375)  # type: ignore[union-attr]
+    bad = s.model_dump(mode="json")
+    bad["experiment"]["space"][0]["path"] = "dynamics.controller.amplitudes.8"  # only 8 joints
+    with pytest.raises(ValueError):
+        ExperimentSpec.model_validate(bad)
+
+
+def test_creature_search_is_deterministic_and_resumable() -> None:
+    from alife_lab.substrates.search.adapter import SearchAdapter
+
+    s = search_spec("search_creature_qd_map_elites", gens=4)
+    a = SearchAdapter()
+
+    def go(n: int) -> Any:
+        st = a.initialize(s)
+        for _ in range(n):
+            st = a.step(st, s)
+        return st
+
+    full, again = go(4), go(4)
+    assert a.state_distance(full, again)["exact_equal"]
+    resumed = a.deserialize_state(a.serialize_state(go(2)), s)
+    for _ in range(2):
+        resumed = a.step(resumed, s)
+    assert a.state_distance(full, resumed)["exact_equal"]
+    assert np.all((full.mass > 5) & (full.mass < 90))  # body mass is a descriptor here
+    header, _ = a.render(full)  # parameter map and grid; no field panel for bodies
+    assert header["channels"] == 3

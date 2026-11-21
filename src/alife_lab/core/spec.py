@@ -1395,9 +1395,28 @@ _MC_PATHS = {"dynamics.T": False, "dynamics.R": False, "initialization.density":
              "initialization.size": True}  # fmt: skip
 
 
+_CREATURE_PATHS = (
+    re.compile(r"^dynamics\.controller\.(amplitudes|phases)\.(\d{1,2})$"),
+    re.compile(r"^dynamics\.body\.legs\.(\d)\.(angle_deg|upper|lower|radius)$"),
+)
+_CREATURE_SCALARS = {"dynamics.controller.frequency_hz", "dynamics.body.torso_radius",
+                     "dynamics.gear", "dynamics.joint_stiffness"}  # fmt: skip
+
+
 def search_path_kind(target: Any, path: str) -> bool | None:
     """None if ``path`` cannot be searched for this target, else whether it is integer-valued.
     Multichannel Lenia exposes every kernel's m, s, h, r (``dynamics.kernels.<i>.<name>``)."""
+    if target.substrate == "creature":
+        if path in _CREATURE_SCALARS:
+            return False
+        legs = len(target.dynamics.body.legs)
+        m = _CREATURE_PATHS[0].match(path)
+        if m:
+            return False if int(m.group(2)) < 2 * legs else None
+        m = _CREATURE_PATHS[1].match(path)
+        if m:
+            return False if int(m.group(1)) < legs else None
+        return None
     if target.substrate == "lenia_mc":
         m = _MC_KERNEL_PATH.match(path)
         if m:
@@ -1407,7 +1426,7 @@ def search_path_kind(target: Any, path: str) -> bool | None:
 
 
 class SearchParam(_Frozen):
-    path: Annotated[str, Field(pattern=r"^[a-z_]{1,32}(\.[a-zA-Z0-9_]{1,32}){1,3}$")]
+    path: Annotated[str, Field(pattern=r"^[a-z_]{1,32}(\.[a-zA-Z0-9_]{1,32}){1,4}$")]
     low: float
     high: float
     # linear / log, or logit: uniform in logit(value) between logit(low) and logit(high)
@@ -1430,6 +1449,7 @@ OBJECTIVE_TARGETS = {
     "lenia_moving_localized": ("lenia",),
     "lenia_clip_target": ("lenia", "lenia_mc"),
     "lenia_clip_open_endedness": ("lenia", "lenia_mc"),
+    "creature_distance": ("creature",),
 }
 
 
@@ -1449,7 +1469,10 @@ class SearchDynamics(_Frozen):
     sigma0: Annotated[float, Field(gt=0.0, le=1.0)] = 0.3  # in normalised [0, 1] units
     # Pre-declared objective (versioned in the adapter); never changed during a run.
     objective: Literal[
-        "lenia_moving_localized", "lenia_clip_target", "lenia_clip_open_endedness"
+        "lenia_moving_localized",
+        "lenia_clip_target",
+        "lenia_clip_open_endedness",
+        "creature_distance",
     ] = "lenia_moving_localized"
     max_alive_fraction: Annotated[float, Field(gt=0.0, le=1.0)] = 0.3
     eval_steps: Annotated[int, Field(ge=10, le=20_000)] = 300
@@ -1559,7 +1582,9 @@ class SearchExperiment(_Frozen):
     substrate: Literal["search"]
     seed: _SEED
     # The base world; its seed is replaced by the evaluation seeds.
-    target: Annotated[LeniaExperiment | LeniaMCExperiment, Field(discriminator="substrate")]
+    target: Annotated[
+        LeniaExperiment | LeniaMCExperiment | CreatureExperiment, Field(discriminator="substrate")
+    ]
     space: Annotated[list[SearchParam], Field(min_length=1, max_length=MAX_SEARCH_PARAMS)]
     dynamics: SearchDynamics = SearchDynamics()
     # Optional, additive section: omitted from the canonical dump when absent so specs written
@@ -1615,7 +1640,8 @@ class SearchExperiment(_Frozen):
         if self.target.substrate not in OBJECTIVE_TARGETS[d.objective]:
             raise ValueError(f"objective {d.objective!r} is not defined for this target")
         crop = self.asal.crop if self.asal is not None else None
-        if crop is not None and crop > min(self.target.world.width, self.target.world.height):
+        world = getattr(self.target, "world", None)
+        if crop is not None and world is not None and crop > min(world.width, world.height):
             raise ValueError("asal.crop must fit in the target world")
         evaluations = d.population * d.eval_seeds * self.runner.max_steps
         if evaluations * d.eval_steps > 2_000_000_000:

@@ -1,0 +1,10 @@
+preset:
+  id: search_creature_coevolve_cma
+  scenario: search_creature_coevolve.yaml
+  title_key: preset.search_creature_coevolve_cma.title
+  description_key: preset.search_creature_coevolve_cma.description
+  overrides: {}
+  expected_observation: 'CMA-ES on CPG and body together: pilot seeds 101-102 reached 23.3 / 22.1
+    m in 20 s with lighter bodies (18.4 / 12.7 kg vs 26.8 kg) and kept going straight (66 / 62 m
+    after 60 s).'
+  negative_control: preset search_creature_coevolve_random (uniform sampling)

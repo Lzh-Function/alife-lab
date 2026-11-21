@@ -1,0 +1,28 @@
+# Pilot seeds 101-102 excluded.
+schema_version: 1
+sweep:
+  name: search_creature_gait_cma_vs_random
+  base_preset: search_creature_gait_cma
+  seeds:
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  factors:
+  - path: dynamics.algorithm
+    values:
+    - cma_es
+    - random
+    labels:
+    - cma_es
+    - random
+  reference_condition: 1
+  endpoint:
+    metric: best_score
+    at: final
+  design: confirmatory
+  hypothesis: 'Companion sweep (CPG only, same seeds and budget). H2 (pre-declared in docs/reference_fidelity/creature.md
+    before running): co-evolution CMA-ES (other sweep) reaches a higher final best_score than CPG-only
+    CMA-ES (this sweep).'
+  profile_id: cpu_dev

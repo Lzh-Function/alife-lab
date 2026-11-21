@@ -172,3 +172,45 @@ def rollout_lenia_frames(
         mass=float(st.cells.sum()),
         field=img,
     )
+
+
+UPRIGHT_MIN = 0.5  # torso tilted less than 60 degrees from vertical
+
+
+@dataclass
+class CreatureEvaluation:
+    score: float
+    viable: bool
+    upright_fraction: float
+    speed: float  # displacement / simulated time (m/s)
+    mass: float  # total body mass (kg): a morphology descriptor
+    displacement: float
+    energy: float
+
+
+def evaluate_creature(spec: ExperimentSpec, ticks: int) -> CreatureEvaluation:
+    """``creature_distance`` (version 1): planar displacement of the torso after ``ticks``
+    ticks multiplied by the fraction of ticks with uprightness > 0.5. Flipping over is
+    penalised instead of rewarded; viable = upright on at least 90 % of the ticks."""
+    from alife_lab.core.spec import CreatureExperiment
+    from alife_lab.substrates.creature import model as creature
+
+    exp = spec.experiment
+    assert isinstance(exp, CreatureExperiment)
+    w = creature.make_world(exp)
+    up = 0
+    for _ in range(ticks):
+        creature.step(w, exp)
+        up += creature.upright(w) > UPRIGHT_MIN
+    q = w.data.qpos
+    disp = math.hypot(q[0] - w.start_xy[0], q[1] - w.start_xy[1])
+    frac = up / max(1, ticks)
+    return CreatureEvaluation(
+        score=disp * frac,
+        viable=frac >= 0.9,
+        upright_fraction=frac,
+        speed=disp / max(1e-9, float(w.data.time)),
+        mass=float(w.model.body_subtreemass[1]),
+        displacement=disp,
+        energy=w.energy,
+    )

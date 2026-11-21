@@ -1,0 +1,148 @@
+# Evolving the embodied creature (Phase 6). Target: the hand-designed four-legged wave walker
+# (configs/scenarios/creature_quadruped.yaml). Objective creature_distance v1: displacement of
+# the torso after 400 ticks (20 s) x fraction of ticks with uprightness > 0.5. MuJoCo on the
+# CPU; the creature has no randomness, so one search seed suffices and holdout seeds are 0.
+# Searched: the CPG only (frequency, 8 amplitudes, 8 phases); the body is fixed.
+schema_version: 1
+experiment:
+  name: search_creature_gait
+  mode: exploratory
+  substrate: search
+  seed: 1
+  target:
+    name: creature_quadruped
+    mode: exploratory
+    substrate: creature
+    seed: 0
+    initialization:
+      height: 0.75
+    dynamics:
+      timestep: 0.01
+      substeps: 5
+      gear: 30.0
+      friction: 1.0
+      density: 300.0
+      joint_stiffness: 20.0
+      body:
+        torso_radius: 0.25
+        legs:
+        - angle_deg: 45
+          upper: 0.3
+          lower: 0.4
+          radius: 0.05
+        - angle_deg: 135
+          upper: 0.3
+          lower: 0.4
+          radius: 0.05
+        - angle_deg: 225
+          upper: 0.3
+          lower: 0.4
+          radius: 0.05
+        - angle_deg: 315
+          upper: 0.3
+          lower: 0.4
+          radius: 0.05
+      controller:
+        kind: cpg
+        frequency_hz: 1.5
+        amplitudes:
+        - 0.8
+        - 0.8
+        - 0.8
+        - 0.8
+        - 0.8
+        - 0.8
+        - 0.8
+        - 0.8
+        phases:
+        - 0
+        - 0.25
+        - 0.25
+        - 0.5
+        - 0.5
+        - 0.75
+        - 0.75
+        - 0.0
+    runner:
+      max_steps: 100000
+      checkpoint_interval: 500
+  space:
+  - path: dynamics.controller.frequency_hz
+    low: 0.3
+    high: 3.0
+    scale: linear
+  - path: dynamics.controller.amplitudes.0
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.phases.0
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.amplitudes.1
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.phases.1
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.amplitudes.2
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.phases.2
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.amplitudes.3
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.phases.3
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.amplitudes.4
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.phases.4
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.amplitudes.5
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.phases.5
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.amplitudes.6
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.phases.6
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.amplitudes.7
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.phases.7
+    low: 0.0
+    high: 1.0
+    scale: linear
+  dynamics:
+    algorithm: cma_es
+    population: 16
+    sigma0: 0.25
+    objective: creature_distance
+    eval_steps: 400
+    eval_seeds: 1
+    holdout_seeds: 0
+  runner:
+    max_steps: 40
+    checkpoint_interval: 10

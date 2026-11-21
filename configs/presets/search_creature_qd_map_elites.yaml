@@ -1,0 +1,9 @@
+preset:
+  id: search_creature_qd_map_elites
+  scenario: search_creature_qd.yaml
+  title_key: preset.search_creature_qd_map_elites.title
+  description_key: preset.search_creature_qd_map_elites.description
+  overrides: {}
+  expected_observation: MAP-Elites collects good walkers of many speeds and body masses; open the
+    lineage view to follow how bodies changed.
+  negative_control: preset search_creature_coevolve_random
