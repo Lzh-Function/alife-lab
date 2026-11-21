@@ -9,7 +9,7 @@ const FIGURES: Record<string, string> = { "01_glider.png": glider, "03_reaction_
 
 export function Stars({ level }: { level: number }) {
   return (
-    <span className="stars" title={`難しさ ${level}/3`}>
+    <span className="stars" title={`むずかしさ ${level}/3`}>
       {"★".repeat(level)}
       <span className="muted">{"☆".repeat(3 - level)}</span>
     </span>
@@ -20,7 +20,7 @@ function SubstrateSection({ g }: { g: SubstrateGuide }) {
   return (
     <section className="panel guide-substrate" id={`guide-${g.slug}`} data-testid={`guide-${g.slug}`}>
       <h3>
-        {g.title} <Stars level={g.level} /> <span className="muted small">学習ガイド {g.atlas}</span>
+        {g.title} <Stars level={g.level} />
       </h3>
       <p className="guide-lead">{g.oneLine}</p>
       <div className="guide-grid">
@@ -57,7 +57,7 @@ function SubstrateSection({ g }: { g: SubstrateGuide }) {
         </div>
       </div>
       <a href="#/catalog" onClick={() => sessionStorage.setItem("alife.catalog.substrate", g.slug)}>
-        → 世界カタログでこの実験系を開く
+        → 世界カタログでこの世界を開く
       </a>
     </section>
   );
@@ -93,8 +93,7 @@ export function GuidePage({ anchor }: { anchor: string | null }) {
         <section id="guide-basics">
           <h2>ALife Lab ガイド</h2>
           <p className="muted">
-            まったく初めての人向けの説明です。世界カタログや実験画面の「?」にマウスを乗せると、各設定や計測値の説明も出ます。
-            ALife の入門教材をもとに、ALife Lab の実装に合わせて書き直したものです。
+            人工生命に初めて触れる人向けのガイドです。世界カタログや実験画面にある「?」マークにカーソルを合わせるかクリックすると、それぞれの設定や計測値の説明も読めます。
           </p>
           {BASICS.map((b) => (
             <div className="panel" key={b.title}>
@@ -105,14 +104,14 @@ export function GuidePage({ anchor }: { anchor: string | null }) {
             </div>
           ))}
           <div className="panel">
-            <h3>どの実験系から始める？</h3>
+            <h3>どの世界から始める？</h3>
             <p>
-              ★ の少ないものからがおすすめです。まず <a href="#/guide/conway">ライフゲーム</a> のグライダーで「1 tick 進める」と「ブラシ」に慣れ、次に{" "}
-              <a href="#/guide/boids">Boids</a> や <a href="#/guide/gray_scott">Gray–Scott</a> で「比較用の実験と並べて比べる」ことを試してみてください。
+              ★ の少ないものから試すのがおすすめです。まずは <a href="#/guide/conway">ライフゲーム</a> のグライダーで「1 tick 進める」や「ブラシ」に慣れ、次に{" "}
+              <a href="#/guide/boids">Boids</a> や <a href="#/guide/gray_scott">Gray–Scott</a> で「比較用の実験と並べて比べる」体験を試してみてください。
             </p>
           </div>
         </section>
-        <h2>実験系ごとのガイド</h2>
+        <h2>世界ごとのガイド</h2>
         {CATEGORIES.map((c) => (
           <div key={c.id}>
             <h3 className="guide-category">

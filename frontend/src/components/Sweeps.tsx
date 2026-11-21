@@ -211,8 +211,8 @@ function SweepForm({ onCreated }: { onCreated: (id: string) => void }) {
         <label>
           {t("sweep.design")}
           <select data-testid="sweep-design" value={design} onChange={(e) => setDesign(e.target.value as "exploratory" | "confirmatory")}>
-            <option value="exploratory">exploratory</option>
-            <option value="confirmatory">confirmatory</option>
+            <option value="exploratory">{t("sweep.design.exploratory")}</option>
+            <option value="confirmatory">{t("sweep.design.confirmatory")}</option>
           </select>
         </label>
         <label>
@@ -318,11 +318,11 @@ export function SweepDetail({ sweepId }: { sweepId: string }) {
                 <thead>
                   <tr>
                     <th>{t("sweep.condition")}</th>
-                    <th>n</th>
-                    <th>mean</th>
-                    <th>sd</th>
-                    <th>median</th>
-                    <th>min–max</th>
+                    <th>{t("sweep.col.n")}</th>
+                    <th>{t("sweep.col.mean")}</th>
+                    <th>{t("sweep.col.sd")}</th>
+                    <th>{t("sweep.col.median")}</th>
+                    <th>{t("sweep.col.minmax")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -357,11 +357,11 @@ export function SweepDetail({ sweepId }: { sweepId: string }) {
                 <thead>
                   <tr>
                     <th>{t("sweep.condition")}</th>
-                    <th>Δ mean</th>
-                    <th>95% CI (bootstrap)</th>
-                    <th>Cliff's δ</th>
-                    <th>p (permutation)</th>
-                    <th>p (Holm)</th>
+                    <th>{t("sweep.col.diff")}</th>
+                    <th>{t("sweep.col.ci95")}</th>
+                    <th>{t("sweep.col.cliffs_delta")}</th>
+                    <th>{t("sweep.col.p_perm")}</th>
+                    <th>{t("sweep.col.p_holm")}</th>
                   </tr>
                 </thead>
                 <tbody>

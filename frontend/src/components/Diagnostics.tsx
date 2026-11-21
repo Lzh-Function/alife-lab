@@ -15,11 +15,11 @@ export function Diagnostics() {
       </button>
       <div className="grid2">
         <div className="panel">
-          <h3>system/resources</h3>
+          <h3>{t("diag.resources")}</h3>
           <pre data-testid="diag-resources">{resources.data ? JSON.stringify(resources.data, null, 2) : t("common.loading")}</pre>
         </div>
         <div className="panel">
-          <h3>system/capabilities</h3>
+          <h3>{t("diag.capabilities")}</h3>
           <pre>{caps.data ? JSON.stringify(caps.data, null, 2) : t("common.loading")}</pre>
         </div>
       </div>
