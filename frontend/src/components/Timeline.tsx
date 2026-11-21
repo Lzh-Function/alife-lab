@@ -13,7 +13,7 @@ interface Props {
   onShownTick?: (tick: number | null) => void;
 }
 
-const PLAY_FPS = 15;
+const PLAY_SPEEDS = [10, 30, 60]; // replayed ticks shown per second (slow / normal / fast)
 const BATCH = 30;
 
 // Timeline: checkpoint / intervention markers, seek by deterministic replay, replay
@@ -27,6 +27,7 @@ export function Timeline({ runId, liveTick, active, onActiveChange, onFrame, onS
   const [frameInfo, setFrameInfo] = useState<ReplayFrame["header"] | null>(null);
   const [alive, setAlive] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
+  const [playFps, setPlayFps] = useState(30);
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<ReplayReport | null>(null);
   const [busy, setBusy] = useState(false);
@@ -48,19 +49,33 @@ export function Timeline({ runId, liveTick, active, onActiveChange, onFrame, onS
     [onFrame, onShownTick],
   );
 
+  // Latest wins: while one request is computing, further seeks only update the wanted tick;
+  // when it returns, the newest wanted tick (if different) is fetched. Old targets never queue.
+  const inFlight = useRef(false);
+  const wanted = useRef<number | null>(null);
   const seek = useCallback(
     async (target: number) => {
-      const seq = ++requestSeq.current;
+      wanted.current = target;
       setError(null);
       setPending(true);
       setTick(target);
+      if (inFlight.current) return;
+      inFlight.current = true;
       try {
-        const [frame] = await api.replayFrames(runId, target, 1, 1);
-        if (seq === requestSeq.current && frame) show(frame);
-      } catch (e) {
-        if (seq === requestSeq.current) setError(e instanceof ApiError ? e.message : String(e));
+        while (wanted.current !== null) {
+          const goal = wanted.current;
+          wanted.current = null;
+          const seq = ++requestSeq.current;
+          try {
+            const [frame] = await api.replayFrames(runId, goal, 1, 1);
+            if (seq === requestSeq.current && wanted.current === null && frame) show(frame);
+          } catch (e) {
+            if (seq === requestSeq.current && wanted.current === null) setError(e instanceof ApiError ? e.message : String(e));
+          }
+        }
       } finally {
-        if (seq === requestSeq.current) setPending(false);
+        inFlight.current = false;
+        setPending(false);
       }
     },
     [runId, show],
@@ -72,7 +87,7 @@ export function Timeline({ runId, liveTick, active, onActiveChange, onFrame, onS
     setTick(target);
     setPending(true);
     window.clearTimeout(pendingSeek.current);
-    pendingSeek.current = window.setTimeout(() => void seek(target), 120);
+    pendingSeek.current = window.setTimeout(() => void seek(target), 40);
   };
   useEffect(() => () => window.clearTimeout(pendingSeek.current), []);
 
@@ -98,7 +113,7 @@ export function Timeline({ runId, liveTick, active, onActiveChange, onFrame, onS
     const fill = async () => {
       if (fetching || next > max) return;
       fetching = true;
-      const count = Math.min(BATCH, max - next + 1);
+      const count = Math.min(Math.max(BATCH, playFps), max - next + 1);
       try {
         const frames = await api.replayFrames(runId, next, count, 1);
         if (!cancelled) {
@@ -119,14 +134,14 @@ export function Timeline({ runId, liveTick, active, onActiveChange, onFrame, onS
       const frame = queue.shift();
       if (frame) show(frame);
       else if (next > max && !fetching) setPlaying(false);
-      if (queue.length < BATCH / 2) void fill();
-    }, 1000 / PLAY_FPS);
+      if (queue.length < Math.max(BATCH, playFps) / 2) void fill();
+    }, 1000 / playFps);
     return () => {
       cancelled = true;
       window.clearInterval(id);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing]);
+  }, [playing, playFps]);
 
   const verify = async () => {
     setBusy(true);
@@ -201,6 +216,16 @@ export function Timeline({ runId, liveTick, active, onActiveChange, onFrame, onS
             <button data-testid="replay-play" disabled={tick === null || tick >= max || exactOnly} onClick={() => setPlaying((p) => !p)}>
               {playing ? `❚❚ ${t("timeline.stop")}` : `▶ ${t("timeline.play")}`}
             </button>
+            <label className="inline small">
+              {t("timeline.play_speed")}
+              <select value={playFps} onChange={(e) => setPlayFps(Number(e.target.value))} data-testid="replay-speed">
+                {PLAY_SPEEDS.map((fps, i) => (
+                  <option key={fps} value={fps}>
+                    {t(`timeline.play_speed.${i}`)}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="inline">
               tick
               <input

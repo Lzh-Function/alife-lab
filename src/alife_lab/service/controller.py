@@ -179,6 +179,8 @@ class Controller:
         self._closed = False
         self._db_closed = False
         self._replay_pool: ProcessPoolExecutor | None = None
+        self._replay_warmed: set[str] = set()
+        self._replay_prefilled: set[tuple[str, int]] = set()
 
     # ------------------------------------------------------------------ lifecycle
 
@@ -1249,8 +1251,51 @@ class Controller:
             raise ControllerError(f"no checkpoint at or before tick {tick}", "out_of_range")
         return candidates[-1]
 
+    def _warm_replay(self, run_id: str) -> None:
+        """Start the replay process and import the substrate while the user looks at the
+        timeline, so the first seek does not pay for process start-up (fire and forget)."""
+        exp = self.db.one(
+            "SELECT e.substrate FROM runs r JOIN experiments e ON e.id=r.experiment_id "
+            "WHERE r.id=?",
+            (run_id,),
+        )
+        substrate = str(exp["substrate"]) if exp is not None else ""
+        if not substrate or substrate in self._replay_warmed or not self._replay_supported(run_id):
+            return
+        self._replay_warmed.add(substrate)
+        try:
+            self._pool().submit(replay_mod.warm, substrate)
+        except RuntimeError:  # pool shutting down
+            self._replay_warmed.discard(substrate)
+
+    def _prefill_replay(self, run_id: str, row: Any) -> None:
+        """For a paused or stopped run, compute the last checkpoint segment in the replay process
+        in the background, so opening replay at the current tick and scrubbing back is instant.
+        Results are discarded; only the replay process's cache keeps the states."""
+        tick = int(row["tick"])
+        live = run_id in self.jobs and not self.jobs[run_id].finished
+        if (live and row["state"] != "paused") or (run_id, tick) in self._replay_prefilled:
+            return
+        if not self._replay_supported(run_id):
+            return
+        try:
+            base = self._base_for(run_id, tick)
+        except ControllerError:
+            return
+        if tick - int(base["simulation_clock"]) > 5000:  # keep background work bounded
+            return
+        self._replay_prefilled.add((run_id, tick))
+        try:
+            self._pool().submit(
+                replay_mod.replay_frames, self._replay_input(run_id, base), tick, 1, 1
+            )
+        except RuntimeError:
+            self._replay_prefilled.discard((run_id, tick))
+
     def timeline(self, run_id: str) -> dict[str, Any]:
         row = self._run_row(run_id)
+        self._warm_replay(run_id)
+        self._prefill_replay(run_id, row)
         checkpoints = self._ordered_checkpoints(run_id)
         interventions = self.db.all(
             "SELECT id, kind, status, requested_clock, applied_clock FROM interventions "

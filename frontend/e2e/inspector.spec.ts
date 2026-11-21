@@ -3,6 +3,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { BASE, expectState, startServer, stopServer, tick, waitHealthy, openPreset } from "./helpers";
 
 async function clickCell(page: Page, x: number, y: number, world = 128) {
+  // Typing into the timeline below scrolls the page; mouse.click uses viewport coordinates.
+  await page.getByTestId("world-canvas").scrollIntoViewIfNeeded();
   const box = (await page.getByTestId("world-canvas").boundingBox())!;
   await page.mouse.click(box.x + ((x + 0.5) / world) * box.width, box.y + ((y + 0.5) / world) * box.height);
 }
