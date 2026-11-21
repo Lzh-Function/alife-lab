@@ -1324,6 +1324,18 @@ class CreatureController(_Frozen):
     phases: list[Annotated[float, Field(ge=0.0, le=1.0)]]  # in turns
 
 
+class CreatureReflex(_Frozen):
+    """Sensory feedback added to the CPG (cf. Taga 1991; Kimura et al. Tekken; Ijspeert 2008):
+    * tilt: each knee command gets ``tilt_gain * lean`` where lean is how far the torso leans
+      towards that leg (the leg on the lower side pushes, levelling the torso);
+    * contact: a knee whose foot is off the ground gets ``contact_gain`` more extension (the leg
+      reaches down to find the ground).
+    The sum is clipped to [-1, 1]."""
+
+    tilt_gain: Annotated[float, Field(ge=0.0, le=3.0)] = 1.0
+    contact_gain: Annotated[float, Field(ge=0.0, le=1.0)] = 0.2
+
+
 class CreatureDynamics(_Frozen):
     clock_unit: Literal["tick"] = "tick"
     numeric_policy: Literal["float64_mujoco_cpu"] = "float64_mujoco_cpu"
@@ -1336,6 +1348,28 @@ class CreatureDynamics(_Frozen):
     joint_stiffness: Annotated[float, Field(ge=0.0, le=1000.0)] = 20.0
     body: CreatureBody
     controller: CreatureController
+    # Optional, additive (omitted from the canonical dump when absent: digests unchanged).
+    reflex: CreatureReflex | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_absent(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        out: dict[str, Any] = handler(self)
+        if out.get("reflex") is None:
+            out.pop("reflex", None)
+        return out
+
+
+class CreatureTerrain(_Frozen):
+    """Rough ground as a MuJoCo height field: smooth random bumps (bilinear interpolation of
+    uniform noise on a grid of spacing ``wavelength``), heights in [0, amplitude], flattened to
+    0 within ``flat_radius`` of the start. Generated from the experiment seed."""
+
+    kind: Literal["rough"] = "rough"
+    amplitude: Annotated[float, Field(ge=0.0, le=0.5)] = 0.12  # m
+    wavelength: Annotated[float, Field(ge=0.2, le=10.0)] = 1.0  # m
+    half_size: Annotated[float, Field(ge=5.0, le=60.0)] = 30.0  # m, square from -s to s
+    resolution: Annotated[float, Field(ge=0.05, le=0.5)] = 0.1  # m per height sample
+    flat_radius: Annotated[float, Field(ge=0.0, le=5.0)] = 1.0  # m
 
 
 class CreatureInitialization(_Frozen):
@@ -1358,8 +1392,16 @@ class CreatureExperiment(_Frozen):
     seed: _SEED
     initialization: CreatureInitialization = CreatureInitialization()
     dynamics: CreatureDynamics
+    terrain: CreatureTerrain | None = None  # None: flat floor
     runner: RunnerSpec = RunnerSpec(max_steps=2000, checkpoint_interval=200)
     observations: CreatureObservation = CreatureObservation()
+
+    @model_serializer(mode="wrap")
+    def _omit_absent(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        out: dict[str, Any] = handler(self)
+        if out.get("terrain") is None:
+            out.pop("terrain", None)
+        return out
 
     @model_validator(mode="after")
     def _check(self) -> CreatureExperiment:
@@ -1401,6 +1443,7 @@ _CREATURE_PATHS = (
 )
 _CREATURE_SCALARS = {"dynamics.controller.frequency_hz", "dynamics.body.torso_radius",
                      "dynamics.gear", "dynamics.joint_stiffness"}  # fmt: skip
+_CREATURE_REFLEX = {"dynamics.reflex.tilt_gain", "dynamics.reflex.contact_gain"}
 
 
 def search_path_kind(target: Any, path: str) -> bool | None:
@@ -1409,6 +1452,8 @@ def search_path_kind(target: Any, path: str) -> bool | None:
     if target.substrate == "creature":
         if path in _CREATURE_SCALARS:
             return False
+        if path in _CREATURE_REFLEX:  # only when the base target has a reflex section
+            return False if target.dynamics.reflex is not None else None
         legs = len(target.dynamics.body.legs)
         m = _CREATURE_PATHS[0].match(path)
         if m:

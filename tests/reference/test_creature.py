@@ -3,6 +3,7 @@ negative control, interventions, determinism and bitwise checkpoint continuation
 
 from __future__ import annotations
 
+import base64
 import json
 import math
 from pathlib import Path
@@ -152,3 +153,83 @@ def test_creature_search_is_deterministic_and_resumable() -> None:
     assert np.all((full.mass > 5) & (full.mass < 90))  # body mass is a descriptor here
     header, _ = a.render(full)  # parameter map and grid; no field panel for bodies
     assert header["channels"] == 3
+
+
+def _with(preset: str, **experiment: Any) -> ExperimentSpec:
+    raw = spec(preset).model_dump(mode="json")
+    for key, value in experiment.items():
+        raw["experiment"][key] = value
+    return ExperimentSpec.model_validate(raw)
+
+
+def test_terrain_is_seeded_flat_at_start_and_matches_the_hfield() -> None:
+    s = spec("creature_rough_wave")
+    e = _exp(s)
+    assert e.terrain is not None
+    h = model.terrain_heights(e)
+    assert h is not None
+    np.testing.assert_array_equal(h, model.terrain_heights(e))  # deterministic
+    other = _exp(_with("creature_rough_wave", seed=e.seed + 1))
+    assert not np.array_equal(h, model.terrain_heights(other))  # the seed changes the ground
+    assert h.min() >= 0 and h.max() <= e.terrain.amplitude
+    assert model.ground_height(e, 0.0, 0.0) == 0.0  # flat start area
+    assert h.max() > 0.5 * e.terrain.amplitude
+    w = model.make_world(e)
+    hf = np.asarray(w.model.hfield_data).reshape(h.shape) * e.terrain.amplitude
+    np.testing.assert_allclose(hf, h, atol=1e-6)  # MuJoCo stores float32
+    # Spec digests: a spec without terrain/reflex serialises exactly as before.
+    flat = spec().model_dump(mode="json")["experiment"]
+    assert "terrain" not in flat and "reflex" not in flat["dynamics"]
+
+
+def test_reflex_sign_and_negative_control() -> None:
+    """The reflex pushes down the knee of a foot in the air (contact term) and of the legs on
+    the side the torso leans to (tilt term); with gains 0 it changes nothing."""
+    s = spec("creature_rough_wave_reflex")
+    e = _exp(s)
+    assert e.dynamics.reflex is not None
+    w = model.make_world(e)
+    w.contacts = [True] * len(w.contacts)
+    tilt = math.radians(10)  # lean towards +x: the top of the torso moves to +x
+    rot = np.array([[math.cos(tilt), 0, math.sin(tilt)], [0, 1, 0],
+                    [-math.sin(tilt), 0, math.cos(tilt)]])  # fmt: skip
+    w.sensed_rot = rot.ravel()
+    out, tilt_deg = model.reflex_commands(w, e)
+    assert tilt_deg == pytest.approx(10.0)
+    angles = [math.radians(leg.angle_deg) for leg in e.dynamics.body.legs]
+    for i, a in enumerate(angles):
+        # up = (sin t, 0, cos t), leg direction = (cos t cos a, sin a, -sin t cos a); the
+        # reflex uses their horizontal dot product.
+        lean = math.sin(tilt) * math.cos(tilt) * math.cos(a)
+        assert out[i] == pytest.approx(e.dynamics.reflex.tilt_gain * lean)
+        assert (out[i] > 0) == (math.cos(a) > 1e-9)  # legs on the +x side push down
+    w.contacts[0] = False
+    out2, _ = model.reflex_commands(w, e)
+    assert out2[0] - out[0] == pytest.approx(e.dynamics.reflex.contact_gain)
+    zero = spec("creature_rough_wave_reflex").model_dump(mode="json")
+    zero["experiment"]["dynamics"]["reflex"] = {"tilt_gain": 0.0, "contact_gain": 0.0}
+    _, with_zero = run(ExperimentSpec.model_validate(zero), 60)
+    _, without = run(spec("creature_rough_wave"), 60)
+    np.testing.assert_array_equal(with_zero.data.qpos, without.data.qpos)
+
+
+def test_reflex_on_terrain_checkpoint_continues_bitwise() -> None:
+    s = spec("creature_rough_wave_reflex")
+    a, st = run(s, 45)
+    assert any(st.contacts) and st.path_length > 0
+    payload = a.serialize_state(st)
+    json.dumps(payload["meta"])
+    resumed = a.deserialize_state(payload, s)
+    assert resumed.path_length == st.path_length and resumed.contacts == st.contacts
+    for _ in range(60):
+        st, resumed = a.step(st, s), a.step(resumed, s)
+    assert a.state_distance(st, resumed)["exact_equal"]
+    assert resumed.path_length == pytest.approx(st.path_length, rel=1e-12)
+    header, _ = a.render(st)
+    assert len(header["contacts"]) == 4 and len(header["reflex"]) == 4
+    assert "hfield" in {g["type"] for g in header["geoms"]} and header["trail"]
+    scene = a.inspect(st, s, {"scene": True})["terrain"]
+    n = scene["n"]
+    assert n <= 241 and len(base64.b64decode(scene["heights_u16_b64"])) == 2 * n * n
+    flat_a, flat = run(spec(), 1)
+    assert flat_a.inspect(flat, spec(), {"scene": True})["terrain"] is None

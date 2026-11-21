@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { GaitPanel, type GaitPanelHandle } from "./GaitPanel";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, type Frame, type MetricRow, type RunEvent } from "../lib/api";
 import { useRunStream, type GpuMemory } from "../lib/stream";
@@ -23,6 +24,7 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
   const t = useT();
   const qc = useQueryClient();
   const canvas = useRef<WorldViewHandle>(null);
+  const gait = useRef<GaitPanelHandle>(null);
   const [tick, setTick] = useState<number | null>(null);
   const [rows, setRows] = useState<MetricRow[]>([]);
   const [events, setEvents] = useState<RunEvent[]>([]);
@@ -73,7 +75,10 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
     onFrame: (frame: Frame) => {
       lastLive.current = frame;
       setTick(frame.header.tick);
-      if (!replayRef.current) canvas.current?.draw(frame);
+      if (!replayRef.current) {
+        canvas.current?.draw(frame);
+        gait.current?.push(frame.header as unknown as Record<string, unknown>);
+      }
       if (frame.header.dropped_previews !== undefined) setDropped(frame.header.dropped_previews);
     },
     onMetrics: (newRows, sps) => {
@@ -354,8 +359,12 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
             onIntervene={onIntervene}
             onInspect={onInspect}
             onDisplayFps={setUiFps}
+            runId={runId}
           />
         </div>
+        {summary.substrate === "creature" && (
+          <GaitPanel ref={gait} hasReflex={Boolean((summary.spec.experiment.dynamics as Record<string, unknown> | undefined)?.reflex)} />
+        )}
         <p className="muted small">{t("lab.preview_note")} · {t("lab.evidence")}</p>
         {replay && <p className="notice small" data-testid="replay-banner">{t("timeline.banner")}</p>}
         <Timeline

@@ -1,0 +1,22 @@
+preset:
+  id: creature_rough_wave_reflex
+  scenario: creature_quadruped.yaml
+  title_key: preset.creature_rough_wave_reflex.title
+  description_key: preset.creature_rough_wave_reflex.description
+  overrides:
+    experiment:
+      name: creature_rough_wave_reflex
+      terrain:
+        kind: rough
+        amplitude: 0.2
+        wavelength: 1.0
+        half_size: 30.0
+        resolution: 0.1
+        flat_radius: 1.0
+      dynamics:
+        reflex:
+          tilt_gain: 1.0
+          contact_gain: 0.2
+  expected_observation: 'The same with tilt and contact reflexes added (untuned gains): compare the
+    torso tilt and the reflex bars with the previous preset.'
+  negative_control: preset creature_rough_wave (no reflex)

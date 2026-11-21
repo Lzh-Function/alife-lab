@@ -24,13 +24,14 @@ interface Props {
   onInspect?: (x: number, y: number) => void;
   maxPixels?: number;
   testId?: string;
+  runId?: string;
 }
 
 const noop = () => undefined;
 
 // Chooses the renderer and maps pointer input to the substrate's intervention payloads.
 export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
-  { substrate, world, tool, onIntervene, onDisplayFps = noop, onInspect, maxPixels, testId },
+  { substrate, world, tool, onIntervene, onDisplayFps = noop, onInspect, maxPixels, testId, runId },
   ref,
 ) {
   const grid = useRef<WorldCanvasHandle>(null);
@@ -79,7 +80,7 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
     // Inspection covers the whole creature; clicking the 3D view in inspect mode requests it.
     return (
       <Suspense fallback={<div className="scene3d muted">3D…</div>}>
-        <Scene3D ref={scene} onDisplayFps={onDisplayFps} testId={testId} width={Math.min(maxPixels ?? 720, 720)} onClick={inspecting ? () => onInspect?.(0, 0) : undefined} />
+        <Scene3D ref={scene} runId={runId} onDisplayFps={onDisplayFps} testId={testId} width={Math.min(maxPixels ?? 720, 720)} onClick={inspecting ? () => onInspect?.(0, 0) : undefined} />
       </Suspense>
     );
   }

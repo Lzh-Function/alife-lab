@@ -428,6 +428,7 @@ export const api = {
   comparisons: () => request<Array<Omit<ComparisonSummary, "members">>>("GET", "/comparisons"),
   comparison: (id: string) => request<ComparisonSummary>("GET", `/comparisons/${id}`),
   comparisonReport: (id: string) => request<ComparisonReport>("GET", `/comparisons/${id}/report?max_points=1000`),
+  scene: (id: string) => request<{ terrain: TerrainInfo | null }>("GET", `/experiments/${id}/inspect?x=0&y=0&scene=true`),
   inspect: (id: string, x: number, y: number, radius: number, tick?: number, mode?: "trace_self" | "trace_next_epoch") =>
     request<import("../components/InspectorPanel").Inspection>(
       "GET",
@@ -539,4 +540,12 @@ export function circleCells(cx: number, cy: number, radius: number, width: numbe
     }
   }
   return out;
+}
+
+export interface TerrainInfo {
+  n: number;
+  half_size: number;
+  extent: number;
+  amplitude: number;
+  heights_u16_b64: string;
 }

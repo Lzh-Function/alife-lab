@@ -300,3 +300,16 @@ p.muted .bff-cell { width: auto; padding: 0 0.25em; background-color: var(--cell
 .legend-item.sp-7 { color: #475569; }
 .target-editor { border: 1px dashed var(--border); padding: 0.5rem; border-radius: 6px; margin-top: 0.5rem; }
 .target-canvas { cursor: crosshair; max-width: 100%; image-rendering: pixelated; border: 1px solid var(--border); }
+
+/* Creature gait panel */
+.gait-panel { margin-top: 0.6rem; max-width: 720px; }
+.gait-panel h4 { margin: 0 0 0.2rem; }
+.gait-svg { width: 100%; height: auto; display: block; }
+.gait-svg .axis-label { fill: var(--muted); font-size: 11px; }
+.gait-svg .axis { stroke: var(--muted); stroke-width: 1; }
+.gait-svg .grid-line { stroke: var(--border); stroke-width: 1; }
+.gait-svg .gait-bar { fill: var(--accent); }
+.gait-svg .gait-tilt { fill: none; stroke: #d9480f; stroke-width: 2; }
+.gait-svg .crosshair { stroke: var(--text); stroke-opacity: 0.5; stroke-width: 1; stroke-dasharray: 3 3; }
+.gait-svg .reflex-bar { fill: var(--accent); }
+.gait-svg .reflex-bar.neg { fill: var(--muted); }

@@ -1,0 +1,18 @@
+preset:
+  id: creature_rough_wave
+  scenario: creature_quadruped.yaml
+  title_key: preset.creature_rough_wave.title
+  description_key: preset.creature_rough_wave.description
+  overrides:
+    experiment:
+      name: creature_rough_wave
+      terrain:
+        kind: rough
+        amplitude: 0.2
+        wavelength: 1.0
+        half_size: 30.0
+        resolution: 0.1
+        flat_radius: 1.0
+  expected_observation: 'The hand-designed wave gait on rough terrain (bumps up to 0.2 m): watch
+    which feet touch the ground in the gait diagram.'
+  negative_control: preset creature_quadruped_wave (flat floor)

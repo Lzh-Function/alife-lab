@@ -1,0 +1,191 @@
+# Rough terrain (MuJoCo height field: smooth random bumps up to 0.2 m, wavelength 1 m,
+# generated from each evaluation seed). Every candidate is scored on 2 search terrains; the
+# best is re-scored on 3 unseen holdout terrains (holdout_best = generalisation).
+# Objective creature_distance v1 (displacement after 20 s x upright fraction).
+# Searched: CPG (17) and body (9), no sensory feedback.
+schema_version: 1
+experiment:
+  name: search_creature_rough
+  mode: exploratory
+  substrate: search
+  seed: 1
+  target:
+    name: creature_quadruped
+    mode: exploratory
+    substrate: creature
+    seed: 0
+    initialization:
+      height: 0.75
+    dynamics:
+      timestep: 0.01
+      substeps: 5
+      gear: 30.0
+      friction: 1.0
+      density: 300.0
+      joint_stiffness: 20.0
+      body:
+        torso_radius: 0.25
+        legs:
+        - angle_deg: 45
+          upper: 0.3
+          lower: 0.4
+          radius: 0.05
+        - angle_deg: 135
+          upper: 0.3
+          lower: 0.4
+          radius: 0.05
+        - angle_deg: 225
+          upper: 0.3
+          lower: 0.4
+          radius: 0.05
+        - angle_deg: 315
+          upper: 0.3
+          lower: 0.4
+          radius: 0.05
+      controller:
+        kind: cpg
+        frequency_hz: 1.5
+        amplitudes:
+        - 0.8
+        - 0.8
+        - 0.8
+        - 0.8
+        - 0.8
+        - 0.8
+        - 0.8
+        - 0.8
+        phases:
+        - 0
+        - 0.25
+        - 0.25
+        - 0.5
+        - 0.5
+        - 0.75
+        - 0.75
+        - 0.0
+    runner:
+      max_steps: 100000
+      checkpoint_interval: 500
+    terrain:
+      kind: rough
+      amplitude: 0.2
+      wavelength: 1.0
+      half_size: 30.0
+      resolution: 0.1
+      flat_radius: 1.0
+  space:
+  - path: dynamics.controller.frequency_hz
+    low: 0.3
+    high: 3.0
+    scale: linear
+  - path: dynamics.controller.amplitudes.0
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.phases.0
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.amplitudes.1
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.phases.1
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.amplitudes.2
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.phases.2
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.amplitudes.3
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.phases.3
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.amplitudes.4
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.phases.4
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.amplitudes.5
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.phases.5
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.amplitudes.6
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.phases.6
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.amplitudes.7
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.controller.phases.7
+    low: 0.0
+    high: 1.0
+    scale: linear
+  - path: dynamics.body.legs.0.upper
+    low: 0.15
+    high: 0.6
+    scale: linear
+  - path: dynamics.body.legs.0.lower
+    low: 0.2
+    high: 0.7
+    scale: linear
+  - path: dynamics.body.legs.1.upper
+    low: 0.15
+    high: 0.6
+    scale: linear
+  - path: dynamics.body.legs.1.lower
+    low: 0.2
+    high: 0.7
+    scale: linear
+  - path: dynamics.body.legs.2.upper
+    low: 0.15
+    high: 0.6
+    scale: linear
+  - path: dynamics.body.legs.2.lower
+    low: 0.2
+    high: 0.7
+    scale: linear
+  - path: dynamics.body.legs.3.upper
+    low: 0.15
+    high: 0.6
+    scale: linear
+  - path: dynamics.body.legs.3.lower
+    low: 0.2
+    high: 0.7
+    scale: linear
+  - path: dynamics.body.torso_radius
+    low: 0.15
+    high: 0.4
+    scale: linear
+  dynamics:
+    algorithm: cma_es
+    population: 16
+    sigma0: 0.25
+    objective: creature_distance
+    eval_steps: 400
+    eval_seeds: 2
+    holdout_seeds: 3
+  runner:
+    max_steps: 80
+    checkpoint_interval: 10

@@ -1,0 +1,21 @@
+# Pilot seeds 101-102 excluded.
+schema_version: 1
+sweep:
+  name: search_creature_rough_plain_sweep
+  base_preset: search_creature_rough_cma
+  seeds:
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  factors: []
+  endpoint:
+    metric: holdout_best
+    at: final
+  design: confirmatory
+  hypothesis: 'H3 (pre-registered in docs/reference_fidelity/creature.md): on rough terrain, evolving
+    the reflex gains together with body and CPG gives a higher final holdout_best (3 unseen terrains)
+    than evolving body and CPG without feedback; compared across the two sweeps (same seeds, budget 16
+    x 80 x 2 evaluations), one-sided exact permutation test.'
+  profile_id: cpu_dev

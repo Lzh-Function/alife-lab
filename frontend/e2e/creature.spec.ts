@@ -54,3 +54,25 @@ test("creature evolution: MAP-Elites search, lineage, best opened in 3D", async 
     await stopServer(server);
   }
 });
+
+test("creature on rough terrain with reflexes: terrain, gait diagram and reflex bars", async ({ page }) => {
+  const server = startServer();
+  await waitHealthy();
+  try {
+    await page.goto(`${BASE}/#/catalog`);
+    await openPreset(page, "creature_rough_wave_reflex");
+    await page.getByTestId("input-profile").selectOption("cpu_dev");
+    await page.getByTestId("input-tps").fill("30");
+    await expect(page.getByTestId("validation")).toContainText("OK");
+    await page.getByTestId("btn-create").click();
+    await expect(page.locator("div.scene3d canvas")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("gait-diagram")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("reflex-bars")).toBeVisible();
+    await expect.poll(() => page.locator("[data-testid=gait-diagram] rect.gait-bar").count(), { timeout: 20_000 }).toBeGreaterThan(2);
+    await expect(page.getByTestId("gait-readout")).toContainText("%");
+    await page.waitForTimeout(4000);
+    await page.screenshot({ path: path.join(DATA, "creature_rough.png"), fullPage: true });
+  } finally {
+    await stopServer(server);
+  }
+});

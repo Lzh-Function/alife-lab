@@ -15,7 +15,8 @@ from alife_lab.substrates.creature import model
 
 SERIALIZE_VERSION = 1
 MUJOCO_AVAILABLE = importlib.util.find_spec("mujoco") is not None
-GEOM_TYPES = {0: "plane", 2: "sphere", 3: "capsule", 5: "cylinder", 6: "box"}
+GEOM_TYPES = {0: "plane", 1: "hfield", 2: "sphere", 3: "capsule", 5: "cylinder", 6: "box"}
+TERRAIN_DISPLAY_MAX = 241  # samples per side sent to the browser
 
 
 def _cr(spec: ExperimentSpec) -> CreatureExperiment:
@@ -129,6 +130,7 @@ class CreatureAdapter:
         geoms = []
         for g in range(m.ngeom):
             geoms.append({
+                "name": m.geom(g).name,
                 "type": GEOM_TYPES.get(int(m.geom_type[g]), "box"),
                 "size": [round(float(v), 5) for v in m.geom_size[g]],
                 "rgba": [round(float(v), 3) for v in m.geom_rgba[g]],
@@ -140,6 +142,12 @@ class CreatureAdapter:
             "geoms": geoms,
             "torso": [round(float(v), 4) for v in d.qpos[:3]],
             "start": [round(state.start_xy[0], 4), round(state.start_xy[1], 4)],
+            "contacts": [bool(c) for c in state.contacts],
+            "reflex": [round(v, 4) for v in state.reflex],
+            "tilt_deg": round(state.tilt_deg, 2),
+            "path_length": round(state.path_length, 3),
+            "time": round(float(d.time), 3),
+            "trail": [[round(r[1], 3), round(r[2], 3)] for r in state.recent[::4]],
             "scale": "metres, z up",
         }, data
 
@@ -166,6 +174,8 @@ class CreatureAdapter:
         self, state: model.World, spec: ExperimentSpec, query: dict[str, Any]
     ) -> dict[str, Any]:
         exp = _cr(spec)
+        if query.get("scene"):  # static scene data for the 3D view (terrain heights)
+            return {"substrate": "creature", "tick": state.tick, "terrain": self._terrain(exp)}
         m, d = state.model, state.data
         legs = []
         for i in range(len(exp.dynamics.body.legs)):
@@ -195,13 +205,41 @@ class CreatureAdapter:
             "legs": legs,
             "mass_kg": float(m.body_subtreemass[1]),
             "controller": exp.dynamics.controller.kind,
+            "tilt_deg": state.tilt_deg,
+            "path_length": state.path_length,
+            "reflex": state.reflex if exp.dynamics.reflex is not None else None,
+            "terrain": exp.terrain.model_dump(mode="json") if exp.terrain else None,
         }
+
+    @staticmethod
+    def _terrain(exp: CreatureExperiment) -> dict[str, Any] | None:
+        """Downsampled heights as base64 uint16 (0 .. amplitude), row = y from -half_size."""
+        import base64
+
+        h = model.terrain_heights(exp)
+        if h is None or exp.terrain is None:
+            return None
+        step = max(1, int(np.ceil((h.shape[0] - 1) / (TERRAIN_DISPLAY_MAX - 1))))
+        small = h[::step, ::step]
+        amp = max(exp.terrain.amplitude, 1e-9)
+        q = np.round(np.clip(small / amp, 0, 1) * 65535).astype("<u2")
+        return {"n": int(small.shape[0]), "half_size": exp.terrain.half_size,
+                "extent": float(exp.terrain.half_size * 2 * (small.shape[0] - 1) * step
+                                / (h.shape[0] - 1)),
+                "amplitude": exp.terrain.amplitude,
+                "heights_u16_b64": base64.b64encode(q.tobytes()).decode()}  # fmt: skip
 
     def state_distance(self, a: model.World, b: model.World) -> dict[str, Any]:
         sa, sb = self._state_vec(a), self._state_vec(b)
         same = sa.shape == sb.shape
         diff = float(np.abs(sa - sb).max()) if same else None
-        exact = bool(same and np.array_equal(sa, sb) and a.energy == b.energy)
+        exact = bool(
+            same
+            and np.array_equal(sa, sb)
+            and a.energy == b.energy
+            and a.contacts == b.contacts
+            and np.array_equal(a.sensed_rot, b.sensed_rot)
+        )
         return {"metric": "max_abs_state_difference", "value": diff, "exact_equal": exact}
 
     @staticmethod
@@ -215,12 +253,17 @@ class CreatureAdapter:
     def serialize_state(self, state: model.World) -> dict[str, Any]:
         return {
             "arrays": {"mj_state": self._state_vec(state),
-                       "recent": np.asarray(state.recent, dtype=np.float64).reshape(-1, 3)},
+                       "recent": np.asarray(state.recent, dtype=np.float64).reshape(-1, 3),
+                       "contacts": np.asarray(state.contacts, dtype=np.uint8),
+                       "sensed_rot": np.asarray(state.sensed_rot, dtype=np.float64)},
             "meta": {
                 "serialize_version": SERIALIZE_VERSION,
                 "tick": state.tick,
                 "start_xy": list(state.start_xy),
                 "energy": state.energy,
+                "path_length": state.path_length,
+                "reflex": list(state.reflex),
+                "tilt_deg": state.tilt_deg,
                 "mujoco": _mujoco().__version__,
                 "state_spec": "mjSTATE_INTEGRATION",
             },
@@ -242,4 +285,14 @@ class CreatureAdapter:
         w.energy = float(meta["energy"])
         recent = np.asarray(payload["arrays"]["recent"], dtype=np.float64).reshape(-1, 3)
         w.recent = [(float(r[0]), float(r[1]), float(r[2])) for r in recent]
+        w.last_xy = (float(w.data.qpos[0]), float(w.data.qpos[1]))
+        # Fields added with terrain/reflex; older checkpoints lack them (flat, no reflex: the
+        # contacts only feed the reflex, so their absence does not change those runs).
+        w.path_length = float(meta.get("path_length", 0.0))
+        w.tilt_deg = float(meta.get("tilt_deg", 0.0))
+        w.reflex = [float(v) for v in meta.get("reflex", w.reflex)]
+        if "contacts" in payload["arrays"]:
+            w.contacts = [bool(v) for v in np.asarray(payload["arrays"]["contacts"]).ravel()]
+        if "sensed_rot" in payload["arrays"]:
+            w.sensed_rot = np.asarray(payload["arrays"]["sensed_rot"], dtype=np.float64).ravel()
         return w

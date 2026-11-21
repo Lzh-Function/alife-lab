@@ -1,0 +1,9 @@
+preset:
+  id: search_creature_rough_cma
+  scenario: search_creature_rough.yaml
+  title_key: preset.search_creature_rough_cma.title
+  description_key: preset.search_creature_rough_cma.description
+  overrides: {}
+  expected_observation: 'Body and CPG evolved on rough terrain without feedback. Pilot seeds 101-102
+    (40 generations): holdout_best 12.3 / 18.2 m.'
+  negative_control: preset search_creature_rough_reflex_cma (same search plus reflex gains)

@@ -1,0 +1,10 @@
+preset:
+  id: search_creature_rough_reflex_cma
+  scenario: search_creature_rough_reflex.yaml
+  title_key: preset.search_creature_rough_reflex_cma.title
+  description_key: preset.search_creature_rough_reflex_cma.description
+  overrides: {}
+  expected_observation: 'Body, CPG and reflex gains evolved together on rough terrain. Pilot seeds
+    101-102 (40 generations): holdout_best 21.4 / 13.6 m; evolved tilt gains 0.9 / 0.01 (the second
+    run discarded the reflex).'
+  negative_control: preset search_creature_rough_cma (no feedback)

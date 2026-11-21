@@ -558,12 +558,15 @@ def create_app(
         tick: Annotated[int | None, Query(ge=0)] = None,
         mode: Annotated[Literal["summary", "trace_self", "trace_next_epoch"], Query()] = "summary",
         candidate: Annotated[int | None, Query(ge=0)] = None,
+        scene: Annotated[bool, Query()] = False,
     ) -> dict[str, Any]:
         query: dict[str, Any] = {"x": x, "y": y, "radius": radius}
         if mode != "summary":
             query["mode"] = mode
         if candidate is not None:  # search runs: look a candidate up by archive index
             query["candidate"] = candidate
+        if scene:  # creature runs: static scene data (terrain) for the 3D view
+            query["scene"] = True
         return envelope(await ctl().inspect(run_id, query, tick))
 
     # ------------------------------------------------------------------- tools
