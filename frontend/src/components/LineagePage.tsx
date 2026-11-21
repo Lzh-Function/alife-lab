@@ -19,7 +19,13 @@ function colour(v: number): string {
 
 const short = (path: string) => {
   const k = /^dynamics\.kernels\.(\d+)\.(\w+)$/.exec(path);
-  return k ? `k${k[1]}.${k[2]}` : (path.split(".").pop() ?? path);
+  if (k) return `k${k[1]}.${k[2]}`;
+  // Indexed paths keep their parent name: controller.amplitudes.3 -> amplitudes[3],
+  // body.legs.2.upper -> legs[2].upper.
+  const parts = path.split(".");
+  const idx = parts.findIndex((p) => /^\d+$/.test(p));
+  if (idx > 0) return `${parts[idx - 1]}[${parts[idx]}]${parts.slice(idx + 1).map((p) => `.${p}`).join("")}`;
+  return parts.pop() ?? path;
 };
 
 export function LineagePage({ runId }: { runId: string }) {

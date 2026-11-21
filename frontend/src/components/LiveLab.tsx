@@ -32,6 +32,8 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
   // As large as the column allows, but a square view should still fit on the screen
   // below the toolbars (never smaller than the previous fixed 720 px, never above 1400 px).
   const viewPixels = Math.min(viewWidth - 4, Math.max(720, windowHeight - 320), 1400);
+  // Wide (16:10) 3D views: as wide as the column, as long as their height fits the screen.
+  const widePixels = Math.min(viewWidth - 4, Math.max(720, Math.round((windowHeight - 320) * 1.6)), 1400);
   const [tick, setTick] = useState<number | null>(null);
   const [rows, setRows] = useState<MetricRow[]>([]);
   const [events, setEvents] = useState<RunEvent[]>([]);
@@ -367,7 +369,7 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
             world={world}
             viewMode={viewMode}
             frameSource={replay ? "replay" : "live"}
-            maxPixels={viewPixels}
+            maxPixels={viewMode === "terrain" || viewMode === "spacetime" || summary.substrate === "creature" ? widePixels : viewPixels}
             tool={viewMode === "2d" || viewMode === "glow" ? toolForView : null}
             onIntervene={onIntervene}
             onInspect={onInspect}

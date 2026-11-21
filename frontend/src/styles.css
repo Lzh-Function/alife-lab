@@ -317,7 +317,7 @@ p.muted .bff-cell { width: auto; padding: 0 0.25em; background-color: var(--cell
 /* Presentation views (3D field, glow) and fullscreen */
 .canvas-wrap-wide { display: block; width: 100%; background: #05070c; }
 .view-modes button.primary { font-weight: 600; }
-.field3d { width: 100%; aspect-ratio: 16 / 10; }
+.field3d { width: 100%; aspect-ratio: 16 / 10; margin: 0 auto; }
 .field3d canvas { display: block; }
 .field3d-bar { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; align-items: center; padding: 0.35rem 0.6rem; background: var(--panel); border-top: 1px solid var(--border); }
 .canvas-wrap:fullscreen { display: flex; flex-direction: column; justify-content: center; align-items: center; background: #05070c; border: none; border-radius: 0; }
