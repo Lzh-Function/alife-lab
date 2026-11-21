@@ -1446,9 +1446,18 @@ _CREATURE_SCALARS = {"dynamics.controller.frequency_hz", "dynamics.body.torso_ra
 _CREATURE_REFLEX = {"dynamics.reflex.tilt_gain", "dynamics.reflex.contact_gain"}
 
 
+_CONNECTOME_STIM_PATH = re.compile(r"^stimuli\.(\d+)\.rate_hz$")
+
+
 def search_path_kind(target: Any, path: str) -> bool | None:
     """None if ``path`` cannot be searched for this target, else whether it is integer-valued.
-    Multichannel Lenia exposes every kernel's m, s, h, r (``dynamics.kernels.<i>.<name>``)."""
+    Multichannel Lenia exposes every kernel's m, s, h, r (``dynamics.kernels.<i>.<name>``).
+    Connectome exposes stimulus firing rates only (``stimuli.<i>.rate_hz``; wiring is fixed)."""
+    if target.substrate == "connectome":
+        m = _CONNECTOME_STIM_PATH.match(path)
+        if m:
+            return False if int(m.group(1)) < len(target.stimuli) else None
+        return None
     if target.substrate == "creature":
         if path in _CREATURE_SCALARS:
             return False
@@ -1495,14 +1504,18 @@ OBJECTIVE_TARGETS = {
     "lenia_clip_target": ("lenia", "lenia_mc"),
     "lenia_clip_open_endedness": ("lenia", "lenia_mc"),
     "creature_distance": ("creature",),
+    "connectome_mn9_rate": ("connectome",),
 }
 
 
 class SearchDynamics(_Frozen):
     clock_unit: Literal["generation"] = "generation"
     # float64_cpu: NumPy objectives; float32_clip_torch: objectives that embed frames with CLIP
-    # in PyTorch (backends torch / torch_cuda; results depend on the recorded device).
-    numeric_policy: Literal["float64_cpu", "float32_clip_torch"] = "float64_cpu"
+    # in PyTorch (backends torch / torch_cuda); float32_connectome: bit-identical CPU/CUDA LIF
+    # connectome evaluations (backends numpy / cupy).
+    numeric_policy: Literal["float64_cpu", "float32_clip_torch", "float32_connectome"] = (
+        "float64_cpu"
+    )
     # random: uniform sampling of the box (baseline); cma_es: CMA-ES (Hansen's purecma
     # equations, positive weights) in the normalised box with a quadratic bound penalty;
     # map_elites: MAP-Elites over the ``qd`` descriptor grid (requires ``qd``).
@@ -1518,6 +1531,7 @@ class SearchDynamics(_Frozen):
         "lenia_clip_target",
         "lenia_clip_open_endedness",
         "creature_distance",
+        "connectome_mn9_rate",
     ] = "lenia_moving_localized"
     max_alive_fraction: Annotated[float, Field(gt=0.0, le=1.0)] = 0.3
     eval_steps: Annotated[int, Field(ge=10, le=20_000)] = 300
@@ -1628,7 +1642,8 @@ class SearchExperiment(_Frozen):
     seed: _SEED
     # The base world; its seed is replaced by the evaluation seeds.
     target: Annotated[
-        LeniaExperiment | LeniaMCExperiment | CreatureExperiment, Field(discriminator="substrate")
+        LeniaExperiment | LeniaMCExperiment | CreatureExperiment | ConnectomeExperiment,
+        Field(discriminator="substrate"),
     ]
     space: Annotated[list[SearchParam], Field(min_length=1, max_length=MAX_SEARCH_PARAMS)]
     dynamics: SearchDynamics = SearchDynamics()
@@ -1652,10 +1667,15 @@ class SearchExperiment(_Frozen):
         clip = d.objective in CLIP_OBJECTIVES
         if clip != (self.asal is not None):
             raise ValueError("CLIP objectives need an asal section (and only they may have one)")
-        if d.numeric_policy != ("float32_clip_torch" if clip else "float64_cpu"):
-            raise ValueError(
-                "numeric_policy must be float32_clip_torch for CLIP objectives, else float64_cpu"
-            )
+        expected_policy = (
+            "float32_clip_torch"
+            if clip
+            else "float32_connectome"
+            if self.target.substrate == "connectome"
+            else "float64_cpu"
+        )
+        if d.numeric_policy != expected_policy:
+            raise ValueError(f"numeric_policy must be {expected_policy!r} for this search target")
         if self.asal is not None:
             a = self.asal
             if d.objective == "lenia_clip_target":
@@ -1764,6 +1784,11 @@ class ConnectomeObservationSpec(_Frozen):
     )
 
 
+_CELL_TYPE_TOKEN = Annotated[
+    str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.\-/ ()+]+$")
+]
+
+
 class ConnectomeExperiment(_Frozen):
     name: _NAME
     mode: Literal["reference", "exploratory"] = "reference"
@@ -1773,6 +1798,7 @@ class ConnectomeExperiment(_Frozen):
     wiring: ConnectomeWiring = "reference"
     stimuli: tuple[ConnectomeStimulusSpec, ...] = ()
     silenced_ports: tuple[str, ...] = ()
+    silenced_cell_types: tuple[_CELL_TYPE_TOKEN, ...] = ()
     dynamics: ConnectomeDynamicsSpec = ConnectomeDynamicsSpec()
     runner: RunnerSpec = RunnerSpec(max_steps=1000, checkpoint_interval=100)
     observations: ConnectomeObservationSpec = ConnectomeObservationSpec()
@@ -1787,6 +1813,18 @@ class ConnectomeExperiment(_Frozen):
                     "reference mode for connectome requires Shiu et al. (2024) default parameters"
                 )
         return self
+
+    @model_serializer(mode="wrap")
+    def _omit_empty_silenced_cell_types(
+        self, handler: SerializerFunctionWrapHandler
+    ) -> dict[str, Any]:
+        out: dict[str, Any] = handler(self)
+        if not out.get("silenced_cell_types"):
+            out.pop("silenced_cell_types", None)
+        return out
+
+
+SearchExperiment.model_rebuild()
 
 
 AnyExperiment = Annotated[

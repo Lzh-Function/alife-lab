@@ -214,3 +214,104 @@ def evaluate_creature(spec: ExperimentSpec, ticks: int) -> CreatureEvaluation:
         displacement=disp,
         energy=w.energy,
     )
+
+
+@dataclass
+class ConnectomeEvaluation:
+    score: float  # target motor (MN9) mean firing rate in Hz
+    viable: bool  # target motor fired at least once (mn9_rate_hz > 0)
+    mn9_rate_hz: float
+    total_stim_hz: float  # sum of stimulus firing rates across configured ports
+    active_fraction: float  # fraction of neurons that fired at least once
+    population_rate_hz: float
+
+
+def evaluate_connectome(spec: ExperimentSpec, ticks: int) -> ConnectomeEvaluation:
+    """``connectome_mn9_rate`` (version 1): run an unmodified connectome adapter headless
+    for ``ticks`` ms and observe MN9 proboscis extension firing rate."""
+    return evaluate_connectome_batch([spec], ticks, backend="numpy")[0]
+
+
+def evaluate_connectome_batch(
+    specs: list[ExperimentSpec],
+    ticks: int,
+    *,
+    backend: str = "numpy",
+    batch_size: int = 8,
+) -> list[ConnectomeEvaluation]:
+    """Batch-evaluate connectome stimulus candidates on CPU (``numpy``) or GPU (``cupy``).
+
+    All specs in one call share the same dataset/wiring/LIFParams (true for every search
+    generation); GPU runs ``CupyBatchedLIFRunner`` with CUDA graphs and produces bitwise
+    identical spike counts to CPU.
+    """
+    from alife_lab.connectome.ablation import _run_batch_total_spikes
+    from alife_lab.core.spec import ConnectomeExperiment
+    from alife_lab.substrates.connectome.adapter import _get_pack_and_csr, _params_from_exp
+
+    if not specs:
+        return []
+    first_exp = specs[0].experiment
+    assert isinstance(first_exp, ConnectomeExperiment)
+    pack, csr = _get_pack_and_csr(first_exp)
+    params = _params_from_exp(first_exp)
+    n = pack.cells.num_cells
+    m = len(specs)
+
+    stim_rows = np.zeros((m, n), dtype=np.float32)
+    sil_rows = np.zeros((m, n), dtype=np.uint8)
+    seeds: list[int] = []
+    stim_sums: list[float] = []
+
+    for row, sp in enumerate(specs):
+        exp = sp.experiment
+        assert isinstance(exp, ConnectomeExperiment)
+        seeds.append(int(exp.seed))
+        total_rate = 0.0
+        for stim in exp.stimuli:
+            if stim.port in pack.io_ports:
+                stim_rows[row, pack.io_ports[stim.port].cell_indices] = np.float32(stim.rate_hz)
+                total_rate += float(stim.rate_hz)
+        stim_sums.append(total_rate)
+        for pid in exp.silenced_ports:
+            if pid in pack.io_ports:
+                sil_rows[row, pack.io_ports[pid].cell_indices] = np.uint8(1)
+        if exp.silenced_cell_types:
+            wanted = set(exp.silenced_cell_types)
+            for idx, ct in enumerate(pack.cells.cell_type):
+                if ct in wanted:
+                    sil_rows[row, idx] = np.uint8(1)
+
+    totals = _run_batch_total_spikes(
+        csr,
+        params,
+        stim_rows,
+        sil_rows,
+        seeds,
+        ticks,
+        backend,
+        batch_size=batch_size,
+    )
+    elapsed_s = max(ticks * params.substeps_per_tick * params.dt_s, 1e-9)
+    mn9_port = pack.io_ports.get("mn9_proboscis_extension")
+    mn9_idx = mn9_port.cell_indices if mn9_port is not None else np.zeros(0, dtype=np.int32)
+    n_mn9 = max(1, int(mn9_idx.size))
+
+    out: list[ConnectomeEvaluation] = []
+    for row in range(m):
+        tot = totals[row]
+        mn9_spikes = int(tot[mn9_idx].sum()) if mn9_idx.size else 0
+        mn9_rate = mn9_spikes / (n_mn9 * elapsed_s)
+        active_frac = float((tot > 0).sum()) / max(1, n)
+        pop_rate = float(int(tot.sum())) / (max(1, n) * elapsed_s)
+        out.append(
+            ConnectomeEvaluation(
+                score=mn9_rate,
+                viable=mn9_rate > 0.0,
+                mn9_rate_hz=mn9_rate,
+                total_stim_hz=stim_sums[row],
+                active_fraction=active_frac,
+                population_rate_hz=pop_rate,
+            )
+        )
+    return out

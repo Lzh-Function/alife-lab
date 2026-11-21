@@ -58,6 +58,9 @@ def deep_merge(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any
 
 
 def _set_path(body: dict[str, Any], path: str, value: Any) -> None:
+    if "." not in path:
+        body[path] = value
+        return
     section, key = path.split(".", 1)
     sub = dict(body.get(section) or {})
     sub[key] = value

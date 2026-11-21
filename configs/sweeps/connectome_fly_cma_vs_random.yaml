@@ -1,0 +1,20 @@
+schema_version: 1
+sweep:
+  name: connectome_fly_cma_vs_random
+  base_preset: search_connectome_fly_cma
+  overrides:
+    runner:
+      max_steps: 8
+      checkpoint_interval: 4
+  seeds: [1, 2, 3, 4, 5]
+  factors:
+    - path: dynamics.algorithm
+      values: ["random", "cma_es"]
+      labels: ["random", "cma_es"]
+  reference_condition: 0
+  endpoint:
+    metric: holdout_best
+    at: final
+  design: confirmatory
+  hypothesis: "On FlyWire v783 with 4 sensory input ports, CMA-ES finds higher holdout MN9 firing rates than uniform random search with the same evaluation budget."
+  profile_id: local_gpu

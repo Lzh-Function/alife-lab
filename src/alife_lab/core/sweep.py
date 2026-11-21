@@ -15,10 +15,14 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from alife_lab.core.hashing import sha256_json
 
 MAX_SWEEP_RUNS = 200
-_PATH = r"^(dynamics|world|initialization|runner|observations|soup)\.[a-z_]{1,64}$"
+_PATH = (
+    r"^((dynamics|world|initialization|runner|observations|soup)\.[a-z_]{1,64}"
+    r"|wiring|silenced_ports|silenced_cell_types)$"
+)
 Scalar = float | int | str | bool
-# Structured levels (e.g. a Particle Life interaction matrix) are allowed when labelled.
-Level = Scalar | list[list[float]]
+# Structured levels (e.g. Particle Life matrices or connectome silenced cell-type lists)
+# are allowed when labelled.
+Level = Scalar | list[str] | list[list[float]]
 
 
 class _Frozen(BaseModel):
@@ -47,7 +51,7 @@ class SweepFactor(_Frozen):
 
 
 class SweepEndpoint(_Frozen):
-    metric: Annotated[str, Field(pattern=r"^[a-z_]{1,64}$")]
+    metric: Annotated[str, Field(pattern=r"^[a-z0-9_]{1,64}$")]
     # "final" = the last tick of each run; an int = that tick (must be <= max_steps).
     at: Literal["final"] | Annotated[int, Field(ge=0)] = "final"
 

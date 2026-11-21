@@ -1,0 +1,29 @@
+schema_version: 1
+sweep:
+  name: connectome_silencing_tiny
+  base_preset: connectome_tiny_circuit
+  overrides:
+    mode: exploratory
+    runner:
+      max_steps: 200
+      checkpoint_interval: 100
+  seeds: [1, 2, 3, 4, 5]
+  factors:
+    - path: silenced_cell_types
+      values:
+        - []
+        - ["IN1"]
+        - ["LB3c"]
+        - ["LB1a"]
+      labels:
+        - intact
+        - silence_IN1
+        - silence_LB3c
+        - silence_LB1a
+  reference_condition: 0
+  endpoint:
+    metric: mn9_rate_hz
+    at: final
+  design: confirmatory
+  hypothesis: "Silencing relay interneuron IN1 or sugar sensory neuron LB3c abolishes MN9 firing under 150 Hz sugar stimulation, whereas silencing inactive bitter neuron LB1a leaves MN9 firing unchanged."
+  profile_id: cpu_dev

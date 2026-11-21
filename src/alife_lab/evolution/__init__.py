@@ -6,4 +6,5 @@ OBJECTIVE_VERSIONS = {
     "lenia_clip_target": 1,
     "lenia_clip_open_endedness": 1,
     "creature_distance": 1,
+    "connectome_mn9_rate": 1,
 }

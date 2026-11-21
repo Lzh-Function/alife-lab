@@ -190,6 +190,7 @@ _ALLOWED_OVERRIDE_KEYS = {
     "wiring",
     "stimuli",
     "silenced_ports",
+    "silenced_cell_types",
 }
 
 

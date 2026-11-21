@@ -1015,6 +1015,16 @@ const ja = {
   "connectome.inspector.silenced": "発火を停止中",
   "connectome.yes": "はい",
   "connectome.no": "いいえ",
+  "preset.search_connectome_tiny_cma.title": "脳の入力探索：4細胞回路で MN9 を動かす刺激を CMA-ES で探す",
+  "preset.search_connectome_tiny_cma.description": "脳の配線は固定したまま、甘味・苦味の刺激頻度だけを探して MN9 の発火レートを高める。オフライン CPU ですぐ動く。",
+  "preset.search_connectome_tiny_random.title": "脳の入力探索：4細胞回路のランダム探索（比較用）",
+  "preset.search_connectome_tiny_random.description": "CMA-ES と同じ評価回数だけランダムに刺激頻度を試す比較用の実験。",
+  "preset.search_connectome_fly_cma.title": "ハエ全脳の入力探索：4つの感覚ポートから MN9 を動かす刺激を探す（CMA-ES）",
+  "preset.search_connectome_fly_cma.description": "FlyWire v783 の実測配線は固定したまま、甘味・苦味・水・毛づくろいの4感覚入力の頻度を探して MN9 の反応を最大化する（GPU バッチ対応）。",
+  "preset.search_connectome_fly_map_elites.title": "ハエ全脳の多様性探索：いろいろな刺激量 × MN9 反応を集める（MAP-Elites）",
+  "preset.search_connectome_fly_map_elites.description": "「MN9 の反応の強さ × 刺激の総量」の区画ごとに、代表的な感覚刺激の組み合わせを幅広く集める。",
+  "preset.search_connectome_fly_shuffled_cma.title": "ハエ全脳の入力探索：配線をシャッフルした脳で探す（比較用）",
+  "preset.search_connectome_fly_shuffled_cma.description": "同じ4感覚入力を探索しても、配線をシャッフルした比較用の脳では MN9 がほとんど反応しないことを確かめる。",
 } as const;
 
 export type MessageKey = keyof typeof ja;
@@ -2032,6 +2042,16 @@ const en: Record<MessageKey, string> = {
   "connectome.inspector.silenced": "Silenced",
   "connectome.yes": "Yes",
   "connectome.no": "No",
+  "preset.search_connectome_tiny_cma.title": "Brain input search: optimize stimuli for MN9 on 4-neuron circuit (CMA-ES)",
+  "preset.search_connectome_tiny_cma.description": "Wiring stays fixed while CMA-ES searches sugar and bitter stimulation rates to maximize MN9 firing (runs offline on CPU).",
+  "preset.search_connectome_tiny_random.title": "Brain input search: 4-neuron random baseline (negative control)",
+  "preset.search_connectome_tiny_random.description": "Uniform random stimulus search with the same evaluation budget as CMA-ES.",
+  "preset.search_connectome_fly_cma.title": "Fly whole-brain input search: 4 sensory ports → MN9 (CMA-ES)",
+  "preset.search_connectome_fly_cma.description": "FlyWire v783 wiring stays fixed while CMA-ES searches 4 sensory port rates to maximize MN9 firing (GPU batched CUDA graphs).",
+  "preset.search_connectome_fly_map_elites.title": "Fly whole-brain QD search: diverse stimulus budgets × MN9 rates (MAP-Elites)",
+  "preset.search_connectome_fly_map_elites.description": "MAP-Elites collects sensory input combinations spanning MN9 response rate and total stimulation rate.",
+  "preset.search_connectome_fly_shuffled_cma.title": "Fly whole-brain input search: shuffled wiring (negative control)",
+  "preset.search_connectome_fly_shuffled_cma.description": "Negative control: searching the same 4 sensory ports on the shuffled brain yields ~0 Hz MN9 firing.",
 };
 
 const dictionaries: Record<Lang, Record<MessageKey, string>> = { ja, en };

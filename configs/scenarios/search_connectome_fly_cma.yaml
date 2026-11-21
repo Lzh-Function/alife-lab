@@ -1,0 +1,54 @@
+schema_version: 1
+experiment:
+  name: search_connectome_fly_cma
+  mode: exploratory
+  substrate: search
+  seed: 1
+  target:
+    name: connectome_fly_input_target
+    mode: exploratory
+    substrate: connectome
+    seed: 1
+    dataset_id: flywire_783
+    wiring: reference
+    stimuli:
+      - port: sugar_grn
+        rate_hz: 75.0
+      - port: bitter_grn
+        rate_hz: 75.0
+      - port: water_grn
+        rate_hz: 75.0
+      - port: antennal_grooming_mechanosensory
+        rate_hz: 75.0
+    runner:
+      max_steps: 500
+      checkpoint_interval: 250
+  space:
+    - path: stimuli.0.rate_hz
+      low: 0.0
+      high: 200.0
+      scale: linear
+    - path: stimuli.1.rate_hz
+      low: 0.0
+      high: 200.0
+      scale: linear
+    - path: stimuli.2.rate_hz
+      low: 0.0
+      high: 200.0
+      scale: linear
+    - path: stimuli.3.rate_hz
+      low: 0.0
+      high: 200.0
+      scale: linear
+  dynamics:
+    algorithm: cma_es
+    numeric_policy: float32_connectome
+    population: 8
+    sigma0: 0.35
+    objective: connectome_mn9_rate
+    eval_steps: 500
+    eval_seeds: 2
+    holdout_seeds: 3
+  runner:
+    max_steps: 10
+    checkpoint_interval: 5

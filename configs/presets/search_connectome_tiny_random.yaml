@@ -1,0 +1,12 @@
+preset:
+  id: search_connectome_tiny_random
+  scenario: search_connectome_tiny_cma.yaml
+  title_key: preset.search_connectome_tiny_random.title
+  description_key: preset.search_connectome_tiny_random.description
+  overrides:
+    experiment:
+      name: search_connectome_tiny_random
+      dynamics:
+        algorithm: random
+  expected_observation: 'Uniform random stimulus sampling baseline with the same evaluation budget as CMA-ES on the 4-neuron circuit.'
+  negative_control: preset search_connectome_tiny_cma

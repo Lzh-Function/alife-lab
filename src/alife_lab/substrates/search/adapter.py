@@ -27,6 +27,7 @@ import numpy.typing as npt
 from alife_lab import API_CONTRACT_VERSION
 from alife_lab.core.spec import (
     CLIP_OBJECTIVES,
+    ConnectomeExperiment,
     CreatureExperiment,
     ExperimentSpec,
     SearchExperiment,
@@ -144,12 +145,13 @@ SEARCH_MANIFEST = PluginManifest(
         supports_deterministic_cpu=True,
         intervention_types=(),
     ),
-    backends=("numpy", "torch", "torch_cuda"),
+    backends=("numpy", "cupy", "torch", "torch_cuda"),
     gpu_required=False,
     serialize_version=SERIALIZE_VERSION,
     metrics=_METRICS,
     backend_numeric_policies={
-        "numpy": ("float64_cpu",),
+        "numpy": ("float64_cpu", "float32_connectome"),
+        "cupy": ("float32_connectome",),
         "torch": ("float32_clip_torch",),
         "torch_cuda": ("float32_clip_torch",),
     },
@@ -263,6 +265,19 @@ class SearchAdapter:
                 speed.append(ro.speed)
                 mass.append(ro.mass)
                 field, last_z = ro.field, z[-1]
+            elif exp.target.substrate == "connectome":
+                from alife_lab.evolution.objectives import evaluate_connectome_batch
+
+                backend = "cupy" if self.backend == "cupy" else "numpy"
+                bev = evaluate_connectome_batch([cand], d.eval_steps, backend=backend)[0]
+                # Archive columns for connectome: alive_fraction = active neuron fraction,
+                # speed = MN9 firing rate (Hz), mass = sum of sensory stimulus rates (Hz).
+                scores.append(bev.score)
+                viable.append(float(bev.viable))
+                alive.append(bev.active_fraction)
+                speed.append(bev.mn9_rate_hz)
+                mass.append(bev.total_stim_hz)
+                field, last_z = None, None
             elif exp.target.substrate == "creature":
                 from alife_lab.evolution.objectives import evaluate_creature
 
@@ -299,8 +314,10 @@ class SearchAdapter:
     def _evaluate_many(
         self, exp: SearchExperiment, params_list: list[dict[str, float | int]], seeds: list[int]
     ) -> list[tuple[float, float, float, float, float, F64 | None, F64 | None]]:
-        """Evaluate candidates; multichannel Lenia with CLIP objectives is batched in torch
-        (float64, the search backend's device), everything else candidate by candidate."""
+        """Evaluate candidates; multichannel Lenia with CLIP objectives is batched in torch,
+        connectome stimulus candidates are batched on CPU/CuPy, everything else sequentially."""
+        if exp.target.substrate == "connectome":
+            return self._evaluate_connectome_batch(exp, params_list, seeds)
         batched = (
             exp.target.substrate == "lenia_mc"
             and exp.dynamics.objective in CLIP_OBJECTIVES
@@ -309,6 +326,49 @@ class SearchAdapter:
         if not batched:
             return [self._evaluate(exp, p, seeds) for p in params_list]
         return self._evaluate_mc_batch(exp, params_list, seeds)
+
+    def _evaluate_connectome_batch(
+        self, exp: SearchExperiment, params_list: list[dict[str, float | int]], seeds: list[int]
+    ) -> list[tuple[float, float, float, float, float, F64 | None, F64 | None]]:
+        from alife_lab.evolution.objectives import evaluate_connectome_batch
+
+        d = exp.dynamics
+        backend = "cupy" if self.backend == "cupy" else "numpy"
+        n = len(params_list)
+        all_specs: list[ExperimentSpec] = []
+        mapping: list[tuple[int, int]] = []
+        for ci, p in enumerate(params_list):
+            for si, s in enumerate(seeds):
+                cand = candidate_spec(exp, p, s)
+                if cand is not None:
+                    all_specs.append(cand)
+                    mapping.append((ci, si))
+
+        evs = evaluate_connectome_batch(all_specs, d.eval_steps, backend=backend, batch_size=8)
+        n_seeds = max(1, len(seeds))
+        sc = np.zeros((n, n_seeds), dtype=np.float64)
+        vi = np.zeros((n, n_seeds), dtype=np.float64)
+        al = np.zeros((n, n_seeds), dtype=np.float64)
+        sp = np.zeros((n, n_seeds), dtype=np.float64)
+        ms = np.zeros((n, n_seeds), dtype=np.float64)
+        for (ci, si), ev in zip(mapping, evs, strict=True):
+            sc[ci, si] = ev.score
+            vi[ci, si] = float(ev.viable)
+            al[ci, si] = ev.active_fraction
+            sp[ci, si] = ev.mn9_rate_hz
+            ms[ci, si] = ev.total_stim_hz
+        return [
+            (
+                float(sc[i].mean()),
+                float(vi[i].mean()),
+                float(al[i].mean()),
+                float(sp[i].mean()),
+                float(ms[i].mean()),
+                None,
+                None,
+            )
+            for i in range(n)
+        ]
 
     def _evaluate_mc_batch(
         self, exp: SearchExperiment, params_list: list[dict[str, float | int]], seeds: list[int]
@@ -472,7 +532,7 @@ class SearchAdapter:
         from alife_lab.evolution import asal as asal_scores
 
         assert exp.asal is not None
-        assert not isinstance(exp.target, CreatureExperiment)  # CLIP objectives: Lenia only
+        assert not isinstance(exp.target, (CreatureExperiment, ConnectomeExperiment))
         w = exp.target.world
         emb = self._embedder(exp)
         side_h, side_w = (exp.asal.crop, exp.asal.crop) if exp.asal.crop else (w.height, w.width)

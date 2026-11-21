@@ -1,0 +1,42 @@
+schema_version: 1
+experiment:
+  name: search_connectome_tiny_cma
+  mode: exploratory
+  substrate: search
+  seed: 1
+  target:
+    name: connectome_tiny_target
+    mode: exploratory
+    substrate: connectome
+    seed: 1
+    dataset_id: synthetic_tiny
+    wiring: reference
+    stimuli:
+      - port: sugar_grn
+        rate_hz: 75.0
+      - port: bitter_grn
+        rate_hz: 75.0
+    runner:
+      max_steps: 200
+      checkpoint_interval: 100
+  space:
+    - path: stimuli.0.rate_hz
+      low: 0.0
+      high: 200.0
+      scale: linear
+    - path: stimuli.1.rate_hz
+      low: 0.0
+      high: 200.0
+      scale: linear
+  dynamics:
+    algorithm: cma_es
+    numeric_policy: float32_connectome
+    population: 8
+    sigma0: 0.35
+    objective: connectome_mn9_rate
+    eval_steps: 200
+    eval_seeds: 2
+    holdout_seeds: 2
+  runner:
+    max_steps: 8
+    checkpoint_interval: 4

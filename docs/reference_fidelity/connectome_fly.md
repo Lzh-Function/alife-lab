@@ -194,4 +194,43 @@ Notes on scaling:
      search `CB0701` (exact 2 MN9 neurons) → inspect `mn9_proboscis_extension` → 3D glowing brain
      rendering all 138,639 neurons (12.5 s).
 
+---
+
+## Phase F3: Systematic Cell-Type Silencing Screen & Sensory Input Search (2026-11-21)
+
+### 1. Systematic single-cell-type silencing screen on FlyWire v783 (RTX 5070, CuPy CUDA graphs, B=8)
+
+Stimulus: `sugar_grn` at 150 Hz; target readout: `mn9_proboscis_extension` (`CB0701`, 2 neurons);
+1000 ms per evaluation. Silencing follows Shiu et al. (2024)'s synaptic-output block semantics
+(silenced neurons cannot scatter outgoing spikes).
+
+- **Discovery screen (top 24 active non-target cell types × 5 seeds = 125 brain-seconds)**:
+  - Wall time: **4.58 s** (**27.3 brain-s/s**); intact baseline MN9 = **76.70 ± 3.87 Hz**.
+  - Shuffled-wiring negative control (top 8 active types × 5 seeds = 45 brain-seconds):
+    **1.77 s** (**25.4 brain-s/s**); baseline and all silenced conditions = **0.00 ± 0.00 Hz**.
+- **Confirmatory 10-seed re-test of top 5 causal hits (`seeds = 1..10`, 60 brain-seconds)**:
+  - Wall time: **2.27 s** (**26.5 brain-s/s**); intact baseline MN9 = **74.50 ± 4.15 Hz**.
+
+| Cell type | Neurons | Mean MN9 (Hz) | Δ vs intact (Hz) | Change | Cliff's δ | p (exact perm) | p (Holm, m=5) | Interpretation |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| `CB0553` | 2 | **0.65** | **-73.85** | **-99.1%** | -1.00 | <0.0001 | **0.0001** | Essential bilateral excitatory relay to MN9 |
+| `DNge059` | 2 | **47.40** | **-27.10** | **-36.4%** | -1.00 | <0.0001 | **0.0001** | Strong excitatory contributor |
+| `CB0062` | 2 | **63.25** | **-11.25** | **-15.1%** | -0.94 | <0.0001 | **0.0001** | Moderate excitatory contributor |
+| `CB0480` | 2 | **91.65** | **+17.15** | **+23.0%** | +0.98 | <0.0001 | **0.0001** | Inhibitory brake (disinhibition when silenced) |
+| `DNge051` | 2 | **97.35** | **+22.85** | **+30.7%** | +1.00 | <0.0001 | **0.0001** | Strong inhibitory brake (disinhibition when silenced) |
+
+### 2. Sensory input search on FlyWire v783 (4 sensory ports, wiring fixed)
+
+Search space: `[sugar_grn, bitter_grn, water_grn, antennal_grooming_mechanosensory]` in `[0, 200]` Hz
+(`stimuli.<idx>.rate_hz` only; wiring and LIF parameters frozen). Objective: `connectome_mn9_rate` (v1),
+6 generations × population 8 × 2 search seeds + 3 disjoint holdout seeds, 500 ms per evaluation,
+5 outer search seeds (`1..5`), GPU batched CUDA graphs (`cupy`, bitwise identical to CPU `numpy`).
+
+| Condition | Holdout MN9 mean ± SD (Hz) | Median (Hz) | Wall time (5 seeds) | Notes |
+|---|---:|---:|---:|---|
+| `CMA-ES` (`reference` wiring) | **78.80 ± 8.27** | 81.33 | 13.47 s | Selected `sugar_grn = 200 Hz` in 5/5 seeds and `bitter_grn = 0 Hz` in 4/5 seeds |
+| `Random` (`reference` wiring) | **68.00 ± 7.89** | 70.00 | 9.27 s | CMA-ES vs Random: Δ = +10.80 Hz, 95% CI [+1.93, +19.93], δ = +0.68, exact p = 0.0714 (honestly recorded: directional at 6 gens / 5 seeds, not p < 0.05) |
+| `CMA-ES` (`shuffled_control` wiring) | **0.00 ± 0.00** | 0.00 | 23.05 s | CMA-ES (`reference`) vs Shuffled: Δ = +78.80 Hz, δ = +1.00, exact **p = 0.0079** |
+
+
 

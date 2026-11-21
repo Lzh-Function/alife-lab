@@ -1,0 +1,8 @@
+preset:
+  id: search_connectome_fly_cma
+  scenario: search_connectome_fly_cma.yaml
+  title_key: preset.search_connectome_fly_cma.title
+  description_key: preset.search_connectome_fly_cma.description
+  overrides: {}
+  expected_observation: 'CMA-ES searches 4 sensory input port rates on FlyWire v783 (wiring fixed; GPU-accelerated with bit-identical CUDA graphs) and discovers sugar-dominant stimulation that strongly drives MN9 (>70 Hz).'
+  negative_control: preset search_connectome_fly_shuffled_cma (same search on shuffled wiring)

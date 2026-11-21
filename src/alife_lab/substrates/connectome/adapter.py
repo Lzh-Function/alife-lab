@@ -274,6 +274,18 @@ class ConnectomeAdapter:
                 known = ", ".join(sorted(pack.io_ports))
                 raise ValueError(f"unknown silenced port {port_id!r} (available: {known})")
             lif.silenced[pack.io_ports[port_id].cell_indices] = np.uint8(1)
+        if exp.silenced_cell_types:
+            wanted = set(exp.silenced_cell_types)
+            matched_types: set[str] = set()
+            for i, ct in enumerate(pack.cells.cell_type):
+                if ct in wanted:
+                    lif.silenced[i] = np.uint8(1)
+                    matched_types.add(ct)
+            missing = sorted(wanted - matched_types)
+            if missing:
+                raise ValueError(
+                    f"unknown silenced cell_type(s) for {exp.dataset_id!r}: {', '.join(missing)}"
+                )
         return self._make_world(exp, lif)
 
     def step(self, state: ConnectomeWorld, spec: ExperimentSpec) -> ConnectomeWorld:

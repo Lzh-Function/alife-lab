@@ -1,0 +1,12 @@
+preset:
+  id: search_connectome_fly_shuffled_cma
+  scenario: search_connectome_fly_cma.yaml
+  title_key: preset.search_connectome_fly_shuffled_cma.title
+  description_key: preset.search_connectome_fly_shuffled_cma.description
+  overrides:
+    experiment:
+      name: search_connectome_fly_shuffled_cma
+      target:
+        wiring: shuffled_control
+  expected_observation: 'Negative control: searching the same 4 sensory input ports on the degree-preserving shuffled brain fails to elicit meaningful MN9 firing (~0 Hz).'
+  negative_control: preset search_connectome_fly_cma (unshuffled reference wiring)

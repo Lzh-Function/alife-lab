@@ -700,7 +700,77 @@ def cmd_connectome(args: argparse.Namespace) -> int:
                         f"expected={chk['expected']}"
                     )
             return 0
-    except DatasetError as exc:
+
+        if args.connectome_cmd == "screen":
+            from alife_lab.connectome.ablation import run_silencing_screen
+            from alife_lab.connectome.lif import (
+                LIFParams,
+                make_shuffled_csr,
+                make_synthetic_tiny_pack,
+            )
+
+            stimuli: list[tuple[str, float]] = []
+            for raw in args.stim:
+                if ":" not in raw:
+                    print(f"invalid --stim {raw!r}; expected PORT:RATE_HZ", file=sys.stderr)
+                    return 2
+                port_s, rate_s = raw.split(":", 1)
+                stimuli.append((port_s.strip(), float(rate_s)))
+            seeds = tuple(int(s.strip()) for s in args.seeds.split(",") if s.strip())
+            cell_types = (
+                [c.strip() for c in args.cell_types.split(",") if c.strip()]
+                if args.cell_types
+                else None
+            )
+            if args.dataset_id == "synthetic_tiny":
+                pack = make_synthetic_tiny_pack()
+            else:
+                pack = load_connectome_pack(
+                    args.dataset_id, ds_dir, verify_hashes=not args.no_verify
+                )
+            csr = pack.edges.to_csr(pack.cells.num_cells)
+            if args.wiring == "shuffled_control":
+                csr = make_shuffled_csr(csr, int(seeds[0]))
+            report = run_silencing_screen(
+                pack,
+                csr,
+                LIFParams(),
+                stimuli=stimuli,
+                cell_types=cell_types,
+                top_k=args.top_k,
+                target_port=args.target,
+                seeds=seeds,
+                ticks=args.ticks,
+                wiring=args.wiring,
+                backend=args.backend,
+                batch_size=args.batch_size,
+            )
+            if args.json:
+                _print_json(report)
+            else:
+                b = report["baseline"]
+                print(
+                    f"screen {report['dataset_id']} wiring={report['wiring']} "
+                    f"backend={report['backend']} (B={report['batch_size']}): "
+                    f"{report['total_evaluations']} evals in {report['wall_seconds']:.2f}s "
+                    f"({report['brain_seconds_per_wall_second']:.1f} brain-s/s)"
+                )
+                print(
+                    f"  baseline {report['target_port']}: "
+                    f"{b['mean_hz']:.2f} +/- {b['sd_hz']:.2f} Hz  seeds={report['seeds']}"
+                )
+                print("  cell_type\tcells\tmean_hz\tdelta_hz\tsupp%\tcliffs_d\tp_perm\tp_holm")
+                for r in report["results"]:
+                    p_str = "na" if r["p_value"] is None else f"{r['p_value']:.4f}"
+                    ph_str = "na" if r["p_value_holm"] is None else f"{r['p_value_holm']:.4f}"
+                    cd_str = "na" if r["cliffs_delta"] is None else f"{r['cliffs_delta']:+.2f}"
+                    print(
+                        f"  {r['cell_type']}\t{r['cell_count']}\t{r['mean_hz']:.2f}\t"
+                        f"{r['delta_hz']:+.2f}\t{r['suppression_pct']:+.1f}%\t"
+                        f"{cd_str}\t{p_str}\t{ph_str}"
+                    )
+            return 0
+    except (DatasetError, ValueError) as exc:
         print(f"connectome error: {exc}", file=sys.stderr)
         return 1
     return 2
@@ -802,6 +872,31 @@ def build_parser() -> argparse.ArgumentParser:
     cs.add_argument("dataset_id")
     cs.add_argument("--json", action="store_true")
     cs.add_argument("--no-verify", action="store_true", help="skip file SHA-256 verification")
+    csc = csub.add_parser(
+        "screen", help="run systematic single-cell-type silencing screen (CPU or batched GPU)"
+    )
+    csc.add_argument("dataset_id")
+    csc.add_argument(
+        "--stim",
+        action="append",
+        default=[],
+        required=True,
+        help="stimulus PORT:RATE_HZ (repeatable, e.g. --stim sugar_grn:150)",
+    )
+    csc.add_argument(
+        "--target", default="mn9_proboscis_extension", help="target IO port to measure"
+    )
+    csc.add_argument(
+        "--cell-types", default="", help="comma-separated cell_types (omit for auto top-k active)"
+    )
+    csc.add_argument("--top-k", type=int, default=24, help="number of top active types to screen")
+    csc.add_argument("--seeds", default="1,2,3,4,5", help="comma-separated seeds")
+    csc.add_argument("--ticks", type=int, default=1000, help="simulation ticks (1 tick = 1 ms)")
+    csc.add_argument("--wiring", choices=["reference", "shuffled_control"], default="reference")
+    csc.add_argument("--backend", choices=["auto", "numpy", "cupy"], default="auto")
+    csc.add_argument("--batch-size", type=int, default=8, help="GPU batch size (default 8)")
+    csc.add_argument("--no-verify", action="store_true", help="skip file SHA-256 verification")
+    csc.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_connectome)
     return parser
 

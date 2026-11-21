@@ -1,0 +1,34 @@
+preset:
+  id: search_connectome_fly_map_elites
+  scenario: search_connectome_fly_cma.yaml
+  title_key: preset.search_connectome_fly_map_elites.title
+  description_key: preset.search_connectome_fly_map_elites.description
+  overrides:
+    experiment:
+      name: search_connectome_fly_map_elites
+      dynamics:
+        algorithm: map_elites
+      qd:
+        descriptors:
+          - name: speed
+            low: 0.0
+            high: 120.0
+            bins: 8
+          - name: mass
+            low: 0.0
+            high: 800.0
+            bins: 8
+        mutation_sigma: 0.15
+      observations:
+        metrics:
+          - best_score
+          - generation_best
+          - generation_mean
+          - viable_fraction
+          - evaluations
+          - holdout_best
+          - coverage
+          - qd_score
+          - archive_size
+  expected_observation: 'MAP-Elites builds a quality-diversity repertoire of sensory stimulus combinations spanning MN9 response rate (speed) and total stimulus budget (mass) on FlyWire v783.'
+  negative_control: preset search_connectome_fly_shuffled_cma (shuffled wiring control)

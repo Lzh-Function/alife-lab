@@ -1,0 +1,8 @@
+preset:
+  id: search_connectome_tiny_cma
+  scenario: search_connectome_tiny_cma.yaml
+  title_key: preset.search_connectome_tiny_cma.title
+  description_key: preset.search_connectome_tiny_cma.description
+  overrides: {}
+  expected_observation: 'CMA-ES searches (sugar_grn, bitter_grn) stimulus rates on the offline 4-neuron circuit (wiring fixed) and converges toward high sugar + low bitter to maximize MN9 firing.'
+  negative_control: preset search_connectome_tiny_random (same evaluation budget, uniform random)
