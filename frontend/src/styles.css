@@ -187,7 +187,7 @@ label.inline { flex-direction: row; display: inline-flex; align-items: center; g
 .lab-head { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
 .lab-head h2 { margin: 0; }
 .toolbar { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
-.canvas-wrap { overflow: auto; max-width: 100%; border: 1px solid var(--border); border-radius: 6px; background: var(--cell-dead); display: inline-block; }
+.canvas-wrap { overflow: auto; max-width: 100%; position: relative; border: 1px solid var(--border); border-radius: 6px; background: var(--cell-dead); display: inline-block; }
 .world-canvas { display: block; max-width: 100%; height: auto; image-rendering: pixelated; touch-action: none; }
 .world-canvas.brush-active { cursor: crosshair; }
 .badge { border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.8em; border: 1px solid var(--border); }
@@ -313,3 +313,14 @@ p.muted .bff-cell { width: auto; padding: 0 0.25em; background-color: var(--cell
 .gait-svg .crosshair { stroke: var(--text); stroke-opacity: 0.5; stroke-width: 1; stroke-dasharray: 3 3; }
 .gait-svg .reflex-bar { fill: var(--accent); }
 .gait-svg .reflex-bar.neg { fill: var(--muted); }
+
+/* Presentation views (3D field, glow) and fullscreen */
+.canvas-wrap-wide { display: block; width: 100%; background: #05070c; }
+.view-modes button.primary { font-weight: 600; }
+.field3d { width: 100%; aspect-ratio: 16 / 10; }
+.field3d canvas { display: block; }
+.field3d-bar { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; align-items: center; padding: 0.35rem 0.6rem; background: var(--panel); border-top: 1px solid var(--border); }
+.canvas-wrap:fullscreen { display: flex; flex-direction: column; justify-content: center; align-items: center; background: #05070c; border: none; border-radius: 0; }
+.canvas-wrap:fullscreen .field3d-wrap { width: 100vw; }
+.canvas-wrap:fullscreen .field3d { max-width: none !important; aspect-ratio: auto; height: calc(100vh - 2.5rem); }
+.canvas-wrap:fullscreen .world-canvas { width: auto; height: 100vh; max-width: 100vw; object-fit: contain; }

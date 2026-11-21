@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { GaitPanel, type GaitPanelHandle } from "./GaitPanel";
+import { useElementWidth, useViewMode, useWindowHeight, ViewModeBar } from "./ViewModeBar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, type Frame, type MetricRow, type RunEvent } from "../lib/api";
 import { useRunStream, type GpuMemory } from "../lib/stream";
 import { useT } from "../i18n";
-import { ToolBar, WorldView, type WorldViewHandle } from "./WorldView";
+import { ToolBar, WorldView, type ViewMode, type WorldViewHandle } from "./WorldView";
 import { Help, metricHelp } from "./Help";
 import { CPU_PROFILE } from "../lib/compute";
 import { SUBSTRATE_GUIDE } from "../guide/content";
@@ -25,6 +26,12 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
   const qc = useQueryClient();
   const canvas = useRef<WorldViewHandle>(null);
   const gait = useRef<GaitPanelHandle>(null);
+  const viewHost = useRef<HTMLDivElement>(null);
+  const [viewWidth, mainRef] = useElementWidth();
+  const windowHeight = useWindowHeight();
+  // As large as the column allows, but a square view should still fit on the screen
+  // below the toolbars (never smaller than the previous fixed 720 px, never above 1400 px).
+  const viewPixels = Math.min(viewWidth - 4, Math.max(720, windowHeight - 320), 1400);
   const [tick, setTick] = useState<number | null>(null);
   const [rows, setRows] = useState<MetricRow[]>([]);
   const [events, setEvents] = useState<RunEvent[]>([]);
@@ -234,10 +241,11 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
   const world = displayWorld(summary.substrate, summary.spec.experiment as Record<string, unknown>);
   const last = rows.length ? rows[rows.length - 1] : null;
   const metricIds = summary.spec.experiment.observations.metrics;
+  const toolForView = currentTool.mode === "inspect" ? currentTool : live && !replay ? currentTool : null;
 
   return (
     <div className="lab">
-      <section className="lab-main">
+      <section className="lab-main" ref={mainRef}>
         <div className="lab-head" data-testid="lab-head">
           <h2 data-testid="run-name">{summary.name}</h2>
           <StateBadge state={summary.state} />
@@ -350,18 +358,24 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
         {error && <p className="error" role="alert">{t("common.error")}: {error}</p>}
         {summary.restorable && <p className="notice">{t("lab.restorable")}</p>}
         {!live && !summary.restorable && <p className="muted">{t("lab.not_live")}</p>}
-        <div className="canvas-wrap">
+        <LabViewModes substrate={summary.substrate} viewHost={viewHost}>
+          {(viewMode) => (
+        <div className={`canvas-wrap ${viewMode !== "2d" ? "canvas-wrap-wide" : ""}`} ref={viewHost}>
           <WorldView
             ref={canvas}
             substrate={summary.substrate}
             world={world}
-            tool={currentTool.mode === "inspect" ? currentTool : live && !replay ? currentTool : null}
+            viewMode={viewMode}
+            maxPixels={viewPixels}
+            tool={viewMode === "2d" || viewMode === "glow" ? toolForView : null}
             onIntervene={onIntervene}
             onInspect={onInspect}
             onDisplayFps={setUiFps}
             runId={runId}
           />
         </div>
+          )}
+        </LabViewModes>
         {summary.substrate === "creature" && (
           <GaitPanel ref={gait} hasReflex={Boolean((summary.spec.experiment.dynamics as Record<string, unknown> | undefined)?.reflex)} />
         )}
@@ -640,6 +654,17 @@ function MetricStat({ id, substrate, value }: { id: string; substrate: string; v
         {t(`metric.${id}`)} <Help text={metricHelp(substrate, id)} testId={`metric-help-${id}`} />
       </dt>
       <dd data-testid={`metric-${id}`}>{value === null ? "null" : Number.isInteger(value) ? value : value.toFixed(3)}</dd>
+    </>
+  );
+}
+
+// Keeps the view mode next to the world view so switching it re-renders only this part.
+function LabViewModes({ substrate, viewHost, children }: { substrate: string; viewHost: React.RefObject<HTMLDivElement | null>; children: (m: ViewMode) => React.ReactNode }) {
+  const [mode, setMode] = useViewMode(substrate);
+  return (
+    <>
+      <ViewModeBar substrate={substrate} mode={mode} setMode={setMode} fullscreenTarget={viewHost} />
+      {children(mode)}
     </>
   );
 }

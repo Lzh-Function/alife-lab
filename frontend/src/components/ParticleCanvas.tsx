@@ -13,12 +13,33 @@ interface Props {
   onDisplayFps: (fps: number) => void;
   maxPixels?: number;
   testId?: string;
+  glow?: boolean; // presentation: additive glowing sprites with fading trails
+}
+
+// Pre-rendered radial glow sprites, one per hue bucket (10 degrees).
+const SPRITES = new Map<number, HTMLCanvasElement>();
+function sprite(hue: number): HTMLCanvasElement {
+  const key = Math.round(hue / 10) % 36;
+  let c = SPRITES.get(key);
+  if (!c) {
+    c = document.createElement("canvas");
+    c.width = c.height = 32;
+    const g = c.getContext("2d")!;
+    const grad = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+    grad.addColorStop(0, `hsla(${key * 10}, 100%, 92%, 1)`);
+    grad.addColorStop(0.25, `hsla(${key * 10}, 95%, 62%, 0.85)`);
+    grad.addColorStop(1, `hsla(${key * 10}, 95%, 50%, 0)`);
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 32, 32);
+    SPRITES.set(key, c);
+  }
+  return c;
 }
 
 // Canvas2D renderer for `particles_f32` frames: [x, y, vx, vy] float32 little-endian per
 // particle. Each boid is a short segment along its heading, coloured by heading angle.
 export const ParticleCanvas = forwardRef<ParticleCanvasHandle, Props>(function ParticleCanvas(
-  { worldWidth, worldHeight, toolRadius, onPoint, onDisplayFps, maxPixels = 720, testId = "world-canvas" },
+  { worldWidth, worldHeight, toolRadius, onPoint, onDisplayFps, maxPixels = 720, testId = "world-canvas", glow = false },
   ref,
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -39,10 +60,36 @@ export const ParticleCanvas = forwardRef<ParticleCanvasHandle, Props>(function P
     const frame = pending.current ?? last.current;
     if (pending.current) frames.current += 1;
     pending.current = null;
-    const styles = getComputedStyle(canvas);
-    ctx.fillStyle = styles.getPropertyValue("--cell-dead").trim() || "#10141c";
-    ctx.fillRect(0, 0, pw, ph);
-    if (frame && frame.header.codec === "particles_typed_f32") {
+    ctx.globalCompositeOperation = "source-over";
+    if (glow) {
+      // Fade the previous image instead of clearing it: moving particles leave trails.
+      ctx.fillStyle = "rgba(4, 6, 11, 0.2)";
+      ctx.fillRect(0, 0, pw, ph);
+    } else {
+      const styles = getComputedStyle(canvas);
+      ctx.fillStyle = styles.getPropertyValue("--cell-dead").trim() || "#10141c";
+      ctx.fillRect(0, 0, pw, ph);
+    }
+    if (glow && frame && (frame.header.codec === "particles_typed_f32" || frame.header.codec === "particles_f32")) {
+      last.current = frame;
+      const typed = frame.header.codec === "particles_typed_f32";
+      const stride = typed ? 20 : 16;
+      const view = new DataView(frame.bits.buffer, frame.bits.byteOffset, frame.bits.byteLength);
+      const n = Math.min(frame.header.count ?? 0, Math.floor(frame.bits.byteLength / stride));
+      const k = Math.max(1, frame.header.types ?? 1);
+      const size = Math.max(6, scale * (typed ? 3.2 : 4));
+      ctx.globalCompositeOperation = "lighter";
+      for (let i = 0; i < n; i++) {
+        const o = i * stride;
+        const x = view.getFloat32(o, true) * scale;
+        const y = view.getFloat32(o + 4, true) * scale;
+        const vx = view.getFloat32(o + 8, true);
+        const vy = view.getFloat32(o + 12, true);
+        const hue = typed ? (view.getFloat32(o + 16, true) * 360) / k + 15 : ((Math.atan2(vy, vx) * 180) / Math.PI + 360) % 360;
+        ctx.drawImage(sprite(hue), x - size / 2, y - size / 2, size, size);
+      }
+      ctx.globalCompositeOperation = "source-over";
+    } else if (frame && frame.header.codec === "particles_typed_f32") {
       // [x, y, vx, vy, type]: one dot per particle, coloured by type.
       last.current = frame;
       const view = new DataView(frame.bits.buffer, frame.bits.byteOffset, frame.bits.byteLength);
@@ -87,7 +134,7 @@ export const ParticleCanvas = forwardRef<ParticleCanvasHandle, Props>(function P
       ctx.arc(cursor.current[0] * scale, cursor.current[1] * scale, toolRadius * scale, 0, 2 * Math.PI);
       ctx.stroke();
     }
-  }, [pw, ph, scale, toolRadius]);
+  }, [pw, ph, scale, toolRadius, glow]);
 
   const schedule = useCallback(() => {
     if (raf.current === null) raf.current = requestAnimationFrame(paint);

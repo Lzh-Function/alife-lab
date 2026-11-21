@@ -7,9 +7,21 @@ import { WorldCanvas, type WorldCanvasHandle } from "./WorldCanvas";
 import { SoupCanvas, type SoupCanvasHandle } from "./SoupCanvas";
 import { FieldCanvas, type FieldCanvasHandle } from "./FieldCanvas";
 import type { Scene3DHandle } from "./Scene3D";
+import type { Field3DHandle } from "./Field3D";
 
-// three.js is loaded only when an embodied creature is shown.
+// three.js is loaded only when an embodied creature or a 3D field view is shown.
 const Scene3D = lazy(() => import("./Scene3D").then((m) => ({ default: m.Scene3D })));
+const Field3D = lazy(() => import("./Field3D").then((m) => ({ default: m.Field3D })));
+
+/** Presentation views. "2d" is the measurement view (and the only one taking pointer tools). */
+export type ViewMode = "2d" | "terrain" | "spacetime" | "glow";
+export const VIEW3D_SUBSTRATES = new Set(["lenia", "flow_lenia", "lenia_mc", "gray_scott", "physarum", "nca", "pd_nca"]);
+export const GLOW_SUBSTRATES = new Set(["boids", "particle_life"]);
+export function viewModesFor(substrate: string): ViewMode[] {
+  if (VIEW3D_SUBSTRATES.has(substrate)) return ["2d", "terrain", "spacetime"];
+  if (GLOW_SUBSTRATES.has(substrate)) return ["2d", "glow"];
+  return ["2d"];
+}
 
 export interface WorldViewHandle {
   draw: (frame: Frame) => void;
@@ -25,13 +37,14 @@ interface Props {
   maxPixels?: number;
   testId?: string;
   runId?: string;
+  viewMode?: ViewMode;
 }
 
 const noop = () => undefined;
 
 // Chooses the renderer and maps pointer input to the substrate's intervention payloads.
 export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
-  { substrate, world, tool, onIntervene, onDisplayFps = noop, onInspect, maxPixels, testId, runId },
+  { substrate, world, tool, onIntervene, onDisplayFps = noop, onInspect, maxPixels, testId, runId, viewMode = "2d" },
   ref,
 ) {
   const grid = useRef<WorldCanvasHandle>(null);
@@ -39,9 +52,28 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
   const soup = useRef<SoupCanvasHandle>(null);
   const field = useRef<FieldCanvasHandle>(null);
   const scene = useRef<Scene3DHandle>(null);
+  const field3d = useRef<Field3DHandle | null>(null);
+  const lastFrame = useRef<Frame | null>(null);
+  const use3d = (viewMode === "terrain" || viewMode === "spacetime") && VIEW3D_SUBSTRATES.has(substrate);
+  // A newly mounted renderer (after a view switch) shows the last frame at once, even if paused.
+  const attachField3d = useCallback((h: Field3DHandle | null) => {
+    field3d.current = h;
+    if (h && lastFrame.current) h.draw(lastFrame.current);
+  }, []);
+  const attachField = useCallback((h: FieldCanvasHandle | null) => {
+    field.current = h;
+    if (h && lastFrame.current) h.draw(lastFrame.current);
+  }, []);
+  const attachParticles = useCallback((h: ParticleCanvasHandle | null) => {
+    particles.current = h;
+    if (h && lastFrame.current) h.draw(lastFrame.current);
+  }, []);
   useImperativeHandle(ref, () => ({
-    draw: (frame: Frame) =>
-      substrate === "creature"
+    draw: (frame: Frame) => {
+      lastFrame.current = frame;
+      return use3d
+        ? field3d.current?.draw(frame)
+        : substrate === "creature"
         ? scene.current?.draw(frame)
         : substrate === "bff"
         ? soup.current?.draw(frame)
@@ -49,8 +81,9 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
           ? field.current?.draw(frame)
           : PARTICLE_SUBSTRATES.has(substrate)
             ? particles.current?.draw(frame)
-            : grid.current?.draw(frame),
-  }), [substrate]);
+            : grid.current?.draw(frame);
+    },
+  }), [substrate, use3d]);
   const inspecting = tool !== null && tool.mode === "inspect";
   const active = tool !== null && tool.mode !== "off" && !inspecting;
 
@@ -76,11 +109,25 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
     [tool, onIntervene, onInspect, substrate],
   );
 
+  if (use3d) {
+    return (
+      <Suspense fallback={<div className="field3d muted">3D…</div>}>
+        <Field3D
+          ref={attachField3d}
+          mode={viewMode as "terrain" | "spacetime"}
+          palette={substrate === "physarum" ? "ember" : "viridis"}
+          onDisplayFps={onDisplayFps}
+          testId={testId}
+          width={maxPixels ?? 960}
+        />
+      </Suspense>
+    );
+  }
   if (substrate === "creature") {
     // Inspection covers the whole creature; clicking the 3D view in inspect mode requests it.
     return (
       <Suspense fallback={<div className="scene3d muted">3D…</div>}>
-        <Scene3D ref={scene} runId={runId} onDisplayFps={onDisplayFps} testId={testId} width={Math.min(maxPixels ?? 720, 720)} onClick={inspecting ? () => onInspect?.(0, 0) : undefined} />
+        <Scene3D ref={scene} runId={runId} onDisplayFps={onDisplayFps} testId={testId} width={maxPixels ?? 720} height={Math.round((maxPixels ?? 720) * 0.66)} onClick={inspecting ? () => onInspect?.(0, 0) : undefined} />
       </Suspense>
     );
   }
@@ -120,7 +167,7 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
   if (FIELD_SUBSTRATES.has(substrate)) {
     return (
       <FieldCanvas
-        ref={field}
+        ref={attachField}
         width={world.width}
         height={world.height}
         minRowPixels={ROW_DISPLAY_SUBSTRATES.has(substrate) ? 28 : 0}
@@ -135,7 +182,8 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
   if (PARTICLE_SUBSTRATES.has(substrate)) {
     return (
       <ParticleCanvas
-        ref={particles}
+        ref={attachParticles}
+        glow={viewMode === "glow"}
         worldWidth={world.width}
         worldHeight={world.height}
         toolRadius={active || inspecting ? tool!.radius : null}
