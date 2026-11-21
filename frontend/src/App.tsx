@@ -10,14 +10,17 @@ import { BffDebuggerPage } from "./components/BffDebuggerPage";
 import { GuidePage } from "./components/GuidePage";
 import { ComputeToggle } from "./components/ComputeToggle";
 import { DiscoveryDetailView, DiscoveryList } from "./components/Discoveries";
+import { GalleryPage } from "./components/Gallery";
+import { LineagePage } from "./components/LineagePage";
 
-type View = "guide" | "catalog" | "library" | "lab" | "compare" | "sweeps" | "discoveries" | "debugger" | "diagnostics";
-const VIEWS = ["guide", "catalog", "library", "lab", "compare", "sweeps", "discoveries", "debugger", "diagnostics"] as const;
+type View = "guide" | "catalog" | "library" | "lab" | "compare" | "sweeps" | "discoveries" | "gallery" | "debugger" | "diagnostics" | "lineage";
+const VIEWS = ["guide", "catalog", "library", "lab", "compare", "sweeps", "discoveries", "gallery", "debugger", "diagnostics", "lineage"] as const;
+const NAV_HIDDEN = new Set<View>(["lineage"]); // reached from a run, not from the top bar
 
 function parseHash(): { view: View; runId: string | null; comparisonId: string | null; sweepId: string | null; discoveryId: string | null; anchor: string | null } {
   const parts = window.location.hash.replace(/^#\/?/, "").split("/");
   const view = VIEWS.find((v) => v === parts[0]) ?? "catalog";
-  const runId = parts[1] && /^run_[0-9a-f]{16}$/.test(parts[1]) ? parts[1] : null;
+  const runId = parts[1] && /^run_[0-9a-f]{16}$/.test(parts[1]) ? parts[1] : null; // lab, lineage
   const comparisonId = parts[1] && /^cmp_[0-9a-f]{16}$/.test(parts[1]) ? parts[1] : null;
   const sweepId = parts[1] && /^swp_[0-9a-f]{16}$/.test(parts[1]) ? parts[1] : null;
   const anchor = view === "guide" && parts[1] && /^[a-z_]{1,40}$/.test(parts[1]) ? parts[1] : null;
@@ -56,7 +59,7 @@ export function App() {
           <span className="muted">{t("app.subtitle")}</span>
         </div>
         <nav>
-          {VIEWS.map((v) => (
+          {VIEWS.filter((v) => !NAV_HIDDEN.has(v)).map((v) => (
             <button key={v} data-testid={`nav-${v}`} className={route.view === v ? "active" : ""} onClick={() => go(v)}>
               {t(`nav.${v}`)}
             </button>
@@ -95,6 +98,8 @@ export function App() {
               }}
             />
           ))}
+        {route.view === "gallery" && <GalleryPage />}
+        {route.view === "lineage" && (route.runId ? <LineagePage key={route.runId} runId={route.runId} /> : <p className="muted">{t("lab.none")}</p>)}
         {route.view === "debugger" && <BffDebuggerPage />}
         {route.view === "diagnostics" && <Diagnostics />}
       </main>

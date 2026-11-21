@@ -45,7 +45,7 @@ const short = (path: string) => {
 };
 const num = (v: number) => (Math.abs(v) >= 100 ? v.toFixed(1) : v.toPrecision(4));
 
-function Candidate({ c, title, testId, onOpenSpec, onRegister, registerDisabled = false, clip = false }: { c: SearchCandidate; title: string; testId: string; onOpenSpec?: (spec: Record<string, unknown>) => void; onRegister?: Register; registerDisabled?: boolean; clip?: boolean }) {
+export function Candidate({ c, title, testId, onOpenSpec, onRegister, registerDisabled = false, clip = false }: { c: SearchCandidate; title: string; testId: string; onOpenSpec?: (spec: Record<string, unknown>) => void; onRegister?: Register; registerDisabled?: boolean; clip?: boolean }) {
   const t = useT();
   const claims = clip ? ["clip_prompt_specific"] : ["moving_localized", "faster_than_base"];
   const [claim, setClaim] = useState(claims[0]);

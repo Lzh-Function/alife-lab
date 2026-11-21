@@ -162,7 +162,8 @@ export function DiscoveryDetailView({ id }: { id: string }) {
         <dl className="stats small">
           <dt>{t("discovery.source")}</dt>
           <dd>
-            <a href={`#/lab/${d.source.run_id}`}>{d.source.run_id}</a> · {t("search.generation")} {d.source.generation} · #{d.source.candidate_index} ({d.source.algorithm})
+            <a href={`#/lab/${d.source.run_id}`}>{d.source.run_id}</a> · {t("search.generation")} {d.source.generation} · #{d.source.candidate_index} ({d.source.algorithm}) ·{" "}
+            <a href={`#/lineage/${d.source.run_id}`}>🌳 {t("lineage.open")}</a>
           </dd>
           {Object.keys(d.source.params ?? {}).length <= 8 &&
             Object.entries(d.source.params ?? {}).map(([k, v]) => (

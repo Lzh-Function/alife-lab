@@ -173,6 +173,9 @@ class Controller:
         from alife_lab.service.discoveries import DiscoveryService
 
         self.discoveries = DiscoveryService(self)
+        from alife_lab.service.gallery import GalleryService
+
+        self.gallery = GalleryService(self)
         self._closed = False
         self._db_closed = False
         self._replay_pool: ProcessPoolExecutor | None = None

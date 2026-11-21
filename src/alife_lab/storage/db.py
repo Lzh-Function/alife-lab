@@ -240,6 +240,26 @@ MIGRATIONS: list[tuple[int, str]] = [
         CREATE INDEX assays_d ON assays(discovery_id);
         """,
     ),
+    (
+        5,
+        """
+        CREATE TABLE gallery (
+            id TEXT PRIMARY KEY,
+            run_id TEXT NOT NULL REFERENCES runs(id),
+            tick INTEGER NOT NULL,
+            substrate TEXT NOT NULL,
+            title TEXT NOT NULL,
+            note TEXT NOT NULL,
+            image_path TEXT NOT NULL,
+            image_sha256 TEXT NOT NULL,
+            width INTEGER NOT NULL,
+            height INTEGER NOT NULL,
+            created_at REAL NOT NULL,
+            hidden_at REAL
+        );
+        CREATE INDEX gallery_run ON gallery(run_id);
+        """,
+    ),
 ]
 
 

@@ -261,6 +261,12 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
           <button data-testid="btn-checkpoint" disabled={busy || !live} onClick={() => act(() => api.control(runId, "checkpoints"))}>
             💾 {t("lab.checkpoint")}
           </button>
+          <GallerySave runId={runId} tick={tick ?? summary.clock.value} defaultTitle={summary.name} />
+          {summary.substrate === "search" && (
+            <a className="button-link" data-testid="btn-lineage" href={`#/lineage/${runId}`}>
+              🌳 {t("lineage.open")}
+            </a>
+          )}
           {summary.substrate === "nca_train" && (
             <button data-testid="btn-run-model" disabled={busy} onClick={() => void runTrainedModel()}>
               🌱 {t("lab.nca.run_model")}
@@ -509,6 +515,55 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
         </div>
       </aside>
     </div>
+  );
+}
+
+/** Saves what the canvas shows now (PNG) with the tick, a title and a note to the gallery. */
+function GallerySave({ runId, tick, defaultTitle }: { runId: string; tick: number; defaultTitle: string }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [note, setNote] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  const save = async () => {
+    const canvas = document.querySelector<HTMLCanvasElement>("canvas[data-testid='world-canvas']");
+    if (!canvas) {
+      setMsg(t("gallery.no_canvas"));
+      return;
+    }
+    const dataUrl = canvas.toDataURL("image/png");
+    try {
+      await api.addGallery({ run_id: runId, tick, title: title || `${defaultTitle} t=${tick}`, note, png_base64: dataUrl.split(",")[1] });
+      setMsg(t("gallery.saved"));
+      setOpen(false);
+      setTitle("");
+      setNote("");
+    } catch (e) {
+      setMsg(e instanceof ApiError ? e.message : String(e));
+    }
+  };
+  return (
+    <span className="gallery-save">
+      <button type="button" data-testid="btn-gallery" onClick={() => setOpen((o) => !o)}>
+        ☆ {t("gallery.save")}
+      </button>
+      {msg && !open && (
+        <span className="small muted" data-testid="gallery-msg">
+          {" "}
+          {msg} <a href="#/gallery">{t("gallery.view")}</a>
+        </span>
+      )}
+      {open && (
+        <span className="gallery-form panel">
+          <input data-testid="gallery-title" placeholder={`${defaultTitle} t=${tick}`} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
+          <textarea data-testid="gallery-note" placeholder={t("gallery.note_placeholder")} value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} rows={2} />
+          <span className="small muted">{t("gallery.save_note")}</span>
+          <button type="button" className="primary" data-testid="gallery-confirm" onClick={save}>
+            {t("gallery.save_confirm")}
+          </button>
+        </span>
+      )}
+    </span>
   );
 }
 

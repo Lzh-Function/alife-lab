@@ -354,7 +354,35 @@ export interface DiscoveryDetail extends DiscoverySummary {
   events: Array<{ at: number; kind: string; author: string; payload: Record<string, unknown> }>;
 }
 
+export interface GalleryEntry {
+  id: string;
+  run_id: string;
+  tick: number;
+  substrate: string;
+  title: string;
+  note: string;
+  width: number;
+  height: number;
+  created_at: number;
+  image_sha256: string;
+}
+
+export interface LineageData {
+  algorithm: string;
+  axis_labels: string[];
+  lineage_table: { generation: number[]; parent: number[]; score: number[]; viable: number[]; u: number[][] };
+  descriptors?: Record<string, number[]>;
+  best: import("../components/SearchInspector").SearchCandidate;
+  tick: number;
+}
+
 export const api = {
+  gallery: () => request<GalleryEntry[]>("GET", "/gallery"),
+  addGallery: (body: { run_id: string; tick: number; title: string; note: string; png_base64: string }) => request<GalleryEntry>("POST", "/gallery", body),
+  hideGallery: (id: string) => request<{ id: string; hidden: boolean }>("DELETE", `/gallery/${id}`),
+  lineage: (id: string) => request<LineageData>("GET", `/experiments/${id}/lineage`),
+  candidate: (id: string, index: number) =>
+    request<import("../components/InspectorPanel").Inspection>("GET", `/experiments/${id}/inspect?x=0&y=0&candidate=${index}`),
   discoveries: () => request<DiscoverySummary[]>("GET", "/discoveries"),
   discovery: (id: string) => request<DiscoveryDetail>("GET", `/discoveries/${id}`),
   createDiscovery: (body: { run_id: string; candidate: number; tick?: number; claim_kind: string; title: string }) =>

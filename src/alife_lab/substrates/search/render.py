@@ -181,6 +181,24 @@ def inspect(state: SearchState, exp: SearchExperiment, query: dict[str, Any]) ->
     best = state.best
     if best is None:
         return out
+    if query.get("lineage"):  # compact table of every candidate for the lineage view
+        n = state.score.size
+        out["region"] = "lineage"
+        out["lineage_table"] = {
+            "generation": state.generation.astype(int).tolist(),
+            "parent": state.parent.astype(int).tolist(),
+            "score": [round(float(v), 6) for v in state.score],
+            "viable": [round(float(v), 4) for v in state.viable],
+            "u": np.round(np.clip(state.u[:, :2], 0, 1), 5).tolist() if n else [],
+        }
+        out["axis_labels"] = [p.path for p in exp.space[:2]]
+        out["best"] = _candidate(state, exp, best)
+        if exp.qd is not None:
+            out["descriptors"] = {
+                d.name: [round(float(v), 6) for v in getattr(state, d.name)]
+                for d in exp.qd.descriptors
+            }
+        return out
     if "candidate" in query:  # direct lookup by archive index (used by the discovery ledger)
         i = int(query["candidate"])
         if not 0 <= i < state.score.size:

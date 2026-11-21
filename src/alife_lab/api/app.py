@@ -130,6 +130,14 @@ class DiscoveryRequest(_Req):
     title: str = Field(default="", max_length=200)
 
 
+class GalleryRequest(_Req):
+    run_id: str = Field(pattern=r"^run_[0-9a-f]{16}$")
+    tick: int = Field(ge=0)
+    title: str = Field(default="", max_length=200)
+    note: str = Field(default="", max_length=2000)
+    png_base64: str = Field(min_length=10, max_length=3_000_000)
+
+
 class DiscoveryReviewRequest(_Req):
     status: Literal["new", "triaged"] | None = None
     note: str | None = Field(default=None, max_length=2000)
@@ -549,10 +557,13 @@ def create_app(
         radius: Annotated[float, Query(ge=0, le=1000)] = 2,
         tick: Annotated[int | None, Query(ge=0)] = None,
         mode: Annotated[Literal["summary", "trace_self", "trace_next_epoch"], Query()] = "summary",
+        candidate: Annotated[int | None, Query(ge=0)] = None,
     ) -> dict[str, Any]:
         query: dict[str, Any] = {"x": x, "y": y, "radius": radius}
         if mode != "summary":
             query["mode"] = mode
+        if candidate is not None:  # search runs: look a candidate up by archive index
+            query["candidate"] = candidate
         return envelope(await ctl().inspect(run_id, query, tick))
 
     # ------------------------------------------------------------------- tools
@@ -680,6 +691,36 @@ def create_app(
     @app.post(f"{API}/sweeps/{{sweep_id}}/cancel")
     async def sweep_cancel(sweep_id: str) -> dict[str, Any]:
         return envelope(await ctl().sweeps.cancel(sweep_id))
+
+    # ------------------------------------------------------------- gallery
+
+    @app.get(f"{API}/gallery")
+    async def gallery_list() -> dict[str, Any]:
+        return envelope(ctl().gallery.list())
+
+    @app.post(f"{API}/gallery", status_code=201)
+    async def gallery_add(body: GalleryRequest) -> dict[str, Any]:
+        return envelope(
+            ctl().gallery.add(body.run_id, body.tick, body.title, body.note, body.png_base64)
+        )
+
+    @app.get(f"{API}/gallery/{{gallery_id}}/image")
+    async def gallery_image(gallery_id: str) -> Response:
+        data = await run_in_threadpool(ctl().gallery.image, gallery_id)
+        return Response(content=data, media_type="image/png",
+                        headers={"Cache-Control": "private, max-age=3600"})  # fmt: skip
+
+    @app.delete(f"{API}/gallery/{{gallery_id}}")
+    async def gallery_hide(gallery_id: str) -> dict[str, Any]:
+        return envelope(ctl().gallery.hide(gallery_id))
+
+    # ------------------------------------------------------------- lineage
+
+    @app.get(f"{API}/experiments/{{run_id}}/lineage")
+    async def lineage(
+        run_id: str, tick: Annotated[int | None, Query(ge=0)] = None
+    ) -> dict[str, Any]:
+        return envelope(await ctl().inspect(run_id, {"lineage": True}, tick))
 
     # ------------------------------------------------------------- discoveries
 

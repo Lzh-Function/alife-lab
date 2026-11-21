@@ -47,3 +47,15 @@ dropped_previews`) + payload. Codec `bitpack1` = `numpy.packbits` (row-major, MS
 | GET | /sweeps, /sweeps/{id} | progress by run state |
 | GET | /sweeps/{id}/report | per-condition summaries, comparisons (Δ mean, bootstrap CI, Cliff's δ, permutation p, Holm), per-run endpoint values, exclusions, time course, note codes |
 | POST | /sweeps/{id}/cancel | cancels non-terminal members |
+
+
+## Gallery and lineage (ADR 0029)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/v1/gallery` | visible entries, newest first |
+| POST | `/api/v1/gallery` | `{run_id, tick, title, note, png_base64}`; PNG validated (≤ 2 MiB, ≤ 4096²) |
+| GET | `/api/v1/gallery/{id}/image` | `image/png`, SHA-256 checked on read |
+| DELETE | `/api/v1/gallery/{id}` | hides the entry (artifact kept) |
+| GET | `/api/v1/experiments/{id}/lineage?tick=` | search runs: per-candidate generation, parent, score, viability, position |
+| GET | `/api/v1/experiments/{id}/inspect?x=0&y=0&candidate=i` | search runs: one candidate by archive index |
