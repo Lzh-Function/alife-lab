@@ -191,6 +191,7 @@ _ALLOWED_OVERRIDE_KEYS = {
     "stimuli",
     "silenced_ports",
     "silenced_cell_types",
+    "plasticity",
 }
 
 

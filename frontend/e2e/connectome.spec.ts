@@ -119,3 +119,44 @@ test("connectome F2 FlyWire v783: 138,639-neuron search, sugar->MN9 and 3D glowi
     await stopServer(server);
   }
 });
+
+test("connectome F4: Mushroom Body KC->MBON plasticity displays changed synapses and forks cleanly", async ({ page }) => {
+  const server = startServer();
+  await waitHealthy();
+  try {
+    await page.goto(`${BASE}/#/catalog`);
+    await openPreset(page, "connectome_mb_tiny_pavlov");
+    await page.getByTestId("input-name").fill("e2e_connectome_f4");
+    await page.getByTestId("field-runner.max_steps").fill("300");
+    await page.getByTestId("field-runner.checkpoint_interval").fill("50");
+    await page.getByTestId("input-profile").selectOption("cpu_dev");
+    await page.getByTestId("input-tps").fill("0");
+    await expect(page.getByTestId("validation")).toContainText("OK");
+    await page.getByTestId("btn-create").click();
+    await expect(page).toHaveURL(/#\/lab\/run_[0-9a-f]{16}/);
+    const runId = page.url().split("/").pop()!;
+
+    // Wait for paired Odor A + PPL101 conditioning to complete and depress KC -> MBON11 synapses.
+    await expectState(page, "completed");
+    await expect(page.getByTestId("connectome-plasticity")).toBeVisible({ timeout: 25_000 });
+    await expect
+      .poll(async () => Number(await page.getByTestId("metric-plastic_changed_edges").textContent()), {
+        timeout: 25_000,
+      })
+      .toBeGreaterThanOrEqual(2);
+    await expect(page.getByTestId("connectome-plasticity")).toContainText("KCg-m");
+    await expect(page.getByTestId("connectome-plasticity")).toContainText("MBON11");
+
+    // Verify Replay + Fork works cleanly on a plastic run (pre- vs post-training comparison).
+    await page.getByTestId("replay-toggle").check();
+    await page.getByTestId("replay-tick-input").fill("50");
+    const source = page.getByTestId("replay-source");
+    await expect(source).toHaveAttribute("data-pending", "false", { timeout: 15_000 });
+    await page.getByTestId("replay-fork").click();
+    await expect(page).not.toHaveURL(new RegExp(runId), { timeout: 20_000 });
+    expect(await tick(page)).toBe(50);
+    await expect(page.getByTestId("lineage")).toContainText(runId);
+  } finally {
+    await stopServer(server);
+  }
+});

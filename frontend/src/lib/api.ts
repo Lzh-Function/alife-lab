@@ -673,6 +673,27 @@ export interface ConnectomeFrameRegion {
   intensity: number;
 }
 
+export interface ConnectomePlasticEdge {
+  pre_index: number;
+  post_index: number;
+  pre_type: string;
+  post_type: string;
+  base_weight: number;
+  eff_weight: number;
+  scale: number;
+  delta_pct: number;
+}
+
+export interface ConnectomePlasticitySummary {
+  enabled: boolean;
+  total_edges: number;
+  changed_edges: number;
+  mean_scale: number;
+  min_scale: number;
+  max_scale: number;
+  top_changed: ConnectomePlasticEdge[];
+}
+
 export interface ConnectomeFrameHeader {
   codec: "connectome_v1";
   dataset_id: string;
@@ -686,5 +707,6 @@ export interface ConnectomeFrameHeader {
   silenced_count: number;
   ports: ConnectomeFramePort[];
   regions: ConnectomeFrameRegion[];
+  plasticity?: ConnectomePlasticitySummary;
   dropped_previews?: number;
 }

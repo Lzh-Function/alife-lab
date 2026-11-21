@@ -1,0 +1,12 @@
+preset:
+  id: connectome_fly_mb_no_dan_control
+  scenario: connectome_fly_mb_pavlov.yaml
+  title_key: preset.connectome_fly_mb_no_dan_control.title
+  description_key: preset.connectome_fly_mb_no_dan_control.description
+  overrides:
+    experiment:
+      name: connectome_fly_mb_no_dan_control
+      silenced_ports:
+        - mushroom_body_dan
+  expected_observation: 'Negative control: silencing mushroom body DANs removes compartmental dopamine reinforcement, so plastic_changed_edges remains 0 and Odor A->MBON11 is not depressed.'
+  negative_control: preset connectome_fly_mb_pavlov (intact PPL101 DANs)

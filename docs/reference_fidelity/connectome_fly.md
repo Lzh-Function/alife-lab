@@ -1,7 +1,6 @@
-# Reference fidelity — Adult *Drosophila* connectome (`flywire_783`, F0–F1)
+# Reference fidelity — Adult *Drosophila* connectome (`flywire_783`, F0–F4)
 
-Status: **F0–F1 complete** (2026-11-21); F2 (dedicated 3D brain visualization, cell search and
-raster UI) not yet implemented.
+Status: **F0–F4 complete** (2026-11-21); F5+ not yet implemented.
 
 > **Honest framing:** This dataset and the upcoming model are a hypothesis-testing
 > simplification derived from one adult female *Drosophila melanogaster* wiring diagram, not a
@@ -231,6 +230,71 @@ Search space: `[sugar_grn, bitter_grn, water_grn, antennal_grooming_mechanosenso
 | `CMA-ES` (`reference` wiring) | **78.80 ± 8.27** | 81.33 | 13.47 s | Selected `sugar_grn = 200 Hz` in 5/5 seeds and `bitter_grn = 0 Hz` in 4/5 seeds |
 | `Random` (`reference` wiring) | **68.00 ± 7.89** | 70.00 | 9.27 s | CMA-ES vs Random: Δ = +10.80 Hz, 95% CI [+1.93, +19.93], δ = +0.68, exact p = 0.0714 (honestly recorded: directional at 6 gens / 5 seeds, not p < 0.05) |
 | `CMA-ES` (`shuffled_control` wiring) | **0.00 ± 0.00** | 0.00 | 23.05 s | CMA-ES (`reference`) vs Shuffled: Δ = +78.80 Hz, δ = +1.00, exact **p = 0.0079** |
+
+---
+
+## Phase F4: Olfactory Associative Learning — Mushroom Body `KC -> MBON` Plasticity (2026-11-21)
+
+> **Honest framing:** Phase F4 uses an **explicitly simplified phenomenological three-factor
+> eligibility-trace plasticity rule** inspired by *Drosophila* Mushroom Body literature
+> (Hige et al. 2015; Cohn et al. 2015; Handler et al. 2019; Jiang & Litwin-Kumar 2021). It is
+> **not** a biochemical cAMP/PKA/cGMP model, and it is strictly disabled in `mode="reference"`.
+
+### 1. Mushroom Body anatomical scope & measured FlyWire v783 findings
+
+- Plastic edges: **only excitatory `KC -> MBON` synapses** (**62,261** of 15,091,983 edges;
+  256,719 synapses). All other 15,029,722 edges in FlyWire v783 remain strictly immutable.
+- Anatomical DAN compartments (`>= 5` synapses): `PPL101` (2 bilateral cells) forms 894 synapses
+  onto GABAergic `MBON11` (2 bilateral γ1pedc cells), and `MBON11` sends **358 direct inhibitory
+  synapses back onto `PPL101`** (`-95, -102, -81, -80`).
+- **Sparse KC odor ports (`odor_a_kc`, `odor_b_kc`):** In the uniform-weight Shiu et al. (2024)
+  LIF model (which lacks APL divisive inhibition), stimulating raw ORNs (`ORN_DM1` vs `ORN_DL5`
+  even at 10 Hz) activates ~3,790 / 5,177 KCs with Jaccard overlap **0.998**. F4 therefore drives
+  two disjoint 250-cell sparse `KCg-m` ensembles (4.8% sparsity, 0% overlap) to isolate MB
+  plasticity cleanly without modifying the reference LIF equations.
+- **Measured `MBON11 -> PPL101` feedback loop:** During Odor A alone (600 ms), intact `MBON11`
+  inhibits `PPL101` (`mbon11_dan <= 10.08`), whereas after `KC_A -> MBON11` depression, weakened
+  `MBON11` disinhibits `PPL101` (`mbon11_dan = 17.11`), forming a self-sustaining memory loop
+  (cf. Felsenberg et al. 2018). Setting the phasic dopamine burst threshold `dan_threshold = 18.0`
+  cleanly separates external punishment bursts (`~27–30` at 220 Hz) from endogenous recurrence.
+
+### 2. Pavlovian conditioning protocol on real FlyWire v783 (5 seeds `1..5`, CuPy GPU)
+
+Command: `uv run alife connectome pavlov flywire_783 --seeds 1,2,3,4,5 --wiring <reference|shuffled_control> --backend cupy`
+Parameters: `odor_hz = 150`, `dan_hz = 220`, `probe_ms = 300`, `trial_ms = 200`, `n_trials = 4`,
+`ext_ms = 1200`, `unpaired_gap_ms = 1500`, `tau_elig = 200 ms`, `tau_dan = 150 ms`,
+`dan_threshold = 18.0`, `lr_ltd = 0.00022`, `lr_ext = 0.03`.
+
+| Condition / Readout | Real FlyWire v783 (mean ± SD, median) | Shuffled control (`wiring="shuffled_control"`) | Exact perm p vs Paired Post (Ref) | Cliff's δ (Ref) |
+|---|---:|---:|---:|---:|
+| Pre-training Odor A → `MBON11` (Hz) | **201.00 ± 4.18** (200.00) | 0.00 ± 0.00 | **0.0079** | -1.00 |
+| After 1 paired trial Odor A → `MBON11` (Hz) | **101.00 ± 7.69** (96.67) | 0.00 ± 0.00 | — (dose-response: 5/5 seeds `post < 1-trial < pre`) | — |
+| After 4 paired trials Odor A → `MBON11` (Hz) | **89.33 ± 9.17** (91.67) | 0.00 ± 0.00 | (reference arm) | — |
+| Extinction (1200 ms Odor A alone) → `MBON11` (Hz) | **199.33 ± 4.65** (201.67) | 0.00 ± 0.00 | **0.0079** | +1.00 |
+| Pre-training Odor B → `MBON11` (Hz) | **198.33 ± 1.67** (198.33) | 0.00 ± 0.00 | — | — |
+| Post-training Odor B → `MBON11` (Hz, specificity) | **198.67 ± 0.75** (198.33) | 0.00 ± 0.00 | **0.0079** | -1.00 |
+| Negative control: Unpaired (1500 ms shift) → `MBON11` (Hz) | **173.00 ± 65.06** (201.67) | 0.00 ± 0.00 | **0.0476** | -0.60 |
+| Negative control: DAN silenced (`mushroom_body_dan`) → `MBON11` (Hz) | **200.00 ± 1.18** (200.00) | 0.00 ± 0.00 | **0.0079** | -1.00 |
+| Changed `KC -> MBON` edges (Paired / Unpaired / DAN silenced) | **353.0 ± 6.7** / median **1.0** / **0.0 ± 0.0** | 0.0 / 0.0 / 0.0 (`2,494` plastic edges) | — | — |
+| Downstream `MBON01` (Pre → Post Odor A, Hz) | 7.00 ± 2.98 → 5.67 ± 0.91 | 0.00 → 0.00 | — (see honest note below) | — |
+| Wall time (5 seeds, full protocol, RTX 5070) | **35.22 s** | **24.76 s** | — | — |
+
+### 3. Honest caveats & non-matches recorded for F4
+
+1. **Unpaired control seed 5 stochastic cascade:** In 4/5 seeds (`1..4`), the 1500 ms shifted-timing
+   unpaired control produced `205.0, 201.7, 200.0, 201.7 Hz` with `0–1` changed edges; in seed 5,
+   a transient whole-brain recurrent burst during the `PPL101` pulse recruited ~27,084 KC→MBON
+   edges (`56.7 Hz`), reflecting the absence of APL divisive inhibition in the uniform-weight
+   Shiu et al. LIF model. Across all 5 seeds, paired vs unpaired still remained significant
+   (`p = 0.0476`, median `91.67` vs `201.67 Hz`).
+2. **Downstream `MBON01` disinhibition:** In the clean 8-neuron `synthetic_mb` circuit, depressing
+   GABAergic `MBON11` robustly disinhibits avoidance `MBON01` (`~30 → ~67 Hz`). In the full
+   138,639-neuron FlyWire v783 brain, `MBON01` stays low (`7.0 → 5.7 Hz`) because it receives
+   additional convergent inputs beyond `MBON11`; downstream avoidance readout in the full brain
+   therefore requires multi-MBON or behavioral-body integration (F8).
+3. **Bitwise CPU/GPU & checkpoint equivalence:** Verified on `synthetic_mb` in
+   `tests/reference/test_connectome_f4.py` (`exact_equal=True`, `max_plastic_scale_diff=0.0`),
+   and verified in Chromium via Playwright E2E `e2e/connectome.spec.ts` (3/3 passed).
 
 
 

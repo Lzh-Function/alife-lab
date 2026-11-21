@@ -8,7 +8,7 @@ exact bitwise equivalence across backends and checkpoints. Never imports CuPy un
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -25,8 +25,19 @@ from alife_lab.connectome.lif import (
     LIFState,
     make_initial_state,
     make_shuffled_csr,
+    make_synthetic_mb_pack,
     make_synthetic_tiny_pack,
     step_tick_cpu,
+)
+from alife_lab.connectome.plasticity import (
+    MBPlasticityParams,
+    PlasticityState,
+    PlasticSynapseMap,
+    build_plastic_synapse_map,
+    effective_weights,
+    make_initial_plasticity_state,
+    plasticity_summary,
+    step_plasticity_tick,
 )
 from alife_lab.core.spec import ConnectomeExperiment, ExperimentSpec
 from alife_lab.service.settings import load_settings
@@ -91,6 +102,26 @@ def _params_from_exp(exp: ConnectomeExperiment) -> LIFParams:
     )
 
 
+def _plasticity_from_exp(exp: ConnectomeExperiment) -> MBPlasticityParams:
+    p = exp.plasticity
+    if p is None or not p.enabled:
+        return MBPlasticityParams(enabled=False)
+    return MBPlasticityParams(
+        enabled=True,
+        tau_elig_ms=p.tau_elig_ms,
+        tau_dan_ms=p.tau_dan_ms,
+        dan_threshold=p.dan_threshold,
+        lr_ltd=p.lr_ltd,
+        lr_ext=p.lr_ext,
+        w_min=p.w_min,
+        w_max=p.w_max,
+        min_dan_synapses=p.min_dan_synapses,
+    )
+
+
+_PLASTIC_MAP_CACHE: dict[tuple[str, str, int, int], PlasticSynapseMap] = {}
+
+
 def _get_pack_and_csr(exp: ConnectomeExperiment) -> tuple[ConnectomePack, CSRGraph]:
     ds_dir = load_settings().resolved_datasets_dir
     key = (exp.dataset_id, str(ds_dir))
@@ -98,6 +129,8 @@ def _get_pack_and_csr(exp: ConnectomeExperiment) -> tuple[ConnectomePack, CSRGra
     if cached is None:
         if exp.dataset_id == "synthetic_tiny":
             pack = make_synthetic_tiny_pack()
+        elif exp.dataset_id == "synthetic_mb":
+            pack = make_synthetic_mb_pack()
         else:
             pack = load_connectome_pack(exp.dataset_id, ds_dir, verify_hashes=True)
         csr = pack.edges.to_csr(pack.cells.num_cells)
@@ -116,7 +149,7 @@ def _get_pack_and_csr(exp: ConnectomeExperiment) -> tuple[ConnectomePack, CSRGra
 
 @dataclass
 class ConnectomeWorld:
-    """Mutable state + immutable pack/CSR references + optional resident GPU runner."""
+    """Mutable state + immutable pack/CSR references + optional resident GPU runner & plasticity."""
 
     pack: ConnectomePack
     csr: CSRGraph
@@ -125,6 +158,11 @@ class ConnectomeWorld:
     backend: str
     gpu_runner: Any = None
     gpu_synced_to_host: bool = True
+    plasticity_params: MBPlasticityParams = field(
+        default_factory=lambda: MBPlasticityParams(enabled=False)
+    )
+    plastic_map: PlasticSynapseMap | None = None
+    plastic_state: PlasticityState | None = None
 
     @property
     def tick(self) -> int:
@@ -156,6 +194,21 @@ _METRICS = (
        "every tick", 1, "never null"),
     _M("mn9_rate_hz", "metric.mn9_rate_hz", "Hz", "tick",
        "Mean firing rate of MN9 proboscis extension motor neurons over elapsed time.", "mean",
+       "every tick", 1, "never null"),
+    _M("mbon11_rate_hz", "metric.mbon11_rate_hz", "Hz", "tick",
+       "Mean firing rate of MBON11 approach output neurons over elapsed time.", "mean",
+       "every tick", 1, "never null"),
+    _M("mbon01_rate_hz", "metric.mbon01_rate_hz", "Hz", "tick",
+       "Mean firing rate of MBON01 avoidance output neurons over elapsed time.", "mean",
+       "every tick", 1, "never null"),
+    _M("plastic_changed_edges", "metric.plastic_changed_edges", "edges", "tick",
+       "Number of plastic KC->MBON edges whose scale differs from 1.0 by more than 0.01.", "none",
+       "every tick", 1, "never null"),
+    _M("plastic_mean_scale", "metric.plastic_mean_scale", "scale", "tick",
+       "Mean synaptic multiplier across all plastic KC->MBON edges (1.0 = naive).", "mean",
+       "every tick", 1, "never null"),
+    _M("plastic_min_scale", "metric.plastic_min_scale", "scale", "tick",
+       "Minimum synaptic multiplier across plastic KC->MBON edges.", "min",
        "every tick", 1, "never null"),
     _M("mean_v_mv", "metric.mean_v_mv", "mV", "tick",
        "Mean membrane potential across all neurons.", "mean",
@@ -240,9 +293,50 @@ class ConnectomeAdapter:
     def manifest(self) -> PluginManifest:
         return CONNECTOME_MANIFEST
 
-    def _make_world(self, exp: ConnectomeExperiment, lif: LIFState) -> ConnectomeWorld:
-        pack, csr = _get_pack_and_csr(exp)
+    def _make_world(
+        self,
+        exp: ConnectomeExperiment,
+        lif: LIFState,
+        plastic_state: PlasticityState | None = None,
+    ) -> ConnectomeWorld:
+        pack, base_csr = _get_pack_and_csr(exp)
         params = _params_from_exp(exp)
+        p_params = _plasticity_from_exp(exp)
+        pmap: PlasticSynapseMap | None = None
+        pstate: PlasticityState | None = None
+        csr = base_csr
+
+        if p_params.enabled:
+            pkey = (
+                pack.pack_digest,
+                exp.wiring,
+                int(exp.seed) if exp.wiring == "shuffled_control" else 0,
+                p_params.min_dan_synapses,
+            )
+            pmap = _PLASTIC_MAP_CACHE.get(pkey)
+            if pmap is None:
+                pmap = build_plastic_synapse_map(
+                    pack, base_csr, min_dan_synapses=p_params.min_dan_synapses
+                )
+                _PLASTIC_MAP_CACHE[pkey] = pmap
+            # Clone signed_weight so per-world plasticity never mutates the shared cached CSR.
+            csr = CSRGraph(
+                num_cells=base_csr.num_cells,
+                indptr=base_csr.indptr,
+                post=base_csr.post,
+                signed_weight=base_csr.signed_weight.copy(),
+                kind=base_csr.kind,
+            )
+            pstate = (
+                plastic_state
+                if plastic_state is not None
+                else make_initial_plasticity_state(pmap)
+            )
+            if pmap.num_edges > 0:
+                eff_w = effective_weights(pmap, pstate.scale)
+                pstate.last_eff_weight[:] = eff_w
+                csr.signed_weight[pmap.csr_edge_idx] = eff_w
+
         gpu_runner: Any = None
         if self.backend == "cupy":
             from alife_lab.connectome.lif_cupy import CupyLIFRunner
@@ -257,6 +351,9 @@ class ConnectomeAdapter:
             backend=self.backend,
             gpu_runner=gpu_runner,
             gpu_synced_to_host=True,
+            plasticity_params=p_params,
+            plastic_map=pmap,
+            plastic_state=pstate,
         )
 
     def initialize(self, spec: ExperimentSpec) -> ConnectomeWorld:
@@ -295,8 +392,43 @@ class ConnectomeAdapter:
             state.lif.substep += state.params.substeps_per_tick
             state.lif.tick += 1
             state.gpu_synced_to_host = False
+            if (
+                state.plasticity_params.enabled
+                and state.plastic_map is not None
+                and state.plastic_state is not None
+            ):
+                last_sp = state.gpu_runner.download_last_tick_spikes()
+                state.lif.last_tick_spikes[:] = last_sp
+                dt_tick_ms = state.params.substeps_per_tick * state.params.dt_ms
+                chg_idx, chg_w = step_plasticity_tick(
+                    state.plastic_state,
+                    state.plastic_map,
+                    state.plasticity_params,
+                    last_sp,
+                    state.lif.silenced,
+                    dt_tick_ms=dt_tick_ms,
+                )
+                if chg_idx.size > 0:
+                    state.csr.signed_weight[chg_idx] = chg_w
+                    state.gpu_runner.update_edge_weights(chg_idx, chg_w)
         else:
             step_tick_cpu(state.lif, state.csr, state.params, int(exp.seed))
+            if (
+                state.plasticity_params.enabled
+                and state.plastic_map is not None
+                and state.plastic_state is not None
+            ):
+                dt_tick_ms = state.params.substeps_per_tick * state.params.dt_ms
+                chg_idx, chg_w = step_plasticity_tick(
+                    state.plastic_state,
+                    state.plastic_map,
+                    state.plasticity_params,
+                    state.lif.last_tick_spikes,
+                    state.lif.silenced,
+                    dt_tick_ms=dt_tick_ms,
+                )
+                if chg_idx.size > 0:
+                    state.csr.signed_weight[chg_idx] = chg_w
         return state
 
     def metrics(self, state: ConnectomeWorld, spec: ExperimentSpec) -> dict[str, float]:
@@ -310,17 +442,29 @@ class ConnectomeAdapter:
         total_spikes = float(int(lif.total_spikes.sum()))
         mean_rate_hz = (total_spikes / (n * elapsed_s)) if (n > 0 and lif.substep > 0) else 0.0
 
-        mn9_port = state.pack.io_ports.get("mn9_proboscis_extension")
-        if mn9_port is not None and mn9_port.cell_indices.size > 0:
-            mn9_idx = mn9_port.cell_indices
-            mn9_tick = float(int(lif.last_tick_spikes[mn9_idx].sum()))
-            mn9_total = float(int(lif.total_spikes[mn9_idx].sum()))
-            mn9_rate = (
-                mn9_total / (int(mn9_idx.size) * elapsed_s) if lif.substep > 0 else 0.0
-            )
+        def _port_rate(port_id: str) -> tuple[float, float]:
+            p = state.pack.io_ports.get(port_id)
+            if p is None or p.cell_indices.size == 0:
+                return 0.0, 0.0
+            idx = p.cell_indices
+            sp_tick = float(int(lif.last_tick_spikes[idx].sum()))
+            sp_tot = float(int(lif.total_spikes[idx].sum()))
+            rate = (sp_tot / (int(idx.size) * elapsed_s)) if lif.substep > 0 else 0.0
+            return sp_tick, rate
+
+        mn9_tick, mn9_rate = _port_rate("mn9_proboscis_extension")
+        _, mbon11_rate = _port_rate("mbon11_approach")
+        _, mbon01_rate = _port_rate("mbon01_avoidance")
+
+        if state.plastic_state is not None and state.plastic_state.scale.size > 0:
+            sc = state.plastic_state.scale
+            p_changed = float(int((np.abs(sc - np.float32(1.0)) > np.float32(0.01)).sum()))
+            p_mean = float(sc.mean())
+            p_min = float(sc.min())
         else:
-            mn9_tick = 0.0
-            mn9_rate = 0.0
+            p_changed = 0.0
+            p_mean = 1.0
+            p_min = 1.0
 
         out = {
             "spikes_tick": spikes_tick,
@@ -329,6 +473,11 @@ class ConnectomeAdapter:
             "mean_firing_rate_hz": mean_rate_hz,
             "mn9_spikes_tick": mn9_tick,
             "mn9_rate_hz": mn9_rate,
+            "mbon11_rate_hz": mbon11_rate,
+            "mbon01_rate_hz": mbon01_rate,
+            "plastic_changed_edges": p_changed,
+            "plastic_mean_scale": p_mean,
+            "plastic_min_scale": p_min,
             "mean_v_mv": float(lif.v.mean()) if n > 0 else float(state.params.v_0),
             "time_ms": float(lif.substep * state.params.dt_ms),
         }
@@ -404,7 +553,7 @@ class ConnectomeAdapter:
                 }
             )
 
-        header = {
+        header: dict[str, Any] = {
             "codec": "connectome_v1",
             "dataset_id": state.pack.dataset_id,
             "num_cells": n,
@@ -418,6 +567,14 @@ class ConnectomeAdapter:
             "ports": ports_summary,
             "regions": regions_summary,
         }
+        if (
+            state.plasticity_params.enabled
+            and state.plastic_map is not None
+            and state.plastic_state is not None
+        ):
+            header["plasticity"] = plasticity_summary(
+                state.pack, state.plastic_map, state.plastic_state
+            )
         return header, fired_idx.tobytes()
 
     def apply_intervention(
@@ -526,16 +683,41 @@ class ConnectomeAdapter:
             and np.array_equal(la.stim_rate_hz.view(np.uint32), lb.stim_rate_hz.view(np.uint32))
             and np.array_equal(la.silenced, lb.silenced)
         )
+        max_scale_diff = 0.0
+        if a.plastic_state is not None and b.plastic_state is not None:
+            pa, pb = a.plastic_state, b.plastic_state
+            if pa.scale.size and pa.scale.shape == pb.scale.shape:
+                max_scale_diff = float(np.abs(pa.scale - pb.scale).max())
+            exact = exact and bool(
+                np.array_equal(pa.scale.view(np.uint32), pb.scale.view(np.uint32))
+                and np.array_equal(pa.kc_elig.view(np.uint32), pb.kc_elig.view(np.uint32))
+                and np.array_equal(pa.mbon_dan.view(np.uint32), pb.mbon_dan.view(np.uint32))
+            )
         return {
             "metric": "max_v_diff_mv",
             "value": dv,
             "max_g_diff_mv": dg,
             "spike_count_l1": spike_l1,
+            "max_plastic_scale_diff": max_scale_diff,
             "exact_equal": exact,
         }
 
     def serialize_state(self, state: ConnectomeWorld) -> dict[str, Any]:
         lif = state.ensure_host()
+        arrays: dict[str, Any] = {
+            "v": lif.v.copy(),
+            "g": lif.g.copy(),
+            "refrac": lif.refrac.copy(),
+            "delay_ring": lif.delay_ring.copy(),
+            "stim_rate_hz": lif.stim_rate_hz.copy(),
+            "silenced": lif.silenced.copy(),
+            "last_tick_spikes": lif.last_tick_spikes.copy(),
+            "total_spikes": lif.total_spikes.copy(),
+        }
+        if state.plastic_state is not None:
+            arrays["plastic_scale"] = state.plastic_state.scale.copy()
+            arrays["plastic_kc_elig"] = state.plastic_state.kc_elig.copy()
+            arrays["plastic_mbon_dan"] = state.plastic_state.mbon_dan.copy()
         return {
             "meta": {
                 "serialize_version": SERIALIZE_VERSION,
@@ -544,16 +726,7 @@ class ConnectomeAdapter:
                 "substep": int(lif.substep),
                 "tick": int(lif.tick),
             },
-            "arrays": {
-                "v": lif.v.copy(),
-                "g": lif.g.copy(),
-                "refrac": lif.refrac.copy(),
-                "delay_ring": lif.delay_ring.copy(),
-                "stim_rate_hz": lif.stim_rate_hz.copy(),
-                "silenced": lif.silenced.copy(),
-                "last_tick_spikes": lif.last_tick_spikes.copy(),
-                "total_spikes": lif.total_spikes.copy(),
-            },
+            "arrays": arrays,
         }
 
     def deserialize_state(self, payload: dict[str, Any], spec: ExperimentSpec) -> ConnectomeWorld:
@@ -574,7 +747,16 @@ class ConnectomeAdapter:
             last_tick_spikes=np.ascontiguousarray(arrays["last_tick_spikes"], dtype=np.int32),
             total_spikes=np.ascontiguousarray(arrays["total_spikes"], dtype=np.int32),
         )
-        world = self._make_world(exp, lif)
+        pstate: PlasticityState | None = None
+        if "plastic_scale" in arrays:
+            scale = np.ascontiguousarray(arrays["plastic_scale"], dtype=np.float32)
+            pstate = PlasticityState(
+                scale=scale,
+                kc_elig=np.ascontiguousarray(arrays["plastic_kc_elig"], dtype=np.float32),
+                mbon_dan=np.ascontiguousarray(arrays["plastic_mbon_dan"], dtype=np.float32),
+                last_eff_weight=np.zeros(scale.shape[0], dtype=np.int32),
+            )
+        world = self._make_world(exp, lif, plastic_state=pstate)
         if meta.get("pack_digest") and meta["pack_digest"] != world.pack.pack_digest:
             raise ValueError("checkpoint pack_digest does not match loaded connectome pack")
         return world

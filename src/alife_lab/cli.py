@@ -770,6 +770,71 @@ def cmd_connectome(args: argparse.Namespace) -> int:
                         f"{cd_str}\t{p_str}\t{ph_str}"
                     )
             return 0
+
+        if args.connectome_cmd == "pavlov":
+            from alife_lab.connectome.learning import run_pavlovian_experiment
+            from alife_lab.connectome.lif import make_synthetic_mb_pack
+            from alife_lab.connectome.plasticity import MBPlasticityParams
+
+            seeds = tuple(int(s.strip()) for s in args.seeds.split(",") if s.strip())
+            if args.dataset_id == "synthetic_mb":
+                pack = make_synthetic_mb_pack()
+            else:
+                pack = load_connectome_pack(
+                    args.dataset_id, ds_dir, verify_hashes=not args.no_verify
+                )
+            pp = MBPlasticityParams(
+                enabled=True,
+                tau_elig_ms=args.tau_elig,
+                tau_dan_ms=args.tau_dan,
+                dan_threshold=args.dan_threshold,
+                lr_ltd=args.lr_ltd,
+                lr_ext=args.lr_ext,
+            )
+            report = run_pavlovian_experiment(
+                pack,
+                seeds=seeds,
+                p_params=pp,
+                odor_hz=args.odor_hz,
+                dan_hz=args.dan_hz,
+                probe_ms=args.probe_ms,
+                trial_ms=args.trial_ms,
+                n_trials=args.trials,
+                ext_ms=args.ext_ms,
+                unpaired_gap_ms=args.unpaired_gap_ms,
+                wiring=args.wiring,
+                backend=args.backend,
+            )
+            if args.json:
+                _print_json(report)
+            else:
+                sm = report["summary"]
+                cp = report["comparisons"]
+                print(
+                    f"pavlov {report['dataset_id']} wiring={report['wiring']} "
+                    f"backend={report['backend']} plastic_edges={report['plastic_edges_total']} "
+                    f"wall={report['wall_seconds']:.2f}s"
+                )
+                print(
+                    f"  OdorA MBON11: pre={sm['pre_odor_a_mbon11_hz']['mean']:.2f} "
+                    f"-> 1-trial={sm['after1_odor_a_mbon11_hz']['mean']:.2f} "
+                    f"-> post={sm['post_odor_a_mbon11_hz']['mean']:.2f} "
+                    f"-> ext={sm['ext_odor_a_mbon11_hz']['mean']:.2f} Hz "
+                    f"(p_post_vs_pre={cp['paired_post_vs_pre_odor_a']['permutation']['p_value']})"
+                )
+                print(
+                    f"  OdorB MBON11: pre={sm['pre_odor_b_mbon11_hz']['mean']:.2f} "
+                    f"-> post={sm['post_odor_b_mbon11_hz']['mean']:.2f} Hz"
+                )
+                print(
+                    f"  Controls (OdorA MBON11): "
+                    f"unpaired={sm['unpaired_odor_a_mbon11_hz']['mean']:.2f} "
+                    f"no_dan={sm['no_dan_odor_a_mbon11_hz']['mean']:.2f} Hz "
+                    f"(changed_edges: paired={sm['changed_edges_post']['mean']:.1f}, "
+                    f"unpaired={sm['changed_edges_unpaired']['mean']:.1f}, "
+                    f"no_dan={sm['changed_edges_no_dan']['mean']:.1f})"
+                )
+            return 0
     except (DatasetError, ValueError) as exc:
         print(f"connectome error: {exc}", file=sys.stderr)
         return 1
@@ -897,6 +962,28 @@ def build_parser() -> argparse.ArgumentParser:
     csc.add_argument("--batch-size", type=int, default=8, help="GPU batch size (default 8)")
     csc.add_argument("--no-verify", action="store_true", help="skip file SHA-256 verification")
     csc.add_argument("--json", action="store_true")
+    cpav = csub.add_parser(
+        "pavlov",
+        help="run F4 mushroom body Pavlovian olfactory conditioning protocol and controls",
+    )
+    cpav.add_argument("dataset_id")
+    cpav.add_argument("--seeds", default="1,2,3,4,5")
+    cpav.add_argument("--odor-hz", type=float, default=150.0)
+    cpav.add_argument("--dan-hz", type=float, default=220.0)
+    cpav.add_argument("--probe-ms", type=int, default=300)
+    cpav.add_argument("--trial-ms", type=int, default=200)
+    cpav.add_argument("--trials", type=int, default=4)
+    cpav.add_argument("--ext-ms", type=int, default=1200)
+    cpav.add_argument("--unpaired-gap-ms", type=int, default=1500)
+    cpav.add_argument("--tau-elig", type=float, default=200.0)
+    cpav.add_argument("--tau-dan", type=float, default=150.0)
+    cpav.add_argument("--dan-threshold", type=float, default=18.0)
+    cpav.add_argument("--lr-ltd", type=float, default=0.00022)
+    cpav.add_argument("--lr-ext", type=float, default=0.03)
+    cpav.add_argument("--wiring", choices=["reference", "shuffled_control"], default="reference")
+    cpav.add_argument("--backend", choices=["auto", "numpy", "cupy"], default="auto")
+    cpav.add_argument("--no-verify", action="store_true")
+    cpav.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_connectome)
     return parser
 

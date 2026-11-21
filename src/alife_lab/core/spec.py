@@ -1727,13 +1727,31 @@ class SearchExperiment(_Frozen):
 # --------------------------------------------------------------------------- #
 
 
-ConnectomeDatasetId = Literal["flywire_783", "synthetic_tiny"]
+ConnectomeDatasetId = Literal["flywire_783", "synthetic_tiny", "synthetic_mb"]
 ConnectomeWiring = Literal["reference", "shuffled_control"]
 
 
 class ConnectomeStimulusSpec(_Frozen):
     port: Annotated[str, Field(min_length=1, max_length=80, pattern=r"^[a-z0-9_]+$")]
     rate_hz: Annotated[float, Field(ge=0.0, le=1000.0)] = 150.0
+
+
+class ConnectomePlasticitySpec(_Frozen):
+    """Simplified phenomenological KC -> MBON dopamine-modulated plasticity (F4).
+
+    Modifies ONLY excitatory KC -> MBON synapses based on presynaptic KC eligibility traces
+    and compartmental DAN activity derived from the anatomical connectome.
+    """
+
+    enabled: bool = False
+    tau_elig_ms: Annotated[float, Field(gt=1.0, le=10_000.0)] = 200.0
+    tau_dan_ms: Annotated[float, Field(gt=1.0, le=10_000.0)] = 150.0
+    dan_threshold: Annotated[float, Field(ge=0.0, le=500.0)] = 18.0
+    lr_ltd: Annotated[float, Field(ge=0.0, le=5.0)] = 0.00022
+    lr_ext: Annotated[float, Field(ge=0.0, le=5.0)] = 0.03
+    w_min: Annotated[float, Field(ge=0.0, le=1.0)] = 0.05
+    w_max: Annotated[float, Field(ge=1.0, le=10.0)] = 2.0
+    min_dan_synapses: Annotated[int, Field(ge=1, le=1000)] = 5
 
 
 class ConnectomeDynamicsSpec(_Frozen):
@@ -1768,6 +1786,11 @@ ConnectomeMetric = Literal[
     "mean_firing_rate_hz",
     "mn9_spikes_tick",
     "mn9_rate_hz",
+    "mbon11_rate_hz",
+    "mbon01_rate_hz",
+    "plastic_changed_edges",
+    "plastic_mean_scale",
+    "plastic_min_scale",
     "mean_v_mv",
     "time_ms",
 ]
@@ -1799,6 +1822,7 @@ class ConnectomeExperiment(_Frozen):
     stimuli: tuple[ConnectomeStimulusSpec, ...] = ()
     silenced_ports: tuple[str, ...] = ()
     silenced_cell_types: tuple[_CELL_TYPE_TOKEN, ...] = ()
+    plasticity: ConnectomePlasticitySpec | None = None
     dynamics: ConnectomeDynamicsSpec = ConnectomeDynamicsSpec()
     runner: RunnerSpec = RunnerSpec(max_steps=1000, checkpoint_interval=100)
     observations: ConnectomeObservationSpec = ConnectomeObservationSpec()
@@ -1812,15 +1836,22 @@ class ConnectomeExperiment(_Frozen):
                 raise ValueError(
                     "reference mode for connectome requires Shiu et al. (2024) default parameters"
                 )
+            if self.plasticity is not None and self.plasticity.enabled:
+                raise ValueError(
+                    "reference mode for connectome requires plasticity disabled "
+                    "(use mode='exploratory' for F4 mushroom body plasticity)"
+                )
         return self
 
     @model_serializer(mode="wrap")
-    def _omit_empty_silenced_cell_types(
+    def _omit_empty_optional_fields(
         self, handler: SerializerFunctionWrapHandler
     ) -> dict[str, Any]:
         out: dict[str, Any] = handler(self)
         if not out.get("silenced_cell_types"):
             out.pop("silenced_cell_types", None)
+        if out.get("plasticity") is None:
+            out.pop("plasticity", None)
         return out
 
 

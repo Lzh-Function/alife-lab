@@ -17,7 +17,7 @@ from typing import Any
 import numpy as np
 
 from alife_lab.connectome.flywire import load_flywire_783_cells
-from alife_lab.connectome.lif import make_synthetic_tiny_pack
+from alife_lab.connectome.lif import make_synthetic_mb_pack, make_synthetic_tiny_pack
 from alife_lab.connectome.registry import DatasetError
 from alife_lab.connectome.schema import CELL_ROLE_NAMES, CellTable, DatasetProvenance, IOPort
 
@@ -155,6 +155,9 @@ def get_connectome_index(dataset_id: str, datasets_dir: Path) -> ConnectomeIndex
 
     if dataset_id == "synthetic_tiny":
         pack = make_synthetic_tiny_pack()
+        index = _build_index(dataset_id, pack.cells, pack.io_ports, pack.provenance)
+    elif dataset_id == "synthetic_mb":
+        pack = make_synthetic_mb_pack()
         index = _build_index(dataset_id, pack.cells, pack.io_ports, pack.provenance)
     elif dataset_id == "flywire_783":
         cells, io_ports, prov = load_flywire_783_cells(datasets_dir, verify_hashes=False)

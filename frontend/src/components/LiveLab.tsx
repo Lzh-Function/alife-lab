@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { GaitPanel, type GaitPanelHandle } from "./GaitPanel";
 import { useElementWidth, useViewMode, useWindowHeight, ViewModeBar } from "./ViewModeBar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError, type Frame, type MetricRow, type RunEvent } from "../lib/api";
+import { api, ApiError, type ConnectomeFrameHeader, type ConnectomePlasticitySummary, type Frame, type MetricRow, type RunEvent } from "../lib/api";
 import { useRunStream, type GpuMemory } from "../lib/stream";
 import { useT } from "../i18n";
 import { ToolBar, WorldView, type ViewMode, type WorldViewHandle } from "./WorldView";
@@ -55,6 +55,7 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
   const replayRef = useRef(false);
   replayRef.current = replay;
   const lastLive = useRef<Frame | null>(null);
+  const [plasticity, setPlasticity] = useState<ConnectomePlasticitySummary | null>(null);
 
   const run = useQuery({ queryKey: ["run", runId], queryFn: () => api.run(runId), refetchInterval: 2000 });
   const checkpoints = useQuery({ queryKey: ["checkpoints", runId], queryFn: () => api.checkpoints(runId) });
@@ -88,6 +89,10 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
       if (!replayRef.current) {
         canvas.current?.draw(frame);
         gait.current?.push(frame.header as unknown as Record<string, unknown>);
+        if (frame.header.codec === "connectome_v1") {
+          const ch = frame.header as unknown as ConnectomeFrameHeader;
+          setPlasticity(ch.plasticity ?? null);
+        }
       }
       if (frame.header.dropped_previews !== undefined) setDropped(frame.header.dropped_previews);
     },
@@ -134,7 +139,13 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
     setReplay(active);
     if (!active && lastLive.current) canvas.current?.draw(lastLive.current);
   }, []);
-  const onReplayFrame = useCallback((frame: Frame) => canvas.current?.draw(frame), []);
+  const onReplayFrame = useCallback((frame: Frame) => {
+    canvas.current?.draw(frame);
+    if (frame.header.codec === "connectome_v1") {
+      const ch = frame.header as unknown as ConnectomeFrameHeader;
+      setPlasticity(ch.plasticity ?? null);
+    }
+  }, []);
 
   const act = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -401,6 +412,7 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
             live={live}
             replay={replay}
             rows={rows}
+            plasticity={plasticity}
             onIntervene={onIntervene}
             onInspectCell={(cellIndex) => onInspectConnectome({ cellIndex })}
             onInspectPort={(port) => onInspectConnectome({ port })}

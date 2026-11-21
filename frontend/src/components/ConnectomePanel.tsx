@@ -4,7 +4,7 @@
 // 3. Highlighted population firing-rate history chart (MN9 & population spikes).
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api, type MetricRow } from "../lib/api";
+import { api, type ConnectomePlasticitySummary, type MetricRow } from "../lib/api";
 import { useT } from "../i18n";
 import { MultiLine, type Series } from "./MultiLine";
 
@@ -13,6 +13,7 @@ interface Props {
   live: boolean;
   replay: boolean;
   rows: MetricRow[];
+  plasticity?: ConnectomePlasticitySummary | null;
   onIntervene: (kind: string, payload: Record<string, unknown>) => void;
   onInspectCell: (cellIndex: number) => void;
   onInspectPort: (portId: string) => void;
@@ -25,6 +26,7 @@ export function ConnectomePanel({
   live,
   replay,
   rows,
+  plasticity,
   onIntervene,
   onInspectCell,
   onInspectPort,
@@ -62,18 +64,32 @@ export function ConnectomePanel({
   const ports = meta.data?.ports ?? [];
   const regions = meta.data?.regions ?? [];
 
-  const rateSeries: Series[] = [
-    {
-      label: t("metric.mn9_rate_hz"),
-      className: "arm-b",
-      points: rows.map((r) => [r.tick, r.values.mn9_rate_hz ?? null]),
-    },
-    {
-      label: t("metric.mean_firing_rate_hz"),
-      className: "arm-a",
-      points: rows.map((r) => [r.tick, r.values.mean_firing_rate_hz ?? null]),
-    },
-  ];
+  const hasMbon = rows.some((r) => r.values.mbon11_rate_hz !== undefined || r.values.mbon01_rate_hz !== undefined);
+  const rateSeries: Series[] = hasMbon
+    ? [
+        {
+          label: t("metric.mbon11_rate_hz"),
+          className: "arm-a",
+          points: rows.map((r) => [r.tick, r.values.mbon11_rate_hz ?? null]),
+        },
+        {
+          label: t("metric.mbon01_rate_hz"),
+          className: "arm-b",
+          points: rows.map((r) => [r.tick, r.values.mbon01_rate_hz ?? null]),
+        },
+      ]
+    : [
+        {
+          label: t("metric.mn9_rate_hz"),
+          className: "arm-b",
+          points: rows.map((r) => [r.tick, r.values.mn9_rate_hz ?? null]),
+        },
+        {
+          label: t("metric.mean_firing_rate_hz"),
+          className: "arm-a",
+          points: rows.map((r) => [r.tick, r.values.mean_firing_rate_hz ?? null]),
+        },
+      ];
 
   return (
     <div className="connectome-controls">
@@ -179,6 +195,49 @@ export function ConnectomePanel({
         <div className="panel" data-testid="connectome-rate-chart">
           <h3>{t("connectome.chart.title")}</h3>
           <MultiLine series={rateSeries} testId="connectome-rates-svg" />
+        </div>
+      )}
+
+      {/* Changed KC -> MBON plastic synapses (F4) */}
+      {plasticity?.enabled && (
+        <div className="panel" data-testid="connectome-plasticity">
+          <h3>{t("connectome.plasticity.title")}</h3>
+          <p className="small muted">{t("connectome.plasticity.note")}</p>
+          <p className="small mono">
+            {t("connectome.plasticity.changed")}: <strong>{plasticity.changed_edges.toLocaleString()}</strong> /{" "}
+            {plasticity.total_edges.toLocaleString()} · {t("connectome.plasticity.mean_scale")}:{" "}
+            {plasticity.mean_scale.toFixed(3)} · {t("connectome.plasticity.min_scale")}: {plasticity.min_scale.toFixed(3)}
+          </p>
+          {plasticity.top_changed.length > 0 ? (
+            <div className="table-wrap" style={{ maxHeight: "12rem", overflowY: "auto" }}>
+              <table className="table small">
+                <thead>
+                  <tr>
+                    <th>KC → MBON</th>
+                    <th>{t("connectome.plasticity.base_eff")}</th>
+                    <th>{t("connectome.plasticity.scale")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {plasticity.top_changed.map((e) => (
+                    <tr key={`${e.pre_index}-${e.post_index}`}>
+                      <td className="mono">
+                        {e.pre_type} (#{e.pre_index}) → {e.post_type} (#{e.post_index})
+                      </td>
+                      <td className="mono">
+                        {e.base_weight} → {e.eff_weight}
+                      </td>
+                      <td className="mono">
+                        {(e.scale * 100).toFixed(0)}% ({e.delta_pct >= 0 ? `+${e.delta_pct}` : e.delta_pct}%)
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="small muted">{t("connectome.plasticity.none_yet")}</p>
+          )}
         </div>
       )}
 

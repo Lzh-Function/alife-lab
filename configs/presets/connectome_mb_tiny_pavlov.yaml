@@ -1,0 +1,8 @@
+preset:
+  id: connectome_mb_tiny_pavlov
+  scenario: connectome_mb_tiny_pavlov.yaml
+  title_key: preset.connectome_mb_tiny_pavlov.title
+  description_key: preset.connectome_mb_tiny_pavlov.description
+  overrides: {}
+  expected_observation: 'Built-in 8-neuron offline Mushroom Body circuit: pairing Odor A KCs with PPL101 punishment DAN depresses KC_A->MBON11 synapses, dropping MBON11 and disinhibiting avoidance MBON01 while Odor B stays intact.'
+  negative_control: 'silence ppl1_punishment_dan (no dopamine -> zero weight change)'

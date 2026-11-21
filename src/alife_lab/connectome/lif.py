@@ -444,3 +444,197 @@ def make_synthetic_tiny_pack() -> ConnectomePack:
         provenance=prov,
         pack_digest=digest,
     )
+
+
+def make_synthetic_mb_pack() -> ConnectomePack:
+    """Built-in 8-neuron synthetic Mushroom Body circuit for offline F4 plasticity tests & CI.
+
+    Topology (models canonical gamma1pedc -> gamma5 feedforward disinhibition):
+      0, 1 (odor_a_kc, KCg-m) --(+140)--> 4 (MBON11, GABAergic approach)
+      0, 1 (odor_a_kc, KCg-m) --(+115)--> 5 (MBON01, avoidance)
+      2, 3 (odor_b_kc, KCg-m) --(+140)--> 4 (MBON11, GABAergic approach)
+      2, 3 (odor_b_kc, KCg-m) --(+115)--> 5 (MBON01, avoidance)
+      4 (MBON11, inhibitory)  --(-240)--> 5 (MBON01, avoidance)
+      6 (PPL101, punishment DAN) --(+15)--> 4 (MBON11, defines gamma1pedc DAN compartment)
+      7 (PAM01, reward DAN)      --(+15)--> 5 (MBON01, defines gamma5 DAN compartment)
+    """
+    n = 8
+    cells = CellTable(
+        source_id=np.array([20, 21, 22, 23, 24, 25, 26, 27], dtype=np.int64),
+        species_names=("synthetic_mb",),
+        species_idx=np.zeros(n, dtype=np.uint8),
+        cell_type=("KCg-m", "KCg-m", "KCg-m", "KCg-m", "MBON11", "MBON01", "PPL101", "PAM01"),
+        super_class=(
+            "central",
+            "central",
+            "central",
+            "central",
+            "central",
+            "central",
+            "central",
+            "central",
+        ),
+        cell_class=(
+            "Kenyon_Cell",
+            "Kenyon_Cell",
+            "Kenyon_Cell",
+            "Kenyon_Cell",
+            "MBON",
+            "MBON",
+            "DAN",
+            "DAN",
+        ),
+        cell_sub_class=("KCg", "KCg", "KCg", "KCg", "", "", "", ""),
+        region=(
+            "MB_CA_L",
+            "MB_CA_R",
+            "MB_CA_L",
+            "MB_CA_R",
+            "MB_PED_L",
+            "MB_ML_L",
+            "MB_PED_L",
+            "MB_ML_L",
+        ),
+        side=("left", "right", "left", "right", "left", "left", "left", "left"),
+        role=np.array(
+            [
+                ROLE_SENSORY,
+                ROLE_SENSORY,
+                ROLE_SENSORY,
+                ROLE_SENSORY,
+                ROLE_MOTOR,
+                ROLE_MOTOR,
+                ROLE_SENSORY,
+                ROLE_SENSORY,
+            ],
+            dtype=np.uint8,
+        ),
+        cell_model=np.full(n, MODEL_SPIKING_LIF, dtype=np.uint8),
+        neurotransmitter=(
+            "acetylcholine",
+            "acetylcholine",
+            "acetylcholine",
+            "acetylcholine",
+            "gaba",
+            "glutamate",
+            "dopamine",
+            "dopamine",
+        ),
+        position_nm=np.array(
+            [
+                [-1200.0, 900.0, 0.0],
+                [-1200.0, 300.0, 0.0],
+                [-1200.0, -300.0, 0.0],
+                [-1200.0, -900.0, 0.0],
+                [600.0, 500.0, 0.0],
+                [1400.0, -500.0, 0.0],
+                [600.0, 1300.0, 0.0],
+                [1400.0, -1300.0, 0.0],
+            ],
+            dtype=np.float32,
+        ),
+        position_source=np.full(n, POS_SOMA, dtype=np.uint8),
+    )
+    edges = EdgeTable(
+        pre=np.array([0, 0, 1, 1, 2, 2, 3, 3, 4, 6, 7], dtype=np.int32),
+        post=np.array([4, 5, 4, 5, 4, 5, 4, 5, 5, 4, 5], dtype=np.int32),
+        count=np.array([150, 125, 150, 125, 150, 125, 150, 125, 240, 15, 15], dtype=np.int32),
+        sign=np.array([1, 1, 1, 1, 1, 1, 1, 1, -1, 1, 1], dtype=np.int8),
+        kind=np.full(11, SYNAPSE_CHEMICAL, dtype=np.uint8),
+    )
+    io_ports = {
+        "odor_a_kc": IOPort(
+            "odor_a_kc",
+            "sensory",
+            "Odor A KCs (synthetic)",
+            "Synthetic Odor A Kenyon cells (indices 0, 1).",
+            np.array([0, 1], dtype=np.int32),
+            "index in (0, 1)",
+        ),
+        "odor_b_kc": IOPort(
+            "odor_b_kc",
+            "sensory",
+            "Odor B KCs (synthetic)",
+            "Synthetic Odor B Kenyon cells (indices 2, 3).",
+            np.array([2, 3], dtype=np.int32),
+            "index in (2, 3)",
+        ),
+        "ppl1_punishment_dan": IOPort(
+            "ppl1_punishment_dan",
+            "sensory",
+            "PPL101 punishment DAN (synthetic)",
+            "Synthetic punishment dopaminergic neuron innervating MBON11.",
+            np.array([6], dtype=np.int32),
+            "cell_type == 'PPL101'",
+        ),
+        "pam_reward_dan": IOPort(
+            "pam_reward_dan",
+            "sensory",
+            "PAM01 reward DAN (synthetic)",
+            "Synthetic reward dopaminergic neuron innervating MBON01.",
+            np.array([7], dtype=np.int32),
+            "cell_type == 'PAM01'",
+        ),
+        "mbon11_approach": IOPort(
+            "mbon11_approach",
+            "motor",
+            "MBON11 approach output (synthetic)",
+            "Synthetic GABAergic approach MBON (inhibits MBON01).",
+            np.array([4], dtype=np.int32),
+            "cell_type == 'MBON11'",
+        ),
+        "mbon01_avoidance": IOPort(
+            "mbon01_avoidance",
+            "motor",
+            "MBON01 avoidance output (synthetic)",
+            "Synthetic avoidance MBON disinhibited when MBON11 is depressed.",
+            np.array([5], dtype=np.int32),
+            "cell_type == 'MBON01'",
+        ),
+        "mushroom_body_kc": IOPort(
+            "mushroom_body_kc",
+            "circuit",
+            "Kenyon cells (synthetic)",
+            "All synthetic Kenyon cells.",
+            np.array([0, 1, 2, 3], dtype=np.int32),
+            "cell_class == 'Kenyon_Cell'",
+        ),
+        "mushroom_body_mbon": IOPort(
+            "mushroom_body_mbon",
+            "circuit",
+            "MBONs (synthetic)",
+            "All synthetic MBONs.",
+            np.array([4, 5], dtype=np.int32),
+            "cell_class == 'MBON'",
+        ),
+        "mushroom_body_dan": IOPort(
+            "mushroom_body_dan",
+            "circuit",
+            "DANs (synthetic)",
+            "All synthetic DANs.",
+            np.array([6, 7], dtype=np.int32),
+            "cell_class == 'DAN'",
+        ),
+    }
+    prov = DatasetProvenance(
+        dataset_id="synthetic_mb",
+        species="synthetic_mb",
+        version="v1",
+        citation=(
+            "Built-in 8-neuron synthetic Mushroom Body circuit for offline F4 plasticity tests."
+        ),
+        licence_note="Project source (offline test fixture).",
+        files=(
+            FileProvenance("builtin", "builtin://synthetic_mb", "0" * 64, 0, "builtin", "project"),
+        ),
+    )
+    digest = compute_pack_digest("synthetic_mb", "synthetic_mb", cells, edges, io_ports, prov)
+    return ConnectomePack(
+        dataset_id="synthetic_mb",
+        species="synthetic_mb",
+        cells=cells,
+        edges=edges,
+        io_ports=io_ports,
+        provenance=prov,
+        pack_digest=digest,
+    )

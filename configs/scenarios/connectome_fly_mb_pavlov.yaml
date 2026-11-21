@@ -1,0 +1,36 @@
+schema_version: 1
+experiment:
+  name: connectome_fly_mb_pavlov
+  mode: exploratory
+  substrate: connectome
+  seed: 1
+  dataset_id: flywire_783
+  wiring: reference
+  stimuli:
+    - port: odor_a_kc
+      rate_hz: 150.0
+    - port: ppl1_punishment_dan
+      rate_hz: 220.0
+  plasticity:
+    enabled: true
+    tau_elig_ms: 200.0
+    tau_dan_ms: 150.0
+    dan_threshold: 18.0
+    lr_ltd: 0.00022
+    lr_ext: 0.03
+    w_min: 0.05
+    w_max: 2.0
+    min_dan_synapses: 5
+  runner:
+    max_steps: 600
+    checkpoint_interval: 150
+  observations:
+    metrics:
+      - spikes_tick
+      - active_neurons_tick
+      - mbon11_rate_hz
+      - mbon01_rate_hz
+      - plastic_changed_edges
+      - plastic_mean_scale
+      - plastic_min_scale
+      - time_ms

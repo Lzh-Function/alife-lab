@@ -522,6 +522,26 @@ class CupyLIFRunner:
             self.params.substeps_per_tick, zero_tick_spikes=True, use_graph=use_graph
         )
 
+    def download_last_tick_spikes(self) -> np.ndarray[Any, np.dtype[np.int32]]:
+        """Download only ``last_tick_spikes`` (N int32) for tick-boundary plasticity updates."""
+        self._stream.synchronize()
+        out: np.ndarray[Any, np.dtype[np.int32]] = self.cp.asnumpy(self.d_last_tick_spikes)
+        return out
+
+    def update_edge_weights(
+        self,
+        edge_indices: np.ndarray[Any, np.dtype[np.int32]],
+        new_weights: np.ndarray[Any, np.dtype[np.int32]],
+    ) -> None:
+        """Update specific CSR edge weights in place without invalidating captured CUDA graphs."""
+        if edge_indices.size == 0:
+            return
+        self._stream.synchronize()
+        d_idx = self.cp.asarray(np.ascontiguousarray(edge_indices, dtype=np.int32))
+        d_val = self.cp.asarray(np.ascontiguousarray(new_weights, dtype=np.int32))
+        self.d_weight[d_idx] = d_val
+        self.cp.cuda.get_current_stream().synchronize()
+
     def synchronize(self) -> None:
         self._stream.synchronize()
 

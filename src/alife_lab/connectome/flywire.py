@@ -404,6 +404,62 @@ def _build_io_ports(cells: CellTable) -> dict[str, IOPort]:
             cell_indices=_select(lambda i: cells.cell_class[i] == "DAN"),
             selection_rule="cell_class == 'DAN'",
         ),
+        IOPort(
+            port_id="odor_a_kc",
+            direction="sensory",
+            label="Odor A sparse KC ensemble (KCg-m #0..249)",
+            description=(
+                "Deterministic sparse subset of 250 KCg-m Kenyon cells (~4.8% of KCs) "
+                "representing Odor A for F4 associative conditioning."
+            ),
+            cell_indices=np.asarray(
+                [i for i in range(n) if cells.cell_type[i] == "KCg-m"][:250], dtype=np.int32
+            ),
+            selection_rule="first 250 cells with cell_type == 'KCg-m'",
+        ),
+        IOPort(
+            port_id="odor_b_kc",
+            direction="sensory",
+            label="Odor B sparse KC ensemble (KCg-m #250..499)",
+            description=(
+                "Disjoint sparse subset of 250 KCg-m Kenyon cells (~4.8% of KCs) "
+                "representing control Odor B for F4 odor-specificity tests."
+            ),
+            cell_indices=np.asarray(
+                [i for i in range(n) if cells.cell_type[i] == "KCg-m"][250:500], dtype=np.int32
+            ),
+            selection_rule="cells 250..499 with cell_type == 'KCg-m'",
+        ),
+        IOPort(
+            port_id="ppl1_punishment_dan",
+            direction="sensory",
+            label="PPL101 punishment DANs (gamma1pedc)",
+            description=(
+                "Bilateral PPL101 aversive dopaminergic neurons innervating MBON11 "
+                "(gamma1pedc compartment, punishment reinforcement)."
+            ),
+            cell_indices=_select(lambda i: cells.cell_type[i] == "PPL101"),
+            selection_rule="cell_type == 'PPL101'",
+        ),
+        IOPort(
+            port_id="mbon11_approach",
+            direction="motor",
+            label="MBON11 approach output (gamma1pedc)",
+            description=(
+                "Bilateral GABAergic MBON11 neurons driven by KCg-m and modulated by PPL101 "
+                "(depression reduces approach and disinhibits downstream avoidance MBONs)."
+            ),
+            cell_indices=_select(lambda i: cells.cell_type[i] == "MBON11"),
+            selection_rule="cell_type == 'MBON11'",
+        ),
+        IOPort(
+            port_id="mbon01_avoidance",
+            direction="motor",
+            label="MBON01 avoidance output (gamma5beta'2a)",
+            description="Bilateral glutamatergic MBON01 avoidance output neurons.",
+            cell_indices=_select(lambda i: cells.cell_type[i] == "MBON01"),
+            selection_rule="cell_type == 'MBON01'",
+        ),
     ]
     return {p.port_id: p for p in ports}
 

@@ -1,0 +1,8 @@
+preset:
+  id: connectome_fly_mb_pavlov
+  scenario: connectome_fly_mb_pavlov.yaml
+  title_key: preset.connectome_fly_mb_pavlov.title
+  description_key: preset.connectome_fly_mb_pavlov.description
+  overrides: {}
+  expected_observation: 'FlyWire v783 whole-brain model with simplified KC->MBON dopamine plasticity (62,261 plastic edges): pairing sparse Odor A KCs with PPL101 punishment selectively depresses Odor A->MBON11 synapses while leaving Odor B untouched.'
+  negative_control: preset connectome_fly_mb_no_dan_control (PPL101 silenced -> zero learning)
