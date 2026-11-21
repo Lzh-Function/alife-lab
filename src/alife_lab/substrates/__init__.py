@@ -7,6 +7,7 @@ from alife_lab.substrates.base import PluginManifest, SubstrateAdapter
 from alife_lab.substrates.bff.adapter import BFF_MANIFEST, BFFAdapter
 from alife_lab.substrates.boids.boids import BOIDS_MANIFEST, BoidsAdapter
 from alife_lab.substrates.ca.conway import CONWAY_MANIFEST, ConwayAdapter
+from alife_lab.substrates.connectome.adapter import CONNECTOME_MANIFEST, ConnectomeAdapter
 from alife_lab.substrates.creature.adapter import CREATURE_MANIFEST, CreatureAdapter
 from alife_lab.substrates.flow_lenia.flow_lenia import FLOW_LENIA_MANIFEST, FlowLeniaAdapter
 from alife_lab.substrates.gray_scott.gray_scott import GRAY_SCOTT_MANIFEST, GrayScottAdapter
@@ -45,6 +46,7 @@ _REGISTRY: dict[str, tuple[PluginManifest, type[SubstrateAdapter]]] = {
     "lenia_mc": (LENIA_MC_MANIFEST, LeniaMCAdapter),
     "creature": (CREATURE_MANIFEST, CreatureAdapter),
     "search": (SEARCH_MANIFEST, SearchAdapter),
+    "connectome": (CONNECTOME_MANIFEST, ConnectomeAdapter),
 }
 
 

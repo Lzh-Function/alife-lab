@@ -1702,6 +1702,93 @@ class SearchExperiment(_Frozen):
         return out
 
 
+# --------------------------------------------------------------------------- #
+# Connectome (spiking LIF whole-brain connectome, F1)
+# --------------------------------------------------------------------------- #
+
+
+ConnectomeDatasetId = Literal["flywire_783", "synthetic_tiny"]
+ConnectomeWiring = Literal["reference", "shuffled_control"]
+
+
+class ConnectomeStimulusSpec(_Frozen):
+    port: Annotated[str, Field(min_length=1, max_length=80, pattern=r"^[a-z0-9_]+$")]
+    rate_hz: Annotated[float, Field(ge=0.0, le=1000.0)] = 150.0
+
+
+class ConnectomeDynamicsSpec(_Frozen):
+    clock_unit: Literal["tick"] = "tick"
+    numeric_policy: Literal["float32_deterministic"] = "float32_deterministic"
+    v_0: Annotated[float, Field(ge=-120.0, le=0.0)] = -52.0
+    v_rst: Annotated[float, Field(ge=-120.0, le=0.0)] = -52.0
+    v_th: Annotated[float, Field(ge=-100.0, le=20.0)] = -45.0
+    t_mbr_ms: Annotated[float, Field(gt=0.1, le=500.0)] = 20.0
+    tau_ms: Annotated[float, Field(gt=0.1, le=500.0)] = 5.0
+    t_rfc_ms: Annotated[float, Field(ge=0.0, le=50.0)] = 2.2
+    t_dly_ms: Annotated[float, Field(ge=0.1, le=20.0)] = 1.8
+    w_syn_mv: Annotated[float, Field(gt=0.0, le=50.0)] = 0.275
+    f_poi: Annotated[float, Field(ge=0.0, le=2000.0)] = 250.0
+    dt_ms: Annotated[float, Field(ge=0.01, le=1.0)] = 0.1
+    substeps_per_tick: Annotated[int, Field(ge=1, le=100)] = 10
+    stim_no_refrac: bool = True
+
+    @model_validator(mode="after")
+    def _check_thresholds(self) -> ConnectomeDynamicsSpec:
+        if self.v_th <= self.v_rst:
+            raise ValueError("v_th must be strictly greater than v_rst")
+        if self.v_th <= self.v_0:
+            raise ValueError("v_th must be strictly greater than v_0")
+        return self
+
+
+ConnectomeMetric = Literal[
+    "spikes_tick",
+    "active_neurons_tick",
+    "total_spikes",
+    "mean_firing_rate_hz",
+    "mn9_spikes_tick",
+    "mn9_rate_hz",
+    "mean_v_mv",
+    "time_ms",
+]
+
+
+class ConnectomeObservationSpec(_Frozen):
+    metrics: tuple[ConnectomeMetric, ...] = (
+        "spikes_tick",
+        "active_neurons_tick",
+        "mn9_spikes_tick",
+        "mn9_rate_hz",
+        "mean_firing_rate_hz",
+        "time_ms",
+    )
+
+
+class ConnectomeExperiment(_Frozen):
+    name: _NAME
+    mode: Literal["reference", "exploratory"] = "reference"
+    substrate: Literal["connectome"]
+    seed: _SEED
+    dataset_id: ConnectomeDatasetId = "flywire_783"
+    wiring: ConnectomeWiring = "reference"
+    stimuli: tuple[ConnectomeStimulusSpec, ...] = ()
+    silenced_ports: tuple[str, ...] = ()
+    dynamics: ConnectomeDynamicsSpec = ConnectomeDynamicsSpec()
+    runner: RunnerSpec = RunnerSpec(max_steps=1000, checkpoint_interval=100)
+    observations: ConnectomeObservationSpec = ConnectomeObservationSpec()
+
+    @model_validator(mode="after")
+    def _check_reference_mode(self) -> ConnectomeExperiment:
+        if self.mode == "reference":
+            if self.wiring != "reference":
+                raise ValueError("reference mode for connectome requires wiring='reference'")
+            if self.dynamics != ConnectomeDynamicsSpec():
+                raise ValueError(
+                    "reference mode for connectome requires Shiu et al. (2024) default parameters"
+                )
+        return self
+
+
 AnyExperiment = Annotated[
     ConwayExperiment
     | BoidsExperiment
@@ -1719,7 +1806,8 @@ AnyExperiment = Annotated[
     | AgentWorldExperiment
     | LeniaMCExperiment
     | CreatureExperiment
-    | SearchExperiment,
+    | SearchExperiment
+    | ConnectomeExperiment,
     Field(discriminator="substrate"),
 ]
 

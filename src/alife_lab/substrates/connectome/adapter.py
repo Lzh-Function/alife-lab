@@ -1,0 +1,473 @@
+"""Connectome spiking LIF substrate adapter (Shiu et al. 2024, F1).
+
+Supports CPU oracle (``numpy``) and CUDA C++ / CUDA-graph GPU execution (``cupy``) with
+exact bitwise equivalence across backends and checkpoints. Never imports CuPy unless the
+``cupy`` backend is selected inside a worker process.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+import numpy as np
+
+from alife_lab import API_CONTRACT_VERSION
+from alife_lab.connectome import (
+    ConnectomePack,
+    CSRGraph,
+    load_connectome_pack,
+)
+from alife_lab.connectome.lif import (
+    LIFParams,
+    LIFState,
+    make_initial_state,
+    make_shuffled_csr,
+    make_synthetic_tiny_pack,
+    step_tick_cpu,
+)
+from alife_lab.core.spec import ConnectomeExperiment, ExperimentSpec
+from alife_lab.service.settings import load_settings
+from alife_lab.substrates.base import Capabilities, MetricDefinition, PluginManifest
+
+SERIALIZE_VERSION = 1
+_PREVIEW_SIDE = 64
+
+# Process-local cache of immutable loaded packs & CSRs so worker restarts/replays stay fast.
+_PACK_CACHE: dict[tuple[str, str], tuple[ConnectomePack, CSRGraph]] = {}
+_SHUFFLED_CSR_CACHE: dict[tuple[str, int], CSRGraph] = {}
+
+
+def _ce(spec: ExperimentSpec) -> ConnectomeExperiment:
+    exp = spec.experiment
+    if not isinstance(exp, ConnectomeExperiment):
+        raise TypeError("connectome adapter received a different spec")
+    return exp
+
+
+def _params_from_exp(exp: ConnectomeExperiment) -> LIFParams:
+    d = exp.dynamics
+    return LIFParams(
+        v_0=d.v_0,
+        v_rst=d.v_rst,
+        v_th=d.v_th,
+        t_mbr_ms=d.t_mbr_ms,
+        tau_ms=d.tau_ms,
+        t_rfc_ms=d.t_rfc_ms,
+        t_dly_ms=d.t_dly_ms,
+        w_syn_mv=d.w_syn_mv,
+        f_poi=d.f_poi,
+        dt_ms=d.dt_ms,
+        substeps_per_tick=d.substeps_per_tick,
+        stim_no_refrac=d.stim_no_refrac,
+    )
+
+
+def _get_pack_and_csr(exp: ConnectomeExperiment) -> tuple[ConnectomePack, CSRGraph]:
+    ds_dir = load_settings().resolved_datasets_dir
+    key = (exp.dataset_id, str(ds_dir))
+    cached = _PACK_CACHE.get(key)
+    if cached is None:
+        if exp.dataset_id == "synthetic_tiny":
+            pack = make_synthetic_tiny_pack()
+        else:
+            pack = load_connectome_pack(exp.dataset_id, ds_dir, verify_hashes=True)
+        csr = pack.edges.to_csr(pack.cells.num_cells)
+        cached = (pack, csr)
+        _PACK_CACHE[key] = cached
+    pack, base_csr = cached
+    if exp.wiring == "shuffled_control":
+        skey = (pack.pack_digest, int(exp.seed))
+        shuf = _SHUFFLED_CSR_CACHE.get(skey)
+        if shuf is None:
+            shuf = make_shuffled_csr(base_csr, int(exp.seed))
+            _SHUFFLED_CSR_CACHE[skey] = shuf
+        return pack, shuf
+    return pack, base_csr
+
+
+@dataclass
+class ConnectomeWorld:
+    """Mutable state + immutable pack/CSR references + optional resident GPU runner."""
+
+    pack: ConnectomePack
+    csr: CSRGraph
+    params: LIFParams
+    lif: LIFState
+    backend: str
+    gpu_runner: Any = None
+    gpu_synced_to_host: bool = True
+
+    @property
+    def tick(self) -> int:
+        return self.lif.tick
+
+    def ensure_host(self) -> LIFState:
+        if self.gpu_runner is not None and not self.gpu_synced_to_host:
+            self.gpu_runner.download_state(self.lif)
+            self.gpu_synced_to_host = True
+        return self.lif
+
+
+_M = MetricDefinition
+_METRICS = (
+    _M("spikes_tick", "metric.spikes_tick", "spikes", "tick",
+       "Total spikes emitted across all neurons during the current 1 ms tick.", "sum",
+       "every tick", 1, "never null"),
+    _M("active_neurons_tick", "metric.active_neurons_tick", "neurons", "tick",
+       "Number of distinct neurons that fired at least once during the current tick.", "none",
+       "every tick", 1, "never null"),
+    _M("total_spikes", "metric.total_spikes", "spikes", "tick",
+       "Cumulative spikes emitted across all neurons since tick 0.", "sum",
+       "every tick", 1, "never null"),
+    _M("mean_firing_rate_hz", "metric.mean_firing_rate_hz", "Hz", "tick",
+       "Population mean firing rate over the elapsed simulated time.", "mean",
+       "every tick", 1, "never null"),
+    _M("mn9_spikes_tick", "metric.mn9_spikes_tick", "spikes", "tick",
+       "Spikes emitted by MN9 proboscis extension motor neurons during the current tick.", "sum",
+       "every tick", 1, "never null"),
+    _M("mn9_rate_hz", "metric.mn9_rate_hz", "Hz", "tick",
+       "Mean firing rate of MN9 proboscis extension motor neurons over elapsed time.", "mean",
+       "every tick", 1, "never null"),
+    _M("mean_v_mv", "metric.mean_v_mv", "mV", "tick",
+       "Mean membrane potential across all neurons.", "mean",
+       "every tick", 1, "never null"),
+    _M("time_ms", "metric.time_ms", "ms", "tick",
+       "Elapsed simulated time in milliseconds.", "none",
+       "every tick", 1, "never null"),
+)  # fmt: skip
+
+CONNECTOME_MANIFEST = PluginManifest(
+    plugin_id="alife_lab.substrates.connectome",
+    plugin_version="0.1.0",
+    api_contract_version=API_CONTRACT_VERSION,
+    kind="substrate",
+    slug="connectome",
+    display_name_key="substrate.connectome",
+    scientific_modes=("reference", "exploratory"),
+    capabilities=Capabilities(
+        state_kind="network",
+        clock_unit="tick",
+        supports_pause=True,
+        supports_interventions=True,
+        supports_inspection=True,
+        supports_lineage=False,
+        supports_differentiation=False,
+        supports_checkpoint=True,
+        supports_deterministic_cpu=True,
+        intervention_types=("stimulate", "silence", "clear_stimuli"),
+    ),
+    backends=("numpy", "cupy"),
+    gpu_required=False,
+    serialize_version=SERIALIZE_VERSION,
+    metrics=_METRICS,
+    reference={
+        "description": (
+            "Whole-brain leaky integrate-and-fire model derived from FlyWire v783 "
+            "(Shiu et al. 2024, Nature 634:210-219). Hypothesis-testing wiring model, "
+            "not a biological brain."
+        ),
+        "paper_urls": [
+            "https://www.nature.com/articles/s41586-024-07763-9",
+            "https://www.nature.com/articles/s41586-024-07558-y",
+        ],
+        "implementation": "https://github.com/philshiu/Drosophila_brain_model",
+    },
+)
+
+
+def _resolve_target_indices(
+    pack: ConnectomePack, payload: dict[str, Any]
+) -> np.ndarray[Any, np.dtype[np.int32]]:
+    n = pack.cells.num_cells
+    indices: list[int] = []
+    port = payload.get("port")
+    if port is not None:
+        if not isinstance(port, str) or port not in pack.io_ports:
+            known = ", ".join(sorted(pack.io_ports))
+            raise ValueError(f"unknown connectome port {port!r} (available: {known})")
+        indices.extend(int(i) for i in pack.io_ports[port].cell_indices)
+    raw_cells = payload.get("cell_indices")
+    if raw_cells is not None:
+        if not isinstance(raw_cells, list) or not all(isinstance(x, int) for x in raw_cells):
+            raise ValueError("cell_indices must be a list of integers")
+        for idx in raw_cells:
+            if idx < 0 or idx >= n:
+                raise ValueError(f"cell index {idx} out of range [0, {n})")
+            indices.append(idx)
+    if not indices:
+        raise ValueError("intervention requires 'port' and/or non-empty 'cell_indices'")
+    return np.unique(np.asarray(indices, dtype=np.int32))
+
+
+class ConnectomeAdapter:
+    backend: str = "numpy"
+
+    def set_backend(self, backend: str) -> None:
+        if backend not in CONNECTOME_MANIFEST.backends:
+            raise ValueError(f"unsupported connectome backend {backend!r}")
+        self.backend = backend
+
+    @property
+    def manifest(self) -> PluginManifest:
+        return CONNECTOME_MANIFEST
+
+    def _make_world(self, exp: ConnectomeExperiment, lif: LIFState) -> ConnectomeWorld:
+        pack, csr = _get_pack_and_csr(exp)
+        params = _params_from_exp(exp)
+        gpu_runner: Any = None
+        if self.backend == "cupy":
+            from alife_lab.connectome.lif_cupy import CupyLIFRunner
+
+            gpu_runner = CupyLIFRunner(csr, params, int(exp.seed))
+            gpu_runner.upload_state(lif)
+        return ConnectomeWorld(
+            pack=pack,
+            csr=csr,
+            params=params,
+            lif=lif,
+            backend=self.backend,
+            gpu_runner=gpu_runner,
+            gpu_synced_to_host=True,
+        )
+
+    def initialize(self, spec: ExperimentSpec) -> ConnectomeWorld:
+        exp = _ce(spec)
+        pack, _ = _get_pack_and_csr(exp)
+        params = _params_from_exp(exp)
+        lif = make_initial_state(pack.cells.num_cells, params)
+        for stim in exp.stimuli:
+            if stim.port not in pack.io_ports:
+                known = ", ".join(sorted(pack.io_ports))
+                raise ValueError(f"unknown stimulus port {stim.port!r} (available: {known})")
+            lif.stim_rate_hz[pack.io_ports[stim.port].cell_indices] = np.float32(stim.rate_hz)
+        for port_id in exp.silenced_ports:
+            if port_id not in pack.io_ports:
+                known = ", ".join(sorted(pack.io_ports))
+                raise ValueError(f"unknown silenced port {port_id!r} (available: {known})")
+            lif.silenced[pack.io_ports[port_id].cell_indices] = np.uint8(1)
+        return self._make_world(exp, lif)
+
+    def step(self, state: ConnectomeWorld, spec: ExperimentSpec) -> ConnectomeWorld:
+        exp = _ce(spec)
+        if state.gpu_runner is not None:
+            state.gpu_runner.step_tick(use_graph=True)
+            state.lif.substep += state.params.substeps_per_tick
+            state.lif.tick += 1
+            state.gpu_synced_to_host = False
+        else:
+            step_tick_cpu(state.lif, state.csr, state.params, int(exp.seed))
+        return state
+
+    def metrics(self, state: ConnectomeWorld, spec: ExperimentSpec) -> dict[str, float]:
+        exp = _ce(spec)
+        wanted = set(exp.observations.metrics)
+        lif = state.ensure_host()
+        elapsed_s = max(lif.substep * state.params.dt_s, 1e-9)
+        n = lif.num_cells
+        spikes_tick = float(int(lif.last_tick_spikes.sum()))
+        active_tick = float(int((lif.last_tick_spikes > 0).sum()))
+        total_spikes = float(int(lif.total_spikes.sum()))
+        mean_rate_hz = (total_spikes / (n * elapsed_s)) if (n > 0 and lif.substep > 0) else 0.0
+
+        mn9_port = state.pack.io_ports.get("mn9_proboscis_extension")
+        if mn9_port is not None and mn9_port.cell_indices.size > 0:
+            mn9_idx = mn9_port.cell_indices
+            mn9_tick = float(int(lif.last_tick_spikes[mn9_idx].sum()))
+            mn9_total = float(int(lif.total_spikes[mn9_idx].sum()))
+            mn9_rate = (
+                mn9_total / (int(mn9_idx.size) * elapsed_s) if lif.substep > 0 else 0.0
+            )
+        else:
+            mn9_tick = 0.0
+            mn9_rate = 0.0
+
+        out = {
+            "spikes_tick": spikes_tick,
+            "active_neurons_tick": active_tick,
+            "total_spikes": total_spikes,
+            "mean_firing_rate_hz": mean_rate_hz,
+            "mn9_spikes_tick": mn9_tick,
+            "mn9_rate_hz": mn9_rate,
+            "mean_v_mv": float(lif.v.mean()) if n > 0 else float(state.params.v_0),
+            "time_ms": float(lif.substep * state.params.dt_ms),
+        }
+        return {k: v for k, v in out.items() if k in wanted}
+
+    def render(self, state: ConnectomeWorld) -> tuple[dict[str, Any], bytes]:
+        """Lightweight 64x64 activity heatmap (F1 preview; 3D point cloud arrives in F2)."""
+        lif = state.ensure_host()
+        side = _PREVIEW_SIDE
+        grid = np.zeros(side * side, dtype=np.float32)
+        n = lif.num_cells
+        if n > 0:
+            bins = (np.arange(n, dtype=np.int64) * (side * side)) // n
+            counts = np.bincount(bins, minlength=side * side).astype(np.float32)
+            sp = np.bincount(
+                bins, weights=lif.last_tick_spikes.astype(np.float32), minlength=side * side
+            ).astype(np.float32)
+            # Show spike density per bin clipped to [0, 1].
+            grid = np.clip(sp / np.maximum(counts * 0.05, 1.0), 0.0, 1.0).astype(np.float32)
+        return {
+            "codec": "grid_f32",
+            "width": side,
+            "height": side,
+            "vmin": 0.0,
+            "vmax": 1.0,
+            "dataset_id": state.pack.dataset_id,
+            "tick": lif.tick,
+            "time_ms": round(lif.substep * state.params.dt_ms, 2),
+        }, grid.tobytes()
+
+    def apply_intervention(
+        self,
+        state: ConnectomeWorld,
+        spec: ExperimentSpec,
+        kind: str,
+        payload: dict[str, Any],
+    ) -> tuple[ConnectomeWorld, dict[str, Any]]:
+        lif = state.ensure_host()
+        if kind == "clear_stimuli":
+            prev_active = int((lif.stim_rate_hz > 0).sum())
+            lif.stim_rate_hz.fill(np.float32(0.0))
+            if state.gpu_runner is not None:
+                state.gpu_runner.upload_controls(lif)
+            return state, {"cleared_neurons": prev_active}
+
+        if kind == "stimulate":
+            try:
+                rate_hz = float(payload.get("rate_hz", 150.0))
+            except (TypeError, ValueError) as exc:
+                raise ValueError("stimulate requires numeric rate_hz") from exc
+            if not (0.0 <= rate_hz <= 1000.0):
+                raise ValueError("rate_hz must be in [0, 1000]")
+            idx = _resolve_target_indices(state.pack, payload)
+            lif.stim_rate_hz[idx] = np.float32(rate_hz)
+            if state.gpu_runner is not None:
+                state.gpu_runner.upload_controls(lif)
+            return state, {"affected_neurons": int(idx.size), "rate_hz": rate_hz}
+
+        if kind == "silence":
+            flag = bool(payload.get("silenced", True))
+            idx = _resolve_target_indices(state.pack, payload)
+            lif.silenced[idx] = np.uint8(1 if flag else 0)
+            if state.gpu_runner is not None:
+                state.gpu_runner.upload_controls(lif)
+            return state, {"affected_neurons": int(idx.size), "silenced": flag}
+
+        raise ValueError(f"unsupported connectome intervention kind {kind!r}")
+
+    def inspect(
+        self, state: ConnectomeWorld, spec: ExperimentSpec, query: dict[str, Any]
+    ) -> dict[str, Any]:
+        lif = state.ensure_host()
+        cells = state.pack.cells
+        n = cells.num_cells
+        port = query.get("port")
+        if isinstance(port, str) and port in state.pack.io_ports:
+            p = state.pack.io_ports[port]
+            idx = p.cell_indices
+            elapsed_s = max(lif.substep * state.params.dt_s, 1e-9)
+            tot = int(lif.total_spikes[idx].sum()) if idx.size else 0
+            return {
+                "substrate": "connectome",
+                "dataset_id": state.pack.dataset_id,
+                "tick": lif.tick,
+                "port": port,
+                "count": int(idx.size),
+                "spikes_tick": int(lif.last_tick_spikes[idx].sum()) if idx.size else 0,
+                "total_spikes": tot,
+                "mean_rate_hz": (tot / (int(idx.size) * elapsed_s))
+                if (idx.size and lif.substep > 0)
+                else 0.0,
+                "mean_v_mv": float(lif.v[idx].mean()) if idx.size else float(state.params.v_0),
+            }
+
+        cell_idx = int(query.get("cell_index", 0))
+        if cell_idx < 0 or cell_idx >= n:
+            raise ValueError(f"cell_index {cell_idx} out of range [0, {n})")
+        return {
+            "substrate": "connectome",
+            "dataset_id": state.pack.dataset_id,
+            "tick": lif.tick,
+            "cell_index": cell_idx,
+            "source_id": int(cells.source_id[cell_idx]),
+            "cell_type": cells.cell_type[cell_idx],
+            "super_class": cells.super_class[cell_idx],
+            "region": cells.region[cell_idx],
+            "v_mv": float(lif.v[cell_idx]),
+            "g_mv": float(lif.g[cell_idx]),
+            "refrac_substeps": int(lif.refrac[cell_idx]),
+            "stim_rate_hz": float(lif.stim_rate_hz[cell_idx]),
+            "silenced": bool(lif.silenced[cell_idx]),
+            "last_tick_spikes": int(lif.last_tick_spikes[cell_idx]),
+            "total_spikes": int(lif.total_spikes[cell_idx]),
+        }
+
+    def state_distance(self, a: ConnectomeWorld, b: ConnectomeWorld) -> dict[str, Any]:
+        la = a.ensure_host()
+        lb = b.ensure_host()
+        dv = float(np.abs(la.v - lb.v).max()) if la.num_cells else 0.0
+        dg = float(np.abs(la.g - lb.g).max()) if la.num_cells else 0.0
+        spike_l1 = int(np.abs(la.total_spikes - lb.total_spikes).sum())
+        exact = bool(
+            np.array_equal(la.v.view(np.uint32), lb.v.view(np.uint32))
+            and np.array_equal(la.g.view(np.uint32), lb.g.view(np.uint32))
+            and np.array_equal(la.refrac, lb.refrac)
+            and np.array_equal(la.delay_ring, lb.delay_ring)
+            and np.array_equal(la.total_spikes, lb.total_spikes)
+            and np.array_equal(la.stim_rate_hz.view(np.uint32), lb.stim_rate_hz.view(np.uint32))
+            and np.array_equal(la.silenced, lb.silenced)
+        )
+        return {
+            "metric": "max_v_diff_mv",
+            "value": dv,
+            "max_g_diff_mv": dg,
+            "spike_count_l1": spike_l1,
+            "exact_equal": exact,
+        }
+
+    def serialize_state(self, state: ConnectomeWorld) -> dict[str, Any]:
+        lif = state.ensure_host()
+        return {
+            "meta": {
+                "serialize_version": SERIALIZE_VERSION,
+                "dataset_id": state.pack.dataset_id,
+                "pack_digest": state.pack.pack_digest,
+                "substep": int(lif.substep),
+                "tick": int(lif.tick),
+            },
+            "arrays": {
+                "v": lif.v.copy(),
+                "g": lif.g.copy(),
+                "refrac": lif.refrac.copy(),
+                "delay_ring": lif.delay_ring.copy(),
+                "stim_rate_hz": lif.stim_rate_hz.copy(),
+                "silenced": lif.silenced.copy(),
+                "last_tick_spikes": lif.last_tick_spikes.copy(),
+                "total_spikes": lif.total_spikes.copy(),
+            },
+        }
+
+    def deserialize_state(self, payload: dict[str, Any], spec: ExperimentSpec) -> ConnectomeWorld:
+        exp = _ce(spec)
+        meta = payload["meta"]
+        if meta.get("serialize_version") != SERIALIZE_VERSION:
+            raise ValueError(f"unsupported connectome checkpoint version: {meta}")
+        arrays = payload["arrays"]
+        lif = LIFState(
+            v=np.ascontiguousarray(arrays["v"], dtype=np.float32),
+            g=np.ascontiguousarray(arrays["g"], dtype=np.float32),
+            refrac=np.ascontiguousarray(arrays["refrac"], dtype=np.int16),
+            delay_ring=np.ascontiguousarray(arrays["delay_ring"], dtype=np.int32),
+            substep=int(meta["substep"]),
+            tick=int(meta["tick"]),
+            stim_rate_hz=np.ascontiguousarray(arrays["stim_rate_hz"], dtype=np.float32),
+            silenced=np.ascontiguousarray(arrays["silenced"], dtype=np.uint8),
+            last_tick_spikes=np.ascontiguousarray(arrays["last_tick_spikes"], dtype=np.int32),
+            total_spikes=np.ascontiguousarray(arrays["total_spikes"], dtype=np.int32),
+        )
+        world = self._make_world(exp, lif)
+        if meta.get("pack_digest") and meta["pack_digest"] != world.pack.pack_digest:
+            raise ValueError("checkpoint pack_digest does not match loaded connectome pack")
+        return world

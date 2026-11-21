@@ -1,7 +1,7 @@
-# Reference fidelity — Adult *Drosophila* connectome (`flywire_783`, F0)
+# Reference fidelity — Adult *Drosophila* connectome (`flywire_783`, F0–F1)
 
-Status: **F0 complete** (2026-11-21); F1 (CPU oracle + CUDA LIF engine and Shiu et al. 2024
-sensorimotor reproduction) not yet implemented.
+Status: **F0–F1 complete** (2026-11-21); F2 (dedicated 3D brain visualization, cell search and
+raster UI) not yet implemented.
 
 > **Honest framing:** This dataset and the upcoming model are a hypothesis-testing
 > simplification derived from one adult female *Drosophila melanogaster* wiring diagram, not a
@@ -92,5 +92,66 @@ Canonical normalized `pack_digest`:
 - 4,458 neurons are absent from `neuropil_synapse_table.csv.gz` and fall back to `neurons.csv.gz`
   `group` or `UNASGD`.
 - Shiu et al.'s published figures used FlyWire v630 (127,400 neurons), while their repository
-  and this pack use FlyWire v783 (138,639 neurons). F1 reproduction results will document any
-  v630 vs v783 discrepancies explicitly.
+  and this pack use FlyWire v783 (138,639 neurons). F1 reproduction results below document
+  both matches and non-matches explicitly.
+
+---
+
+## F1 LIF simulation engine & Shiu et al. (2024) reproduction (measured 2026-11-21)
+
+### Model equations and defaults
+Exact linear integration over `dt = 0.1 ms` (10 substeps = 1 ms tick) of Shiu et al. (2024):
+- `dv/dt = (v_0 - v + g) / t_mbr` (outside refractory period), `dg/dt = -g / tau`
+- Spike when `v > v_th` and `refrac == 0` -> reset `v = v_rst`, `g = 0`, `refrac = t_rfc`
+  (or `0` for externally Poisson-stimulated neurons, matching `philshiu/Drosophila_brain_model`)
+- Defaults: `v_0 = -52 mV`, `v_rst = -52 mV`, `v_th = -45 mV`, `t_mbr = 20 ms`, `tau = 5 ms`,
+  `t_rfc = 2.2 ms` (22 substeps), `t_dly = 1.8 ms` (18 substeps), `w_syn = 0.275 mV`,
+  `f_poi = 250` (`v += 68.75 mV` on Poisson hits), default stimulus rate `150 Hz`.
+- Implementation: `alife_lab.connectome.lif` (CPU `float32` oracle),
+  `alife_lab.connectome.lif_cupy` (CUDA C++ `--fmad=false` + CUDA graphs + batched runner),
+  `alife_lab.substrates.connectome.adapter` (`connectome` substrate plugin 0.1.0).
+
+### Verification gates (`tests/reference/test_connectome_lif.py`, `tests/integration/test_connectome_platform.py`)
+| Gate | Result |
+|---|---|
+| Single-neuron passive decay & synaptic pulse vs continuous analytic solution (10 ms) | pass (`|err| < 1e-4 mV`) |
+| 1.8 ms synaptic delay, 2.2 ms refractory period, exact +/− cancellation, silencing | pass |
+| Checkpoint save → restore bitwise continuation (NPZ round-trip) | pass (`exact_equal=True`, `max|dv|=0`) |
+| CPU (`numpy`) vs GPU (`cupy` eager & CUDA graph) on full FlyWire v783 (138,639 neurons, 50 ms) | **pass: bit-identical (`max|dv|=0.0`, 0 differing bits)** |
+| GPU repeat determinism & `CupyBatchedLIFRunner` per-brain match against CPU oracle | **pass: bit-identical** |
+| Worker restart + `stimulate`/`silence` interventions + deterministic replay verification | pass (`status="verified"`) |
+
+### Shiu et al. (2024) sensorimotor reproduction (FlyWire v783, 5 seeds [1..5], 1000 ms each)
+| Condition (150 Hz unless noted) | MN9 mean rate (Hz, 5-seed mean [per-seed]) | Descending spikes/s (5-seed mean) | Total brain spikes/s (mean) | Assessment |
+|---|---:|---:|---:|---|
+| Sugar GRNs (`sugar_grn`, 32 cells) | **76.7** `[75.0, 83.5, 75.0, 76.0, 74.0]` | 1,804.6 | 18,650.2 | **Reproduced:** strong MN9 proboscis extension drive across all 5 seeds |
+| Sugar (32) + Bitter (`bitter_grn`, 42 cells) | **0.4** `[0.5, 0.5, 0.5, 0.0, 0.5]` | 646.6 | 18,295.0 | **Reproduced:** 99.5% suppression of MN9 by bitter pathway |
+| Sugar + low-salt (`sugar_and_low_salt_grn`, 57) | **15.4** `[16.0, 23.0, 12.5, 14.0, 11.5]` | 7,503.0 | 706,859.0 | **Reproduced** (lower MN9 rate than pure sugar; strong network-wide recruitment) |
+| Sugar + low-salt (57) + Bitter (42) | **0.0** `[0, 0, 0, 0, 0]` | 7,214.2 | 669,960.6 | **Reproduced:** 100% MN9 suppression |
+| Sugar (32) with `sugar_grn` silenced (intervention) | **0.0** `[0, 0, 0, 0, 0]` | 0.0 | 4,736.6 | **Control passes:** silencing blocks all downstream propagation |
+| Shuffled control brain (`wiring="shuffled_control"`, sugar 32) | **0.0** `[0, 0, 0, 0, 0]` | — | ~9,739 | **Control passes:** MN9 response depends on biological wiring, not degree/weight statistics |
+| Antennal grooming mechanosensory (187 cells) | **0.0** `[0, 0, 0, 0, 0]` | **478.2** `[473, 488, 480, 471, 479]` | 30,255.8 | **Reproduced (circuit-level):** activates grooming-linked descending neurons (`DNg84` ~100 Hz, `DNg35`, `DNg57`, `DNg29`) with 0 MN9 |
+| Shuffled control brain (antennal grooming 187) | 0.0 | **0.4** `[0, 0, 0, 0, 2]` | — | **Control passes:** >1,000× drop in descending output |
+| Johnston's organ (`jo_mechanosensory`, 1,091) | 0.0 | 3,114.2 | 188,142.2 | Strong descending recruitment, 0 MN9 |
+| Water GRNs (`water_grn`, 30 cells, 150 Hz & 200 Hz) | **0.0** `[0, 0, 0, 0, 0]` | 385.8 / 502.4 | 7,070 / 9,434 | **Not reproduced here:** unlike Shiu et al. (v630 curated water GRNs), v783 `cell_sub_class == 'water'` alone does not drive MN9 above threshold at 150–200 Hz (recorded honestly without tuning) |
+
+### Measured performance & VRAM (real FlyWire v783, RTX 5070 12 GiB / Core Ultra 7 270K Plus)
+| Mode | Wall time per 1 s sim | Real-time factor | Brain-s / wall-s | GPU memory (MiB) |
+|---|---:|---:|---:|---:|
+| CPU oracle (`numpy`, 1 core) | ~6.16 s (extrapolated from 50 ms = 0.308 s) | 0.16× | 0.16 | — |
+| GPU eager (`cupy`, no CUDA graph, 10-step) | 0.2349 s | 4.3× | 4.3 | 129.3 |
+| GPU CUDA graph (10-step = 1 tick) | 0.0600 s | 16.7× | 16.7 | 129.3 |
+| GPU CUDA graph (100-step = 10 ms batch) | 0.0465–0.0572 s | **17.5–21.5×** | **17.5–21.5** | 128.8–129.3 |
+| Batched GPU (`B = 8`, shared CSR, CUDA graph) | 0.2162 s | 4.6× / brain | **37.0** | 220.4 (13.1 MiB/brain) |
+| Batched GPU (`B = 32`, shared CSR, CUDA graph) | 2.5041 s | 0.40× / brain | 12.8 | 534.5 (13.1 MiB/brain) |
+| Batched GPU (`B = 64`, shared CSR, CUDA graph) | 4.9812 s | 0.20× / brain | 12.8 | 953.4 (13.1 MiB/brain) |
+| Batched GPU (`B = 128`, shared CSR, CUDA graph) | 9.8320 s | 0.10× / brain | 13.0 | 1,791.1 (13.1 MiB/brain) |
+
+Notes on scaling:
+- Per-brain GPU state is **13.1 MiB** on top of the shared **115.6 MiB** CSR graph, so ~500–700
+  brains fit in memory on a 12 GiB GPU; however, aggregate throughput peaks around **B = 8**
+  (**37.0 brain-s/s**) before L2 cache contention from random `atomicAdd` targets flattens
+  throughput to ~13 brain-s/s at B = 32–128.
+- High-activity regimes (e.g. `sugar_and_low_salt_grn` with ~700k spikes/s) still run at
+  **10.4× real-time** (0.096 s per simulated second) with CUDA graphs.
+

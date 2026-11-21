@@ -1,0 +1,22 @@
+schema_version: 1
+experiment:
+  name: connectome_synthetic_tiny
+  mode: reference
+  substrate: connectome
+  seed: 42
+  dataset_id: synthetic_tiny
+  wiring: reference
+  stimuli:
+    - port: sugar_grn
+      rate_hz: 150.0
+  runner:
+    max_steps: 200
+    checkpoint_interval: 50
+  observations:
+    metrics:
+      - spikes_tick
+      - active_neurons_tick
+      - mn9_spikes_tick
+      - mn9_rate_hz
+      - mean_firing_rate_hz
+      - time_ms

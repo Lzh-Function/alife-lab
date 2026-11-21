@@ -39,6 +39,7 @@ ALWAYS_COMPUTED = {
     "lenia_mc": set(),
     "creature": set(),
     "search": set(),
+    "connectome": set(),
 }
 UNIT_NOTE = (
     "Unit of analysis: one independently seeded run per value. Time points within a run are not "
