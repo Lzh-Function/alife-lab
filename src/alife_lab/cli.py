@@ -590,6 +590,122 @@ def cmd_backup(args: argparse.Namespace) -> int:
     return 2
 
 
+# --------------------------------------------------------------------------- #
+# connectome datasets (F0+)
+# --------------------------------------------------------------------------- #
+
+
+def cmd_connectome(args: argparse.Namespace) -> int:
+    from alife_lab.connectome import (
+        DatasetError,
+        fetch_dataset,
+        list_dataset_specs,
+        load_connectome_pack,
+        summarize_connectome_pack,
+        verify_dataset,
+    )
+    from alife_lab.service.settings import load_settings
+
+    settings = load_settings()
+    ds_dir = settings.resolved_datasets_dir
+    try:
+        if args.connectome_cmd == "list":
+            rows = []
+            for spec in list_dataset_specs():
+                report = verify_dataset(spec.dataset_id, ds_dir, spec=spec)
+                rows.append(
+                    {
+                        "dataset_id": spec.dataset_id,
+                        "species": spec.species,
+                        "version": spec.version,
+                        "files": len(spec.files),
+                        "total_size_bytes": spec.total_size_bytes,
+                        "verified_local": report["ok"],
+                    }
+                )
+            if args.json:
+                _print_json({"datasets_dir": str(ds_dir), "datasets": rows})
+            else:
+                for row in rows:
+                    status = "verified" if row["verified_local"] else "not_present"
+                    size_mb = row["total_size_bytes"] / (1024 * 1024)
+                    print(
+                        f"{row['dataset_id']}\t{row['species']}\t{row['version']}\t"
+                        f"{row['files']} files ({size_mb:.1f} MiB)\t{status}"
+                    )
+            return 0
+
+        if args.connectome_cmd == "fetch":
+            report = fetch_dataset(
+                args.dataset_id,
+                ds_dir,
+                max_datasets_mb=settings.max_datasets_mb,
+            )
+            _print_json(report)
+            return 0 if report["ok"] else 1
+
+        if args.connectome_cmd == "verify":
+            report = verify_dataset(args.dataset_id, ds_dir)
+            _print_json(report)
+            return 0 if report["ok"] else 1
+
+        if args.connectome_cmd == "summary":
+            t0 = time.perf_counter()
+            pack = load_connectome_pack(
+                args.dataset_id, ds_dir, verify_hashes=not args.no_verify
+            )
+            load_s = round(time.perf_counter() - t0, 3)
+            summary = summarize_connectome_pack(pack)
+            summary["measured"] = {"load_seconds": load_s}
+            if args.json:
+                _print_json(summary)
+            else:
+                c = summary["counts"]
+                d = summary["degree"]
+                print(
+                    f"{summary['dataset_id']} ({summary['species']})  "
+                    f"pack_digest={summary['pack_digest'][:16]}…  loaded in {load_s:.2f}s"
+                )
+                print(
+                    f"  cells={c['cells']:,}  edges={c['edges']:,}  "
+                    f"synapses={c['total_synapses']:,}"
+                )
+                print(
+                    f"  excitatory={c['excitatory_edges']:,} edges "
+                    f"({100 * c['excitatory_edge_ratio']:.2f}%), "
+                    f"{c['excitatory_synapses']:,} synapses "
+                    f"({100 * c['excitatory_synapse_ratio']:.2f}%)"
+                )
+                print(
+                    f"  inhibitory={c['inhibitory_edges']:,} edges "
+                    f"({100 * c['inhibitory_edge_ratio']:.2f}%), "
+                    f"{c['inhibitory_synapses']:,} synapses "
+                    f"({100 * c['inhibitory_synapse_ratio']:.2f}%)"
+                )
+                print(
+                    f"  degree out: median={d['out_median']:.0f} mean={d['out_mean']:.2f} "
+                    f"max={d['out_max']} | in: median={d['in_median']:.0f} "
+                    f"mean={d['in_mean']:.2f} max={d['in_max']}"
+                )
+                print(
+                    f"  self_loops={c['self_loops']}  isolated={c['isolated_cells']}  "
+                    f"mixed_sign_pre={c['mixed_sign_presynaptic_neurons']}  "
+                    f"regions={c['unique_regions']}"
+                )
+                print(f"  positions: {summary['position_sources']}")
+                for chk in summary["reference_checks"]:
+                    tag = "ok" if chk["ok"] else "DIFF"
+                    print(
+                        f"  [{tag:>4}] {chk['check']}: actual={chk['actual']} "
+                        f"expected={chk['expected']}"
+                    )
+            return 0
+    except DatasetError as exc:
+        print(f"connectome error: {exc}", file=sys.stderr)
+        return 1
+    return 2
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="alife",
@@ -673,6 +789,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("run_ids", nargs="+")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_compare)
+
+    p = sub.add_parser("connectome", help="manage and inspect biological connectome species packs")
+    csub = p.add_subparsers(dest="connectome_cmd", required=True)
+    cl = csub.add_parser("list", help="list registered connectome species packs")
+    cl.add_argument("--json", action="store_true")
+    cf = csub.add_parser("fetch", help="download and SHA-256 verify a connectome dataset")
+    cf.add_argument("dataset_id")
+    cv = csub.add_parser("verify", help="re-hash local connectome dataset files")
+    cv.add_argument("dataset_id")
+    cs = csub.add_parser("summary", help="load a species pack and print summary/reference checks")
+    cs.add_argument("dataset_id")
+    cs.add_argument("--json", action="store_true")
+    cs.add_argument("--no-verify", action="store_true", help="skip file SHA-256 verification")
+    p.set_defaults(func=cmd_connectome)
     return parser
 
 

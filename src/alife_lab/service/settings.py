@@ -18,6 +18,8 @@ class Settings:
     frontend_dist: Path
     max_active_jobs: int
     default_ticks_per_second: float
+    datasets_dir: Path | None = None
+    max_datasets_mb: int = 4096
 
     @property
     def db_path(self) -> Path:
@@ -31,6 +33,10 @@ class Settings:
     def token_path(self) -> Path:
         return self.home / "session_token"
 
+    @property
+    def resolved_datasets_dir(self) -> Path:
+        return self.datasets_dir if self.datasets_dir is not None else self.home / "datasets"
+
 
 def _path_env(name: str, default: Path) -> Path:
     value = os.environ.get(name)
@@ -41,12 +47,15 @@ def _path_env(name: str, default: Path) -> Path:
 
 
 def load_settings() -> Settings:
+    home = _path_env("ALIFE_HOME", PROJECT_ROOT / ".alife")
     return Settings(
         project_root=PROJECT_ROOT,
         runs_root=_path_env("ALIFE_RUNS_DIR", PROJECT_ROOT / "runs"),
-        home=_path_env("ALIFE_HOME", PROJECT_ROOT / ".alife"),
+        home=home,
         configs_dir=_path_env("ALIFE_CONFIGS_DIR", PROJECT_ROOT / "configs"),
         frontend_dist=_path_env("ALIFE_FRONTEND_DIST", PROJECT_ROOT / "frontend" / "dist"),
         max_active_jobs=int(os.environ.get("ALIFE_MAX_ACTIVE_JOBS", "4")),
         default_ticks_per_second=float(os.environ.get("ALIFE_DEFAULT_TPS", "10")),
+        datasets_dir=_path_env("ALIFE_DATASETS_DIR", home / "datasets"),
+        max_datasets_mb=int(os.environ.get("ALIFE_MAX_DATASETS_MB", "4096")),
     )
