@@ -14,7 +14,12 @@ export const DATA = process.env.ALIFE_E2E_DATA ?? mkdtempSync(path.join(tmpdir()
 export function startServer(): ChildProcess {
   const proc = spawn("uv", ["run", "alife", "serve", "--host", "127.0.0.1", "--port", String(PORT), "--log-level", "warning"], {
     cwd: ROOT,
-    env: { ...process.env, ALIFE_HOME: path.join(DATA, "home"), ALIFE_RUNS_DIR: path.join(DATA, "runs") },
+    env: {
+      ...process.env,
+      ALIFE_HOME: path.join(DATA, "home"),
+      ALIFE_RUNS_DIR: path.join(DATA, "runs"),
+      ALIFE_DATASETS_DIR: process.env.ALIFE_DATASETS_DIR ?? path.join(ROOT, ".alife/datasets"),
+    },
     stdio: ["ignore", "inherit", "inherit"],
   });
   return proc;

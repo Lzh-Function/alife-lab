@@ -1,0 +1,15 @@
+preset:
+  id: connectome_fly_sugar_bitter
+  scenario: connectome_fly_sugar.yaml
+  title_key: preset.connectome_fly_sugar_bitter.title
+  description_key: preset.connectome_fly_sugar_bitter.description
+  overrides:
+    experiment:
+      name: connectome_fly_sugar_bitter_150hz
+      stimuli:
+        - port: sugar_grn
+          rate_hz: 150.0
+        - port: bitter_grn
+          rate_hz: 150.0
+  expected_observation: 'Co-stimulating bitter_grn alongside sugar_grn at 150 Hz strongly suppresses MN9 firing (~0-1 Hz, >99% reduction relative to sugar alone).'
+  negative_control: preset connectome_fly_sugar (sugar stimulation without bitter)

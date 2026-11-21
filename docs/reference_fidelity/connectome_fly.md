@@ -155,3 +155,43 @@ Notes on scaling:
 - High-activity regimes (e.g. `sugar_and_low_salt_grn` with ~700k spikes/s) still run at
   **10.4× real-time** (0.096 s per simulated second) with CUDA graphs.
 
+---
+
+## Phase F2: Browser Observation, Interactive Controls & 3D Brain View (2026-11-21)
+
+### Implemented capabilities
+
+- **CPU-only metadata, neuron search & 3D geometry API** (`src/alife_lab/connectome/query.py`,
+  `src/alife_lab/api/app.py`):
+  - `GET /api/v1/connectome/{dataset_id}/meta`
+  - `GET /api/v1/connectome/{dataset_id}/cells?q=&region=&role=&port=&limit=&offset=`
+  - `GET /api/v1/connectome/{dataset_id}/geometry` (quantized `int16` normalized FAFB 3D positions +
+    `uint8` role + `uint8` region palette = `1.11 MB` for all 138,639 FlyWire v783 neurons; skips
+    loading the 100 MiB connectivity table in the API process).
+- **Deterministic preview codec (`connectome_v1`)** in `ConnectomeAdapter.render()`:
+  - Emits per-port firing rates, top-16 neuropil firing intensities and exact sorted `int32` fired
+    neuron indices (~1–8 KB/frame), preserving byte-identical keyframe verification during replay.
+- **Browser UI (`ConnectomeView.tsx`, `Brain3D.tsx`, `ConnectomePanel.tsx`, `InspectorPanel.tsx`)**:
+  - 2D measurement view: rolling spike raster plot, brain-region firing intensity bars, highlighted
+    IO port rates (MN9, sugar, bitter, grooming).
+  - 3D glowing brain view (lazy-loaded Three.js WebGL2 point cloud): places all 138,639 FlyWire
+    neurons at their FAFB 3D coordinates and illuminates spiking neurons in real time (presentation
+    only; never alters scientific state).
+  - Live browser controls for `stimulate`, `silence`, `clear_stimuli`, neuron search & per-cell
+    inspection, compatible with deterministic Timeline rewind/replay and fork/paired-fork.
+  - Five catalog presets (`connectome_tiny_circuit`, `connectome_fly_sugar`,
+    `connectome_fly_sugar_bitter`, `connectome_fly_grooming`, `connectome_fly_shuffled_control`),
+    beginner guide section, glossary terms, parameter/metric `?` help and full `ja`/`en` i18n.
+
+### F2 Verification (Playwright Chromium E2E)
+
+- `e2e/connectome.spec.ts` (2/2 passed in 20.1 s):
+  1. `connectome_tiny_circuit` (offline CPU): create → observe 2D raster & MN9 response → search
+     `CB0701` & inspect → live `stimulate` + `silence` → switch to `brain3d` & back → pause →
+     Timeline rewind/replay → replay verification (`ok-text`) → fork at tick 20 with parent lineage
+     → beginner guide (6.8 s).
+  2. `connectome_fly_sugar` (real FlyWire v783, 138,639 neurons): create → live simulation →
+     search `CB0701` (exact 2 MN9 neurons) → inspect `mn9_proboscis_extension` → 3D glowing brain
+     rendering all 138,639 neurons (12.5 s).
+
+

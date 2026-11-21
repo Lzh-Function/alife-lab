@@ -1,0 +1,8 @@
+preset:
+  id: connectome_fly_sugar
+  scenario: connectome_fly_sugar.yaml
+  title_key: preset.connectome_fly_sugar.title
+  description_key: preset.connectome_fly_sugar.description
+  overrides: {}
+  expected_observation: 'Shiu et al. (2024) feeding circuit on FlyWire v783 (138,639 neurons): stimulating sugar_grn at 150 Hz recruits gustatory interneurons and drives MN9 proboscis extension motor neurons (~70-80 Hz).'
+  negative_control: preset connectome_fly_shuffled_control (degree-preserving shuffled wiring)

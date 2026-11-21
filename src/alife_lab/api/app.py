@@ -21,13 +21,19 @@ from starlette.concurrency import run_in_threadpool
 
 from alife_lab import __version__
 from alife_lab.api.security import AccessPolicy, BodyTooLarge, SecurityMiddleware
+from alife_lab.connectome.query import (
+    get_connectome_geometry,
+    get_connectome_meta,
+    search_connectome_cells,
+)
+from alife_lab.connectome.registry import DatasetError
 from alife_lab.core.hashing import sha256_json
 from alife_lab.core.spec import ExperimentSpec
 from alife_lab.core.states import RunState
 from alife_lab.core.sweep import SweepSpec
 from alife_lab.execution.executors import Executor
 from alife_lab.execution.probe import probe_system
-from alife_lab.service.controller import Controller, ControllerError, Subscriber
+from alife_lab.service.controller import Controller, ControllerError, NotFound, Subscriber
 from alife_lab.service.settings import Settings
 from alife_lab.service.sweeps import deep_merge
 from alife_lab.substrates import get_manifest, has_substrate, list_substrates
@@ -180,6 +186,10 @@ _ALLOWED_OVERRIDE_KEYS = {
     "space",
     "qd",
     "asal",
+    "dataset_id",
+    "wiring",
+    "stimuli",
+    "silenced_ports",
 }
 
 
@@ -552,13 +562,15 @@ def create_app(
     @app.get(f"{API}/experiments/{{run_id}}/inspect")
     async def inspect(
         run_id: str,
-        x: Annotated[float, Query()],
-        y: Annotated[float, Query()],
+        x: Annotated[float, Query()] = 0.0,
+        y: Annotated[float, Query()] = 0.0,
         radius: Annotated[float, Query(ge=0, le=1000)] = 2,
         tick: Annotated[int | None, Query(ge=0)] = None,
         mode: Annotated[Literal["summary", "trace_self", "trace_next_epoch"], Query()] = "summary",
         candidate: Annotated[int | None, Query(ge=0)] = None,
         scene: Annotated[bool, Query()] = False,
+        cell_index: Annotated[int | None, Query(ge=0)] = None,
+        port: Annotated[str | None, Query(max_length=64)] = None,
     ) -> dict[str, Any]:
         query: dict[str, Any] = {"x": x, "y": y, "radius": radius}
         if mode != "summary":
@@ -567,7 +579,63 @@ def create_app(
             query["candidate"] = candidate
         if scene:  # creature runs: static scene data (terrain) for the 3D view
             query["scene"] = True
+        if cell_index is not None:
+            query["cell_index"] = cell_index
+        if port is not None:
+            query["port"] = port
         return envelope(await ctl().inspect(run_id, query, tick))
+
+    # ------------------------------------------------------------- connectome
+
+    @app.get(f"{API}/connectome/{{dataset_id}}/meta")
+    async def connectome_meta(dataset_id: str) -> dict[str, Any]:
+        try:
+            data = await run_in_threadpool(
+                get_connectome_meta, dataset_id, settings.resolved_datasets_dir
+            )
+        except DatasetError as exc:
+            raise NotFound(str(exc)) from exc
+        return envelope(data)
+
+    @app.get(f"{API}/connectome/{{dataset_id}}/cells")
+    async def connectome_cells(
+        dataset_id: str,
+        q: Annotated[str, Query(max_length=128)] = "",
+        region: Annotated[str, Query(max_length=64)] = "",
+        role: Annotated[str, Query(max_length=32)] = "",
+        port: Annotated[str, Query(max_length=64)] = "",
+        limit: Annotated[int, Query(ge=1, le=200)] = 50,
+        offset: Annotated[int, Query(ge=0)] = 0,
+    ) -> dict[str, Any]:
+        try:
+            data = await run_in_threadpool(
+                search_connectome_cells,
+                dataset_id,
+                settings.resolved_datasets_dir,
+                q=q,
+                region=region,
+                role=role,
+                port=port,
+                limit=limit,
+                offset=offset,
+            )
+        except DatasetError as exc:
+            raise NotFound(str(exc)) from exc
+        return envelope(data)
+
+    @app.get(f"{API}/connectome/{{dataset_id}}/geometry")
+    async def connectome_geometry(dataset_id: str) -> Response:
+        try:
+            header, body = await run_in_threadpool(
+                get_connectome_geometry, dataset_id, settings.resolved_datasets_dir
+            )
+        except DatasetError as exc:
+            raise NotFound(str(exc)) from exc
+        return Response(
+            content=_pack_frame(header, body),
+            media_type="application/octet-stream",
+            headers={"Cache-Control": "private, max-age=3600"},
+        )
 
     # ------------------------------------------------------------------- tools
 

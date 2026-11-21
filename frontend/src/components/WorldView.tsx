@@ -6,18 +6,22 @@ import { ParticleCanvas, type ParticleCanvasHandle } from "./ParticleCanvas";
 import { WorldCanvas, type WorldCanvasHandle } from "./WorldCanvas";
 import { SoupCanvas, type SoupCanvasHandle } from "./SoupCanvas";
 import { FieldCanvas, type FieldCanvasHandle } from "./FieldCanvas";
+import { ConnectomeView, type ConnectomeViewHandle } from "./ConnectomeView";
 import type { Scene3DHandle } from "./Scene3D";
 import type { Field3DHandle } from "./Field3D";
+import type { Brain3DHandle } from "./Brain3D";
 
-// three.js is loaded only when an embodied creature or a 3D field view is shown.
+// three.js is loaded only when an embodied creature, 3D field, or 3D brain view is shown.
 const Scene3D = lazy(() => import("./Scene3D").then((m) => ({ default: m.Scene3D })));
 const Field3D = lazy(() => import("./Field3D").then((m) => ({ default: m.Field3D })));
+const Brain3D = lazy(() => import("./Brain3D").then((m) => ({ default: m.Brain3D })));
 
 /** Presentation views. "2d" is the measurement view (and the only one taking pointer tools). */
-export type ViewMode = "2d" | "terrain" | "spacetime" | "glow";
+export type ViewMode = "2d" | "terrain" | "spacetime" | "glow" | "brain3d";
 export const VIEW3D_SUBSTRATES = new Set(["lenia", "flow_lenia", "lenia_mc", "gray_scott", "physarum", "nca", "pd_nca"]);
 export const GLOW_SUBSTRATES = new Set(["boids", "particle_life"]);
 export function viewModesFor(substrate: string): ViewMode[] {
+  if (substrate === "connectome") return ["2d", "brain3d"];
   if (VIEW3D_SUBSTRATES.has(substrate)) return ["2d", "terrain", "spacetime"];
   if (GLOW_SUBSTRATES.has(substrate)) return ["2d", "glow"];
   return ["2d"];
@@ -37,6 +41,7 @@ interface Props {
   maxPixels?: number;
   testId?: string;
   runId?: string;
+  datasetId?: string;
   viewMode?: ViewMode;
   frameSource?: string; // "live" or "replay"; the time stack restarts when it changes
 }
@@ -45,7 +50,7 @@ const noop = () => undefined;
 
 // Chooses the renderer and maps pointer input to the substrate's intervention payloads.
 export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
-  { substrate, world, tool, onIntervene, onDisplayFps = noop, onInspect, maxPixels, testId, runId, viewMode = "2d", frameSource = "live" },
+  { substrate, world, tool, onIntervene, onDisplayFps = noop, onInspect, maxPixels, testId, runId, datasetId, viewMode = "2d", frameSource = "live" },
   ref,
 ) {
   const grid = useRef<WorldCanvasHandle>(null);
@@ -54,8 +59,11 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
   const field = useRef<FieldCanvasHandle>(null);
   const scene = useRef<Scene3DHandle>(null);
   const field3d = useRef<Field3DHandle | null>(null);
+  const connectome2d = useRef<ConnectomeViewHandle | null>(null);
+  const brain3d = useRef<Brain3DHandle | null>(null);
   const lastFrame = useRef<Frame | null>(null);
   const use3d = (viewMode === "terrain" || viewMode === "spacetime") && VIEW3D_SUBSTRATES.has(substrate);
+  const useBrain3d = substrate === "connectome" && viewMode === "brain3d";
   // A newly mounted renderer (after a view switch) shows the last frame at once, even if paused.
   const attachField3d = useCallback((h: Field3DHandle | null) => {
     field3d.current = h;
@@ -69,10 +77,22 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
     particles.current = h;
     if (h && lastFrame.current) h.draw(lastFrame.current);
   }, []);
+  const attachConnectome2d = useCallback((h: ConnectomeViewHandle | null) => {
+    connectome2d.current = h;
+    if (h && lastFrame.current) h.draw(lastFrame.current);
+  }, []);
+  const attachBrain3d = useCallback((h: Brain3DHandle | null) => {
+    brain3d.current = h;
+    if (h && lastFrame.current) h.draw(lastFrame.current);
+  }, []);
   useImperativeHandle(ref, () => ({
     draw: (frame: Frame) => {
       lastFrame.current = frame;
-      return use3d
+      return useBrain3d
+        ? brain3d.current?.draw(frame)
+        : substrate === "connectome"
+        ? connectome2d.current?.draw(frame)
+        : use3d
         ? field3d.current?.draw(frame)
         : substrate === "creature"
         ? scene.current?.draw(frame)
@@ -84,7 +104,7 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
             ? particles.current?.draw(frame)
             : grid.current?.draw(frame);
     },
-  }), [substrate, use3d]);
+  }), [substrate, use3d, useBrain3d]);
   const inspecting = tool !== null && tool.mode === "inspect";
   const active = tool !== null && tool.mode !== "off" && !inspecting;
 
@@ -110,6 +130,31 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
     [tool, onIntervene, onInspect, substrate],
   );
 
+  if (useBrain3d) {
+    return (
+      <Suspense fallback={<div className="field3d muted">3D…</div>}>
+        <Brain3D
+          ref={attachBrain3d}
+          datasetId={datasetId ?? "flywire_783"}
+          source={frameSource}
+          onDisplayFps={onDisplayFps}
+          testId={testId}
+          width={maxPixels ?? 840}
+        />
+      </Suspense>
+    );
+  }
+  if (substrate === "connectome") {
+    return (
+      <ConnectomeView
+        ref={attachConnectome2d}
+        frameSource={frameSource}
+        onDisplayFps={onDisplayFps}
+        maxPixels={maxPixels}
+        testId={testId}
+      />
+    );
+  }
   if (use3d) {
     return (
       <Suspense fallback={<div className="field3d muted">3D…</div>}>

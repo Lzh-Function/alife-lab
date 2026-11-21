@@ -1,0 +1,15 @@
+preset:
+  id: connectome_fly_shuffled_control
+  scenario: connectome_fly_sugar.yaml
+  title_key: preset.connectome_fly_shuffled_control.title
+  description_key: preset.connectome_fly_shuffled_control.description
+  overrides:
+    experiment:
+      name: connectome_fly_shuffled_control
+      mode: exploratory
+      wiring: shuffled_control
+      stimuli:
+        - port: sugar_grn
+          rate_hz: 150.0
+  expected_observation: 'Negative control: degree-preserving shuffled wiring destroys circuit specificity, so stimulating sugar_grn at 150 Hz yields ~0 Hz MN9 firing.'
+  negative_control: preset connectome_fly_sugar (unshuffled FlyWire v783 reference wiring)

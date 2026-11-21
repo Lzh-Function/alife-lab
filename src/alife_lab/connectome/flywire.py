@@ -408,13 +408,16 @@ def _build_io_ports(cells: CellTable) -> dict[str, IOPort]:
     return {p.port_id: p for p in ports}
 
 
-def load_flywire_783(
+def load_flywire_783_cells(
     datasets_dir: Path,
     *,
-    verify_hashes: bool = True,
+    verify_hashes: bool = False,
     spec: DatasetSpec | None = None,
-) -> ConnectomePack:
-    """Load the verified FlyWire v783 tables into a canonical ``ConnectomePack``."""
+) -> tuple[CellTable, dict[str, IOPort], Any]:
+    """Load only FlyWire v783 cell metadata, 3D positions and IO ports (no 100 MiB edges).
+
+    Used by API search and 3D geometry endpoints so the API process stays lightweight.
+    """
     dspec = spec or FLYWIRE_783_SPEC
     if verify_hashes:
         report = verify_dataset(dspec.dataset_id, datasets_dir, spec=dspec)
@@ -425,8 +428,12 @@ def load_flywire_783(
             )
 
     rdir = raw_dir(datasets_dir, dspec.dataset_id)
+    if not (rdir / "Completeness_783.csv").is_file():
+        raise DatasetError(
+            f"dataset {dspec.dataset_id!r} is not installed in {datasets_dir}; "
+            "run 'uv run alife connectome fetch flywire_783' first"
+        )
     root_ids = _load_completeness(rdir / "Completeness_783.csv")
-    edges = _load_connectivity(rdir / "Connectivity_783.parquet", root_ids)
 
     annotations = _load_annotations(rdir / "Supplemental_file1_neuron_annotations.tsv")
     codex_cls = _load_codex_classification(rdir / "classification.csv.gz")
@@ -542,6 +549,22 @@ def load_flywire_783(
     cells.validate()
     io_ports = _build_io_ports(cells)
     provenance = dspec.to_provenance()
+    return cells, io_ports, provenance
+
+
+def load_flywire_783(
+    datasets_dir: Path,
+    *,
+    verify_hashes: bool = True,
+    spec: DatasetSpec | None = None,
+) -> ConnectomePack:
+    """Load the verified FlyWire v783 tables into a canonical ``ConnectomePack``."""
+    dspec = spec or FLYWIRE_783_SPEC
+    cells, io_ports, provenance = load_flywire_783_cells(
+        datasets_dir, verify_hashes=verify_hashes, spec=dspec
+    )
+    rdir = raw_dir(datasets_dir, dspec.dataset_id)
+    edges = _load_connectivity(rdir / "Connectivity_783.parquet", cells.source_id)
     digest = compute_pack_digest(
         dspec.dataset_id, dspec.species, cells, edges, io_ports, provenance
     )

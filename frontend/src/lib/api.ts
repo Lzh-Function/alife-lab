@@ -55,7 +55,16 @@ export interface RunSummary {
   profile_id: string;
   spec_hash: string;
   profile_hash: string;
-  spec: { experiment: { world?: { width: number; height: number; boundary: string }; dynamics?: { channels?: number; species?: unknown[]; n_ncas?: number }; runner: { max_steps: number; checkpoint_interval: number }; observations: { metrics: string[] } } };
+  spec: {
+    experiment: {
+      dataset_id?: string;
+      wiring?: string;
+      world?: { width: number; height: number; boundary: string };
+      dynamics?: { channels?: number; species?: unknown[]; n_ncas?: number };
+      runner: { max_steps: number; checkpoint_interval: number };
+      observations: { metrics: string[] };
+    };
+  };
   clock: { unit: string; value: number };
   epoch: number;
   ticks_per_second: number;
@@ -471,6 +480,43 @@ export const api = {
     if (!resp.ok) throw new ApiError(resp.status, "frame_error", resp.statusText);
     return unpackFrame(await resp.arrayBuffer());
   },
+  inspectConnectome: (id: string, opts: { cellIndex?: number; port?: string; tick?: number }) => {
+    const params = new URLSearchParams({ x: "0", y: "0" });
+    if (opts.cellIndex !== undefined) params.set("cell_index", String(opts.cellIndex));
+    if (opts.port !== undefined) params.set("port", opts.port);
+    if (opts.tick !== undefined) params.set("tick", String(opts.tick));
+    return request<import("../components/InspectorPanel").Inspection>("GET", `/experiments/${id}/inspect?${params.toString()}`);
+  },
+  connectomeMeta: (datasetId: string) => request<ConnectomeMeta>("GET", `/connectome/${encodeURIComponent(datasetId)}/meta`),
+  connectomeCells: (
+    datasetId: string,
+    opts: { q?: string; region?: string; role?: string; port?: string; limit?: number; offset?: number },
+  ) => {
+    const params = new URLSearchParams();
+    if (opts.q) params.set("q", opts.q);
+    if (opts.region) params.set("region", opts.region);
+    if (opts.role) params.set("role", opts.role);
+    if (opts.port) params.set("port", opts.port);
+    if (opts.limit !== undefined) params.set("limit", String(opts.limit));
+    if (opts.offset !== undefined) params.set("offset", String(opts.offset));
+    return request<ConnectomeCellSearch>("GET", `/connectome/${encodeURIComponent(datasetId)}/cells?${params.toString()}`);
+  },
+  connectomeGeometry: async (datasetId: string): Promise<ConnectomeGeometry> => {
+    const resp = await fetch(`/api/v1/connectome/${encodeURIComponent(datasetId)}/geometry`);
+    if (!resp.ok) throw new ApiError(resp.status, "geometry_error", resp.statusText);
+    const frame = unpackFrame(await resp.arrayBuffer());
+    const h = frame.header as unknown as ConnectomeGeometryHeader;
+    const n = h.num_cells;
+    const raw = frame.bits;
+    const posBytes = n * 6;
+    const i16 = new Int16Array(raw.slice(0, posBytes).buffer);
+    const positions = new Float32Array(n * 3);
+    const inv = 1 / (h.pos_scale || 32000);
+    for (let i = 0; i < n * 3; i++) positions[i] = i16[i] * inv;
+    const roles = raw.slice(posBytes, posBytes + n);
+    const regionIdx = raw.slice(posBytes + n, posBytes + 2 * n);
+    return { header: h, positions, roles, regionIdx };
+  },
 };
 
 export interface Frame {
@@ -548,4 +594,97 @@ export interface TerrainInfo {
   extent: number;
   amplitude: number;
   heights_u16_b64: string;
+}
+
+export interface ConnectomePortMeta {
+  port_id: string;
+  direction: "sensory" | "motor" | "circuit";
+  label: string;
+  description: string;
+  count: number;
+  selection_rule: string;
+}
+
+export interface ConnectomeMeta {
+  dataset_id: string;
+  species: string;
+  version: string;
+  num_cells: number;
+  citation: string;
+  licence_note: string;
+  roles: Record<string, number>;
+  regions: Array<{ region: string; count: number }>;
+  ports: ConnectomePortMeta[];
+}
+
+export interface ConnectomeCell {
+  index: number;
+  source_id: number;
+  cell_type: string;
+  super_class: string;
+  cell_class: string;
+  region: string;
+  side: string;
+  role: string;
+  neurotransmitter: string;
+}
+
+export interface ConnectomeCellSearch {
+  dataset_id: string;
+  total: number;
+  offset: number;
+  limit: number;
+  items: ConnectomeCell[];
+}
+
+export interface ConnectomeGeometryHeader {
+  codec: string;
+  dataset_id: string;
+  num_cells: number;
+  pos_scale: number;
+  role_names: string[];
+  region_names: string[];
+  bounds_nm: { min: number[]; max: number[]; scale_nm: number };
+  port_indices: Record<string, number[]>;
+}
+
+export interface ConnectomeGeometry {
+  header: ConnectomeGeometryHeader;
+  positions: Float32Array;
+  roles: Uint8Array;
+  regionIdx: Uint8Array;
+}
+
+export interface ConnectomeFramePort {
+  port_id: string;
+  direction: "sensory" | "motor" | "circuit";
+  label: string;
+  count: number;
+  spikes_tick: number;
+  rate_hz: number;
+  stim_rate_hz: number;
+  silenced_count: number;
+}
+
+export interface ConnectomeFrameRegion {
+  region: string;
+  count: number;
+  spikes_tick: number;
+  intensity: number;
+}
+
+export interface ConnectomeFrameHeader {
+  codec: "connectome_v1";
+  dataset_id: string;
+  num_cells: number;
+  tick: number;
+  time_ms: number;
+  spikes_tick: number;
+  active_neurons_tick: number;
+  fired_count: number;
+  stimulated_count: number;
+  silenced_count: number;
+  ports: ConnectomeFramePort[];
+  regions: ConnectomeFrameRegion[];
+  dropped_previews?: number;
 }

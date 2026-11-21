@@ -17,6 +17,7 @@ import { InspectorPanel, type Inspection } from "./InspectorPanel";
 import { BffDebugger, type BffTrace } from "./BffDebugger";
 import { AssayResult, type AssayResultData } from "./AssayResult";
 import { SpeciesChart } from "./SpeciesChart";
+import { ConnectomePanel } from "./ConnectomePanel";
 
 const LIVE = new Set(["starting", "running", "pausing", "paused", "resuming"]);
 const MAX_ROWS = 4000;
@@ -237,6 +238,17 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
       .catch((e) => setInspectError(e instanceof ApiError ? e.message : String(e)));
   };
 
+  const onInspectConnectome = (opts: { cellIndex?: number; port?: string }) => {
+    const tickArg = replay && shownReplayTick.current !== null ? shownReplayTick.current : undefined;
+    api
+      .inspectConnectome(runId, { ...opts, tick: tickArg })
+      .then((d) => {
+        setInspection(d);
+        setInspectError(null);
+      })
+      .catch((e) => setInspectError(e instanceof ApiError ? e.message : String(e)));
+  };
+
   if (!summary) return <p>{run.isError ? t("common.error") : t("common.loading")}</p>;
   const currentTool = tool ?? initialTool(summary.substrate);
   currentToolRef.current = currentTool;
@@ -367,9 +379,10 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
             ref={canvas}
             substrate={summary.substrate}
             world={world}
+            datasetId={summary.spec.experiment.dataset_id}
             viewMode={viewMode}
             frameSource={replay ? "replay" : "live"}
-            maxPixels={viewMode === "terrain" || viewMode === "spacetime" || summary.substrate === "creature" ? widePixels : viewPixels}
+            maxPixels={viewMode === "terrain" || viewMode === "spacetime" || viewMode === "brain3d" || summary.substrate === "creature" || summary.substrate === "connectome" ? widePixels : viewPixels}
             tool={viewMode === "2d" || viewMode === "glow" ? toolForView : null}
             onIntervene={onIntervene}
             onInspect={onInspect}
@@ -381,6 +394,17 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
         </LabViewModes>
         {summary.substrate === "creature" && (
           <GaitPanel ref={gait} hasReflex={Boolean((summary.spec.experiment.dynamics as Record<string, unknown> | undefined)?.reflex)} />
+        )}
+        {summary.substrate === "connectome" && (
+          <ConnectomePanel
+            datasetId={summary.spec.experiment.dataset_id ?? "flywire_783"}
+            live={live}
+            replay={replay}
+            rows={rows}
+            onIntervene={onIntervene}
+            onInspectCell={(cellIndex) => onInspectConnectome({ cellIndex })}
+            onInspectPort={(port) => onInspectConnectome({ port })}
+          />
         )}
         <p className="muted small">{t("lab.preview_note")} · {t("lab.evidence")}</p>
         {replay && <p className="notice small" data-testid="replay-banner">{t("timeline.banner")}</p>}

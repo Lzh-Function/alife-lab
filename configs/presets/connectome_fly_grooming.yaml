@@ -1,0 +1,13 @@
+preset:
+  id: connectome_fly_grooming
+  scenario: connectome_fly_sugar.yaml
+  title_key: preset.connectome_fly_grooming.title
+  description_key: preset.connectome_fly_grooming.description
+  overrides:
+    experiment:
+      name: connectome_fly_grooming_150hz
+      stimuli:
+        - port: antennal_grooming_mechanosensory
+          rate_hz: 150.0
+  expected_observation: 'Shiu et al. (2024) antennal grooming circuit: stimulating antennal mechanosensory neurons at 150 Hz recruits antennal grooming interneurons and descending neurons.'
+  negative_control: preset connectome_fly_shuffled_control (shuffled wiring)

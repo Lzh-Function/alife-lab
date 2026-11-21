@@ -38,7 +38,7 @@ export function RunPane({
     },
     onMetrics: (rows) => {
       const last = rows[rows.length - 1];
-      if (last) setAlive(last.values.alive_cell_count ?? last.values.population ?? (last.values.mass != null ? Math.round(last.values.mass * 10) / 10 : null));
+      if (last) setAlive(last.values.alive_cell_count ?? last.values.population ?? (last.values.mn9_rate_hz != null ? Math.round(last.values.mn9_rate_hz * 10) / 10 : last.values.mass != null ? Math.round(last.values.mass * 10) / 10 : null));
     },
     onEvent: (ev) => {
       if (ev.type === "checkpoint_ready") onCheckpoint();
@@ -89,6 +89,7 @@ export function RunPane({
           ref={canvas}
           substrate={summary.substrate}
           world={world}
+          datasetId={summary.spec.experiment.dataset_id}
           tool={live ? tool : null}
           onIntervene={onIntervene}
           maxPixels={420}

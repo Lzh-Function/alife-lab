@@ -7,6 +7,7 @@ exact bitwise equivalence across backends and checkpoints. Never imports CuPy un
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
@@ -14,6 +15,7 @@ import numpy as np
 
 from alife_lab import API_CONTRACT_VERSION
 from alife_lab.connectome import (
+    CELL_ROLE_NAMES,
     ConnectomePack,
     CSRGraph,
     load_connectome_pack,
@@ -31,11 +33,37 @@ from alife_lab.service.settings import load_settings
 from alife_lab.substrates.base import Capabilities, MetricDefinition, PluginManifest
 
 SERIALIZE_VERSION = 1
-_PREVIEW_SIDE = 64
+_TOP_REGIONS = 16
 
 # Process-local cache of immutable loaded packs & CSRs so worker restarts/replays stay fast.
 _PACK_CACHE: dict[tuple[str, str], tuple[ConnectomePack, CSRGraph]] = {}
 _SHUFFLED_CSR_CACHE: dict[tuple[str, int], CSRGraph] = {}
+# Cached top-region lookup per pack_digest: (region_names, region_counts, cell_to_top_region)
+_RegionRenderIndex = tuple[
+    tuple[str, ...],
+    np.ndarray[Any, np.dtype[np.int32]],
+    np.ndarray[Any, np.dtype[np.int16]],
+]
+_REGION_RENDER_CACHE: dict[str, _RegionRenderIndex] = {}
+
+
+def _region_render_index(pack: ConnectomePack) -> _RegionRenderIndex:
+    cached = _REGION_RENDER_CACHE.get(pack.pack_digest)
+    if cached is not None:
+        return cached
+    counts = Counter(pack.cells.region)
+    top = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:_TOP_REGIONS]
+    names = tuple(r for r, _ in top)
+    totals = np.asarray([int(c) for _, c in top], dtype=np.int32)
+    name_to_idx = {r: i for i, r in enumerate(names)}
+    mapping = np.full(pack.cells.num_cells, -1, dtype=np.int16)
+    for i, r in enumerate(pack.cells.region):
+        j = name_to_idx.get(r)
+        if j is not None:
+            mapping[i] = j
+    cached = (names, totals, mapping)
+    _REGION_RENDER_CACHE[pack.pack_digest] = cached
+    return cached
 
 
 def _ce(spec: ExperimentSpec) -> ConnectomeExperiment:
@@ -295,29 +323,90 @@ class ConnectomeAdapter:
         return {k: v for k, v in out.items() if k in wanted}
 
     def render(self, state: ConnectomeWorld) -> tuple[dict[str, Any], bytes]:
-        """Lightweight 64x64 activity heatmap (F1 preview; 3D point cloud arrives in F2)."""
+        """Structured connectome preview (codec ``connectome_v1``) for 2D raster/heatmap + 3D brain.
+
+        Emits exact fired cell indices (little-endian ``int32``) as the binary payload alongside
+        per-port and top-region firing summaries in the header. Pure function of ``LIFState`` so
+        replay keyframe verification is byte-for-byte deterministic.
+        """
         lif = state.ensure_host()
-        side = _PREVIEW_SIDE
-        grid = np.zeros(side * side, dtype=np.float32)
         n = lif.num_cells
-        if n > 0:
-            bins = (np.arange(n, dtype=np.int64) * (side * side)) // n
-            counts = np.bincount(bins, minlength=side * side).astype(np.float32)
-            sp = np.bincount(
-                bins, weights=lif.last_tick_spikes.astype(np.float32), minlength=side * side
-            ).astype(np.float32)
-            # Show spike density per bin clipped to [0, 1].
-            grid = np.clip(sp / np.maximum(counts * 0.05, 1.0), 0.0, 1.0).astype(np.float32)
-        return {
-            "codec": "grid_f32",
-            "width": side,
-            "height": side,
-            "vmin": 0.0,
-            "vmax": 1.0,
+        elapsed_s = max(lif.substep * state.params.dt_s, 1e-9)
+        fired_idx = np.flatnonzero(lif.last_tick_spikes > 0).astype("<i4", copy=False)
+
+        # Per-port activity summary (12 ports in FlyWire v783, 4 in synthetic_tiny).
+        ports_summary: list[dict[str, Any]] = []
+        for pid, port in state.pack.io_ports.items():
+            idx = port.cell_indices
+            cnt = int(idx.size)
+            if cnt > 0:
+                sp_tick = int(lif.last_tick_spikes[idx].sum())
+                sp_tot = int(lif.total_spikes[idx].sum())
+                rate = (sp_tot / (cnt * elapsed_s)) if lif.substep > 0 else 0.0
+                stim_hz = float(lif.stim_rate_hz[idx].max())
+                sil_cnt = int(lif.silenced[idx].sum())
+            else:
+                sp_tick = 0
+                rate = 0.0
+                stim_hz = 0.0
+                sil_cnt = 0
+            ports_summary.append(
+                {
+                    "port_id": pid,
+                    "direction": port.direction,
+                    "label": port.label,
+                    "count": cnt,
+                    "spikes_tick": sp_tick,
+                    "rate_hz": round(rate, 2),
+                    "stim_rate_hz": round(stim_hz, 2),
+                    "silenced_count": sil_cnt,
+                }
+            )
+
+        # Top-region firing intensity summary via vectorized bincount.
+        reg_names, reg_counts, cell_to_reg = _region_render_index(state.pack)
+        k = len(reg_names)
+        if k > 0 and fired_idx.size > 0:
+            fired_regs = cell_to_reg[fired_idx]
+            valid = fired_regs >= 0
+            reg_spikes = np.bincount(
+                fired_regs[valid].astype(np.int32),
+                weights=lif.last_tick_spikes[fired_idx[valid]].astype(np.float64),
+                minlength=k,
+            )
+        else:
+            reg_spikes = np.zeros(k, dtype=np.float64)
+
+        regions_summary = []
+        for j, rname in enumerate(reg_names):
+            cnt = int(reg_counts[j])
+            sp = int(reg_spikes[j])
+            # Fraction of neurons firing in this tick, scaled so 5% active saturates at 1.0.
+            intensity = min(1.0, sp / max(cnt * 0.05, 1.0))
+            regions_summary.append(
+                {
+                    "region": rname,
+                    "count": cnt,
+                    "spikes_tick": sp,
+                    "intensity": round(float(intensity), 4),
+                }
+            )
+
+        header = {
+            "codec": "connectome_v1",
             "dataset_id": state.pack.dataset_id,
-            "tick": lif.tick,
+            "num_cells": n,
+            "tick": int(lif.tick),
             "time_ms": round(lif.substep * state.params.dt_ms, 2),
-        }, grid.tobytes()
+            "spikes_tick": int(lif.last_tick_spikes.sum()),
+            "active_neurons_tick": int(fired_idx.size),
+            "fired_count": int(fired_idx.size),
+            "stimulated_count": int((lif.stim_rate_hz > 0).sum()),
+            "silenced_count": int((lif.silenced > 0).sum()),
+            "ports": ports_summary,
+            "regions": regions_summary,
+        }
+        return header, fired_idx.tobytes()
 
     def apply_intervention(
         self,
@@ -386,6 +475,7 @@ class ConnectomeAdapter:
         cell_idx = int(query.get("cell_index", 0))
         if cell_idx < 0 or cell_idx >= n:
             raise ValueError(f"cell_index {cell_idx} out of range [0, {n})")
+        pos = cells.position_nm[cell_idx]
         return {
             "substrate": "connectome",
             "dataset_id": state.pack.dataset_id,
@@ -394,7 +484,12 @@ class ConnectomeAdapter:
             "source_id": int(cells.source_id[cell_idx]),
             "cell_type": cells.cell_type[cell_idx],
             "super_class": cells.super_class[cell_idx],
+            "cell_class": cells.cell_class[cell_idx],
             "region": cells.region[cell_idx],
+            "side": cells.side[cell_idx],
+            "role": CELL_ROLE_NAMES[int(cells.role[cell_idx])],
+            "neurotransmitter": cells.neurotransmitter[cell_idx],
+            "position_nm": [round(float(v), 1) for v in pos],
             "v_mv": float(lif.v[cell_idx]),
             "g_mv": float(lif.g[cell_idx]),
             "refrac_substeps": int(lif.refrac[cell_idx]),

@@ -1,0 +1,8 @@
+preset:
+  id: connectome_tiny_circuit
+  scenario: connectome_synthetic_tiny.yaml
+  title_key: preset.connectome_tiny_circuit.title
+  description_key: preset.connectome_tiny_circuit.description
+  overrides: {}
+  expected_observation: 'Built-in 4-neuron reflex circuit (works offline, no dataset download): stimulating sugar_grn at 150 Hz excites the relay interneuron and drives MN9 motor spikes; stimulating bitter_grn inhibits MN9.'
+  negative_control: 'silence sugar_grn or clear stimuli during the run'

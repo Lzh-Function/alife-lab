@@ -6,7 +6,7 @@ import { SearchInspector, type SearchInspection } from "./SearchInspector";
 type Vec = { x: number; y: number; magnitude: number };
 type Boid = { id: number; x: number; y: number; vx: number; vy: number; speed: number; heading_deg: number; distance: number };
 
-export interface Inspection extends Partial<SearchInspection> {
+export interface Inspection extends Omit<Partial<SearchInspection>, "region"> {
   substrate: string;
   tick: number;
   source?: { method: string; base_tick?: number; interventions_replayed?: number };
@@ -118,6 +118,30 @@ export interface Inspection extends Partial<SearchInspection> {
     flow: { x: number; y: number };
     displacement: { x: number; y: number };
   }>;
+  // connectome
+  dataset_id?: string;
+  port?: string;
+  count?: number;
+  spikes_tick?: number;
+  total_spikes?: number;
+  mean_rate_hz?: number;
+  mean_v_mv?: number;
+  cell_index?: number;
+  source_id?: number;
+  cell_type?: string;
+  super_class?: string;
+  cell_class?: string;
+  region?: string;
+  side?: string;
+  role?: string;
+  neurotransmitter?: string;
+  position_nm?: number[];
+  v_mv?: number;
+  g_mv?: number;
+  refrac_substeps?: number;
+  stim_rate_hz?: number;
+  silenced?: boolean;
+  last_tick_spikes?: number;
 }
 
 const f = (v: number, d = 3) => (Math.abs(v) >= 100 ? v.toFixed(1) : v.toPrecision(d));
@@ -629,6 +653,55 @@ export function InspectorPanel({
                 </tbody>
               </table>
             </>
+          )}
+          {data.substrate === "connectome" && (
+            <div data-testid="inspector-connectome">
+              {data.port ? (
+                <dl className="stats small">
+                  <dt>{t("connectome.col.port")}</dt>
+                  <dd className="mono">{data.port}</dd>
+                  <dt>{t("connectome.col.count")}</dt>
+                  <dd className="mono">{data.count}</dd>
+                  <dt>{t("metric.spikes_tick")}</dt>
+                  <dd className="mono">{data.spikes_tick}</dd>
+                  <dt>{t("metric.total_spikes")}</dt>
+                  <dd className="mono">{data.total_spikes}</dd>
+                  <dt>{t("connectome.inspector.mean_rate")}</dt>
+                  <dd className="mono">{(data.mean_rate_hz ?? 0).toFixed(2)} Hz</dd>
+                  <dt>{t("metric.mean_v_mv")}</dt>
+                  <dd className="mono">{(data.mean_v_mv ?? 0).toFixed(2)} mV</dd>
+                </dl>
+              ) : (
+                <dl className="stats small">
+                  <dt>{t("connectome.col.cell_type")}</dt>
+                  <dd className="mono">
+                    {data.cell_type || "—"} (#{data.cell_index})
+                  </dd>
+                  <dt>{t("connectome.col.source_id")}</dt>
+                  <dd className="mono">{data.source_id}</dd>
+                  <dt>{t("connectome.col.region")}</dt>
+                  <dd className="mono">
+                    {data.region} {data.side ? `(${data.side})` : ""}
+                  </dd>
+                  <dt>{t("connectome.col.role")}</dt>
+                  <dd>{data.role ? t(`connectome.role.${data.role}`) : "—"}</dd>
+                  <dt>{t("connectome.col.nt")}</dt>
+                  <dd className="mono">{data.neurotransmitter || "—"}</dd>
+                  <dt>v / g</dt>
+                  <dd className="mono">
+                    {(data.v_mv ?? 0).toFixed(2)} / {(data.g_mv ?? 0).toFixed(2)} mV
+                  </dd>
+                  <dt>{t("connectome.stim_rate")}</dt>
+                  <dd className="mono">{(data.stim_rate_hz ?? 0).toFixed(1)} Hz</dd>
+                  <dt>{t("connectome.inspector.silenced")}</dt>
+                  <dd>{data.silenced ? t("connectome.yes") : t("connectome.no")}</dd>
+                  <dt>{t("metric.total_spikes")}</dt>
+                  <dd className="mono">
+                    {data.total_spikes} (tick: {data.last_tick_spikes})
+                  </dd>
+                </dl>
+              )}
+            </div>
           )}
           {data.substrate === "boids" && (
             <>
