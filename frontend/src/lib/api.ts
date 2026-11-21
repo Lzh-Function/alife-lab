@@ -327,6 +327,10 @@ export interface CheckResult {
   id: string;
   viable_fraction?: number;
   mean_speed?: number;
+  score?: number; // CLIP checks
+  blank?: number;
+  max_control?: number;
+  max_control_prompt?: string;
   mean_mass?: number;
   seconds?: number;
   error?: string;

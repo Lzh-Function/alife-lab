@@ -34,7 +34,7 @@ PASS_VIABLE = 0.8  # fraction of seeds that must be viable
 REPRODUCE_TOL = 0.05  # relative speed tolerance vs. the recorded search value
 LARGER_TOL = 0.10  # relative speed tolerance vs. the reproduce check
 FASTER_MARGIN = 0.05  # candidate must be >= 5 % faster than the base parameters
-CLAIM_KINDS = ("moving_localized", "faster_than_base")
+CLAIM_KINDS = ("moving_localized", "faster_than_base", "clip_prompt_specific")
 
 
 def _seeds(search: SearchExperiment, count: int) -> list[int]:
@@ -62,6 +62,12 @@ def make_plan(
 ) -> dict[str, Any]:
     if claim_kind not in CLAIM_KINDS:
         raise ValueError(f"unknown claim kind {claim_kind!r}")
+    if claim_kind == "clip_prompt_specific":
+        from alife_lab.evolution import assays_clip
+
+        return assays_clip.make_plan(search, candidate_spec, recorded)
+    if search.asal is not None or search.target.substrate != "lenia":
+        raise ValueError(f"{claim_kind} is defined for single-channel, non-CLIP Lenia searches")
     ExperimentSpec.model_validate(candidate_spec)  # must be a valid target spec
     seed_free = candidate_spec["experiment"]["initialization"].get("preset") == "pattern"
     seeds = _seeds(search, 1 if seed_free else 5)
@@ -139,6 +145,11 @@ def run_check(check: dict[str, Any], seeds: list[int], max_alive: float) -> dict
     """Run one check on every seed (in a worker process)."""
     from alife_lab.evolution.objectives import evaluate_lenia
 
+    if check.get("kind") == "clip":
+        from alife_lab.evolution import assays_clip
+
+        return assays_clip.run_check(check, seeds)
+
     t0 = time.perf_counter()
     rows = []
     for s in seeds:
@@ -160,6 +171,10 @@ def run_check(check: dict[str, Any], seeds: list[int], max_alive: float) -> dict
 
 def judge(plan: dict[str, Any], results: dict[str, dict[str, Any]]) -> dict[str, Any]:
     """Apply the pre-declared rules; returns per-check verdicts and the overall status."""
+    if plan["claim_kind"] == "clip_prompt_specific":
+        from alife_lab.evolution import assays_clip
+
+        return assays_clip.judge(plan, results)
     verdicts: dict[str, dict[str, Any]] = {}
     for check in plan["checks"]:
         cid = check["id"]

@@ -1,0 +1,14 @@
+preset:
+  id: search_lenia_qd_imgep
+  scenario: search_lenia_qd.yaml
+  title_key: preset.search_lenia_qd_imgep.title
+  description_key: preset.search_lenia_qd_imgep.description
+  overrides:
+    experiment:
+      name: search_lenia_qd_imgep
+      dynamics: {algorithm: imgep}
+      explore: {k: 10, archive_add: 2, mutation_sigma: 0.1}
+  expected_observation: >-
+    Goal exploration: random goals in the (speed, mass) box, nearest known candidate mutated.
+    Pilot seeds 101-102 (2000 evaluations): coverage 0.138-0.169.
+  negative_control: preset search_lenia_qd_random (same budget, uniform sampling)

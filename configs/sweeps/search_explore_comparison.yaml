@@ -1,0 +1,24 @@
+# Coverage of the pre-declared (speed x mass) grid at an equal budget of 2000 evaluations for
+# novelty search, IMGEP, MAP-Elites and uniform random search. Pilot seeds 99, 101, 102 are
+# excluded (novelty/IMGEP pilots: coverage 0.138-0.169).
+schema_version: 1
+sweep:
+  name: search_explore_comparison
+  base_preset: search_lenia_qd_novelty
+  overrides:
+    observations:
+      metrics: [best_score, viable_fraction, evaluations, coverage, qd_score, archive_size]
+  seeds: [1, 2, 3, 4, 5]
+  factors:
+    - path: dynamics.algorithm
+      values: [random, novelty, imgep, map_elites]
+      labels: [random, novelty, imgep, map_elites]
+  reference_condition: 0
+  endpoint: {metric: coverage, at: final}
+  design: confirmatory
+  hypothesis: >-
+    With the same budget of 2000 evaluations, novelty search and IMGEP each fill a larger
+    fraction of the pre-declared speed x mass grid (coverage) than uniform random search on
+    Lenia (m, s, R) from the Orbium pattern; one value per seeded search run (Holm-corrected
+    over the comparisons with random). MAP-Elites is included for reference.
+  profile_id: cpu_dev

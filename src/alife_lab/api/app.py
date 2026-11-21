@@ -124,7 +124,9 @@ class DiscoveryRequest(_Req):
     run_id: str = Field(pattern=r"^run_[0-9a-f]{16}$")
     candidate: int = Field(ge=0)
     tick: int | None = Field(default=None, ge=0)
-    claim_kind: Literal["moving_localized", "faster_than_base"] = "moving_localized"
+    claim_kind: Literal["moving_localized", "faster_than_base", "clip_prompt_specific"] = (
+        "moving_localized"
+    )
     title: str = Field(default="", max_length=200)
 
 

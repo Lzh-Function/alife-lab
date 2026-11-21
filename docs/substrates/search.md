@@ -12,6 +12,8 @@
 - Optional `asal` (`model`, `prompts`, `frames`) for the CLIP objectives
   `lenia_clip_target` / `lenia_clip_open_endedness`; numeric policy `float32_clip_torch`,
   backends `torch` / `torch_cuda`. Frames are taken at the ends of `frames` equal chunks.
+- Optional `explore` (`k`, `archive_add`, `mutation_sigma`) for `novelty` / `imgep`; the
+  novelty archive (candidate indices) is part of the checkpoint metadata.
 - State: archive of every candidate (`u` normalised, `x` values, `score`, `viable`,
   `alive_fraction`, `speed`, `mass`, `parent`, `generation`); the QD grid is derived, holdout scores of former bests, CMA-ES state
   (JSON arrays), NumPy RNG state, best candidate's final field (display only).
@@ -19,7 +21,8 @@
   best candidate, each with params, scores and a materialisable target spec.
 - Metrics: `best_score`, `generation_best`, `generation_mean`, `viable_fraction`,
   `evaluations`, `holdout_best` (NaN without holdout), `sigma` (NaN for random); with `qd`:
-  `coverage`, `qd_score`, `archive_size`; with CLIP objectives: `blank_score`. CLIP runs store
+  `coverage`, `qd_score`, `archive_size`; with CLIP objectives: `blank_score`, `illumination`
+  (32 farthest-point viable candidates); novelty algorithm: `mean_novelty`. CLIP runs store
   the last-frame embedding of every candidate (`embedding`, serialize_version 3).
 - Display codec `field_u8`, 3 channels, height H, width H + W (+ H with `qd`): parameter map
   of the first two axes (colour = score, grey = not viable, cyan = ancestors of the best), the

@@ -26,7 +26,7 @@ import numpy.typing as npt
 
 from alife_lab import API_CONTRACT_VERSION
 from alife_lab.core.spec import CLIP_OBJECTIVES, ExperimentSpec, SearchExperiment
-from alife_lab.evolution import OBJECTIVE_VERSIONS, cmaes, qd
+from alife_lab.evolution import OBJECTIVE_VERSIONS, cmaes, explore, qd
 from alife_lab.evolution.space import bound_violation, candidate_spec, decode, seeds_for
 from alife_lab.substrates.base import Capabilities, MetricDefinition, PluginManifest
 
@@ -34,6 +34,7 @@ F64 = npt.NDArray[np.float64]
 # 2: + mass, parent (v1 loads with NaN / -1); 3: + embedding (v1/v2 load without it)
 SERIALIZE_VERSION = 3
 EMBED_DIM = 512  # CLIP ViT-B/32
+ILLUMINATION_SET = 32  # illumination is measured on this many spread-out viable candidates
 BOUND_PENALTY = 10.0  # CMA-ES f = -score + BOUND_PENALTY * |u - clip(u)|^2
 _ARCHIVE = ("u", "x", "score", "viable", "alive_fraction", "speed", "mass", "parent",
             "generation")  # fmt: skip
@@ -64,6 +65,7 @@ class SearchState:
     grid: tuple[int, int] | None = None  # QD bins (descriptor 0, descriptor 1), from the spec
     # (n, D) CLIP embedding of the last sampled frame (first search seed); (0, 0) otherwise.
     embedding: F64 = field(default_factory=lambda: np.zeros((0, 0)), repr=False)
+    novelty_archive: list[int] = field(default_factory=list)  # archive indices (novelty)
     holdout: dict[int, float] = field(default_factory=dict)  # archive index -> holdout score
     best_field: F64 | None = field(default=None, repr=False)
     last: dict[str, float] = field(default_factory=dict)
@@ -107,6 +109,14 @@ _METRICS = (
        "Score of an empty (all-zero) world under the same CLIP objective: a reference level "
        "that a dead candidate reaches for free.", "none", "every generation", 1,
        "CLIP objectives only"),
+    _M("mean_novelty", "metric.mean_novelty", "distance", "generation",
+       "Mean kNN novelty of this generation's viable candidates in the behaviour space (novelty "
+       "algorithm).", "mean", "every generation", 1, "novelty algorithm only"),
+    _M("illumination", "metric.illumination", "score", "generation",
+       "ASAL illumination (-mean max CLIP similarity to another member) of 32 viable candidates "
+       "chosen by greedy farthest-point selection; independent of how many candidates exist "
+       "(higher = a wider range of looks found).", "none", "every generation", 1,
+       "CLIP searches only; null until 32 viable candidates exist"),
 )  # fmt: skip
 
 SEARCH_MANIFEST = PluginManifest(
@@ -358,6 +368,10 @@ class SearchAdapter:
             noise = state.rng.standard_normal((d.population, dim)) * exp.qd.mutation_sigma
             u = np.clip(state.u[chosen] + noise, 0.0, 1.0)
             parents = chosen.astype(np.float64)
+        elif d.algorithm == "novelty":
+            u, parents = explore.propose_novelty(state, exp, state.rng, d.population, dim)
+        elif d.algorithm == "imgep":
+            u, parents = explore.propose_imgep(state, exp, state.rng, d.population, dim)
         else:
             u = state.rng.random((d.population, dim))
         search_seeds = seeds_for(exp, 1, d.eval_seeds)
@@ -422,6 +436,18 @@ class SearchAdapter:
             state.last.update(qd.stats(state.elites, state))
         if exp.dynamics.objective in CLIP_OBJECTIVES:
             state.last["blank_score"] = self._blank_score(exp)
+            ok = (state.viable >= 1.0) & ~np.isnan(state.embedding).any(axis=1)
+            if ok.sum() >= ILLUMINATION_SET:
+                from alife_lab.evolution import asal as asal_scores
+
+                subset = asal_scores.farthest_subset(state.embedding[ok], ILLUMINATION_SET)
+                state.last["illumination"] = asal_scores.illumination(subset)
+            else:
+                state.last["illumination"] = math.nan
+        if d.algorithm == "novelty":
+            state.last["mean_novelty"] = explore.update_archive(
+                state, exp, state.score.size - len(u)
+            )
         return state
 
     def _blank_score(self, exp: SearchExperiment) -> float:
@@ -473,6 +499,7 @@ class SearchAdapter:
             and np.array_equal(a.parent, b.parent)
             and np.array_equal(a.embedding, b.embedding, equal_nan=True)
             and a.holdout == b.holdout
+            and a.novelty_archive == b.novelty_archive
         )
         if a.cma is not None and b.cma is not None:
             exact = exact and np.array_equal(a.cma.mean, b.cma.mean) and a.cma.sigma == b.cma.sigma
@@ -496,6 +523,7 @@ class SearchAdapter:
                 "rng_state": state.rng.bit_generator.state,
                 "cma": state.cma.to_json() if state.cma is not None else None,
                 "holdout": {str(k): v for k, v in state.holdout.items()},
+                "novelty_archive": state.novelty_archive,
                 "last": state.last,
                 "groups": {"archive": ", ".join(_ARCHIVE), "optimizer_state": "cma",
                            "rng": "rng_state", "display": "best_field"},
@@ -528,6 +556,7 @@ class SearchAdapter:
             alive_fraction=archive["alive_fraction"], speed=archive["speed"],
             mass=archive["mass"], parent=archive["parent"], generation=archive["generation"],
         )  # fmt: skip
+        state.novelty_archive = [int(i) for i in meta.get("novelty_archive") or []]
         if "embedding" in arr:
             state.embedding = np.asarray(arr["embedding"], dtype=np.float64).copy()
         if exp.qd is not None:

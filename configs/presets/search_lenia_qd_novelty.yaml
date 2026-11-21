@@ -1,0 +1,18 @@
+preset:
+  id: search_lenia_qd_novelty
+  scenario: search_lenia_qd.yaml
+  title_key: preset.search_lenia_qd_novelty.title
+  description_key: preset.search_lenia_qd_novelty.description
+  overrides:
+    experiment:
+      name: search_lenia_qd_novelty
+      dynamics: {algorithm: novelty}
+      explore: {k: 10, archive_add: 2, mutation_sigma: 0.1}
+      observations:
+        metrics: [best_score, generation_best, generation_mean, viable_fraction, evaluations,
+                  holdout_best, sigma, coverage, qd_score, archive_size, mean_novelty]
+  expected_observation: >-
+    Novelty search in the (speed, mass) behaviour space; it never looks at the score. Pilot
+    seeds 101-102 (2000 evaluations): coverage 0.144-0.156 of the 160-cell grid, about the
+    level of MAP-Elites, above uniform random search.
+  negative_control: preset search_lenia_qd_random (same budget, uniform sampling)

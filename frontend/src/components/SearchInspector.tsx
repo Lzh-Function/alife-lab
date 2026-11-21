@@ -45,9 +45,10 @@ const short = (path: string) => {
 };
 const num = (v: number) => (Math.abs(v) >= 100 ? v.toFixed(1) : v.toPrecision(4));
 
-function Candidate({ c, title, testId, onOpenSpec, onRegister, registerDisabled = false }: { c: SearchCandidate; title: string; testId: string; onOpenSpec?: (spec: Record<string, unknown>) => void; onRegister?: Register; registerDisabled?: boolean }) {
+function Candidate({ c, title, testId, onOpenSpec, onRegister, registerDisabled = false, clip = false }: { c: SearchCandidate; title: string; testId: string; onOpenSpec?: (spec: Record<string, unknown>) => void; onRegister?: Register; registerDisabled?: boolean; clip?: boolean }) {
   const t = useT();
-  const [claim, setClaim] = useState("moving_localized");
+  const claims = clip ? ["clip_prompt_specific"] : ["moving_localized", "faster_than_base"];
+  const [claim, setClaim] = useState(claims[0]);
   return (
     <div data-testid={testId}>
       <h4 className="small">
@@ -92,11 +93,14 @@ function Candidate({ c, title, testId, onOpenSpec, onRegister, registerDisabled 
           {t("search.open_as_run")}
         </button>
       )}
-      {onRegister && c.spec && c.viable_fraction > 0 && (c.spec as { experiment?: { substrate?: string } }).experiment?.substrate === "lenia" && !registerDisabled && (
+      {onRegister && c.spec && (clip || c.viable_fraction > 0) && !registerDisabled && (
         <div className="register-row">
           <select value={claim} onChange={(e) => setClaim(e.target.value)} data-testid={`${testId}-claim`}>
-            <option value="moving_localized">{t("discovery.claim.moving_localized")}</option>
-            <option value="faster_than_base">{t("discovery.claim.faster_than_base")}</option>
+            {claims.map((k) => (
+              <option key={k} value={k}>
+                {t(`discovery.claim.${k}`)}
+              </option>
+            ))}
           </select>
           <button type="button" className="small" data-testid={`${testId}-register`} onClick={() => onRegister(c.index, claim)}>
             {t("discovery.register")}
@@ -140,8 +144,8 @@ export function SearchInspector({ data, onOpenSpec, onRegister }: { data: Search
           {!data.candidate && <span className="muted"> · {t("search.archive_empty")}</span>}
         </p>
       )}
-      {data.candidate && <Candidate c={data.candidate} title={t("search.clicked")} testId="search-candidate" onOpenSpec={onOpenSpec} onRegister={onRegister} registerDisabled={!!data.asal} />}
-      {data.best && <Candidate c={data.best} title={t("search.best")} testId="search-best" onOpenSpec={onOpenSpec} onRegister={onRegister} registerDisabled={!!data.asal} />}
+      {data.candidate && <Candidate c={data.candidate} title={t("search.clicked")} testId="search-candidate" onOpenSpec={onOpenSpec} onRegister={onRegister} clip={data.objective === "lenia_clip_target"} registerDisabled={!!data.asal && data.objective !== "lenia_clip_target"} />}
+      {data.best && <Candidate c={data.best} title={t("search.best")} testId="search-best" onOpenSpec={onOpenSpec} onRegister={onRegister} clip={data.objective === "lenia_clip_target"} registerDisabled={!!data.asal && data.objective !== "lenia_clip_target"} />}
       {data.cma && (
         <p className="small muted mono">
           CMA-ES mean: {Object.entries(data.cma.mean).map(([k, v]) => `${short(k)}=${num(v)}`).join(", ")} · σ={data.cma.sigma.toFixed(3)}

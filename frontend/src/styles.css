@@ -111,6 +111,7 @@ button.linklike { border: none; background: none; padding: 0; color: var(--accen
 .discovery-rejected { border-color: var(--danger); color: var(--danger); }
 .discovery-inconclusive { border-color: var(--warn-border); background: var(--warn-bg); color: var(--text); }
 .discovery-detail .table td { white-space: normal; vertical-align: top; }
+.param-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: 0.1rem 0.8rem; margin-top: 0.4rem; }
 .register-row { display: flex; gap: 0.4rem; margin-top: 0.4rem; flex-wrap: wrap; }
 /* Top-bar CPU/GPU switch */
 .segmented { display: inline-flex; align-items: center; gap: 0; }

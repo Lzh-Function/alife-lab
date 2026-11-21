@@ -1,0 +1,18 @@
+preset:
+  id: search_asal_lenia_mc_illuminate
+  scenario: search_asal_lenia_mc.yaml
+  title_key: preset.search_asal_lenia_mc_illuminate.title
+  description_key: preset.search_asal_lenia_mc_illuminate.description
+  overrides:
+    experiment:
+      name: search_asal_lenia_mc_illuminate
+      dynamics: {algorithm: novelty}
+      explore: {k: 10, archive_add: 2, mutation_sigma: 0.1}
+      observations:
+        metrics: [best_score, generation_best, viable_fraction, evaluations, blank_score,
+                  mean_novelty, illumination]
+  expected_observation: >-
+    Exploratory, ASAL-illumination-like: novelty search in CLIP embedding space ignores the
+    prompts' score and looks for unlike-looking rollouts. Pilot seed 101 (30 generations):
+    illumination of 32 spread-out candidates -0.909 vs random -0.911 vs CMA-ES -0.944.
+  negative_control: preset search_asal_lenia_mc_cell_random (uniform sampling)

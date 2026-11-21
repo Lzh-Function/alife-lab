@@ -1361,7 +1361,10 @@ class SearchDynamics(_Frozen):
     # random: uniform sampling of the box (baseline); cma_es: CMA-ES (Hansen's purecma
     # equations, positive weights) in the normalised box with a quadratic bound penalty;
     # map_elites: MAP-Elites over the ``qd`` descriptor grid (requires ``qd``).
-    algorithm: Literal["random", "cma_es", "map_elites"] = "cma_es"
+    # novelty: novelty search (Lehman & Stanley 2011) with a kNN archive; imgep: goal
+    # exploration (Forestier et al. 2017; Reinke et al. 2020 for Lenia). Both need a behaviour
+    # space: the qd descriptors, or (novelty only) the CLIP embeddings of an asal search.
+    algorithm: Literal["random", "cma_es", "map_elites", "novelty", "imgep"] = "cma_es"
     population: Annotated[int, Field(ge=2, le=256)] = 12
     sigma0: Annotated[float, Field(gt=0.0, le=1.0)] = 0.3  # in normalised [0, 1] units
     # Pre-declared objective (versioned in the adapter); never changed during a run.
@@ -1388,7 +1391,18 @@ SearchMetric = Literal[
     "qd_score",
     "archive_size",
     "blank_score",
+    "mean_novelty",
+    "illumination",
 ]
+
+
+class SearchExplore(_Frozen):
+    """Settings of the novelty and IMGEP algorithms (behaviour space: qd descriptors scaled to
+    [0, 1] by their bounds, or CLIP embeddings)."""
+
+    k: Annotated[int, Field(ge=1, le=64)] = 10  # nearest neighbours for novelty
+    archive_add: Annotated[int, Field(ge=0, le=64)] = 2  # most novel added per generation
+    mutation_sigma: Annotated[float, Field(gt=0.0, le=1.0)] = 0.1  # normalised units
 
 
 class QDDescriptor(_Frozen):
@@ -1472,6 +1486,7 @@ class SearchExperiment(_Frozen):
     # before it existed keep their digest.
     qd: SearchQD | None = None
     asal: SearchASAL | None = None
+    explore: SearchExplore | None = None
     runner: RunnerSpec = RunnerSpec(max_steps=25, checkpoint_interval=5)
     observations: SearchObservation = SearchObservation()
 
@@ -1502,6 +1517,16 @@ class SearchExperiment(_Frozen):
                 raise ValueError("eval_steps must be >= the number of sampled frames")
         if d.algorithm == "map_elites" and self.qd is None:
             raise ValueError("map_elites needs a qd section (descriptor grid)")
+        if d.algorithm in ("novelty", "imgep") and self.explore is None:
+            raise ValueError(f"{d.algorithm} needs an explore section")
+        if d.algorithm == "imgep" and self.qd is None:
+            raise ValueError("imgep samples goals in the qd descriptor box: it needs qd")
+        if d.algorithm == "novelty" and self.qd is None and self.asal is None:
+            raise ValueError("novelty needs a behaviour space: qd descriptors or CLIP (asal)")
+        if "mean_novelty" in self.observations.metrics and d.algorithm != "novelty":
+            raise ValueError("mean_novelty is reported by the novelty algorithm only")
+        if "illumination" in self.observations.metrics and self.asal is None:
+            raise ValueError("illumination is defined for CLIP searches (asal) only")
         if "blank_score" in self.observations.metrics and d.objective not in CLIP_OBJECTIVES:
             raise ValueError("blank_score is defined for CLIP objectives only")
         qd_metrics = {"coverage", "qd_score", "archive_size"}
@@ -1520,7 +1545,7 @@ class SearchExperiment(_Frozen):
     @model_serializer(mode="wrap")
     def _omit_absent_sections(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
         out: dict[str, Any] = handler(self)
-        for key in ("qd", "asal"):
+        for key in ("qd", "asal", "explore"):
             if out.get(key) is None:
                 out.pop(key, None)
         return out

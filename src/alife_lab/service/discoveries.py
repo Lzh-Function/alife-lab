@@ -90,10 +90,11 @@ class DiscoveryService:
         search = spec.experiment
         if not isinstance(search, SearchExperiment):
             raise ControllerError("discoveries are registered from search runs")
-        if search.target.substrate != "lenia" or search.asal is not None:
+        clip_search = search.asal is not None and search.dynamics.objective == "lenia_clip_target"
+        if (claim_kind == "clip_prompt_specific") != clip_search:
             raise ControllerError(
-                "assay plan v1 covers single-channel Lenia candidates of non-CLIP searches only "
-                "(a prompt-specificity assay for CLIP searches is planned)"
+                "claim clip_prompt_specific is for CLIP target searches; moving_localized and "
+                "faster_than_base are for single-channel, non-CLIP Lenia searches"
             )
         source_tick = int(run["clock"]["value"]) if tick is None else int(tick)
         info = await self.c.inspect(run_id, {"candidate": int(candidate)}, source_tick)
@@ -184,6 +185,8 @@ class DiscoveryService:
     async def _run(self, did: str, aid: str, plan: dict[str, Any], author: str) -> None:
         results: dict[str, dict[str, Any]] = {}
         for check in plan["checks"]:
+            if check.get("kind") == "derived":  # judged from another check's result
+                continue
             try:
                 results[check["id"]] = await self.c._in_pool(
                     assays.run_check, check, plan["seeds"], plan["max_alive_fraction"]

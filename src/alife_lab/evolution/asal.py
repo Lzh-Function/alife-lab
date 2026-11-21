@@ -43,3 +43,21 @@ def illumination(zs: F64) -> float:
     k = zs @ zs.T
     np.fill_diagonal(k, -np.inf)
     return -float(k.max(axis=-1).mean())
+
+
+def farthest_subset(zs: F64, n: int) -> F64:
+    """Greedy max-min (farthest-point) selection of ``n`` rows, starting from row 0.
+
+    Used to compare the diversity of searches with different numbers of viable candidates:
+    the illumination of all candidates falls as their number grows (each gets closer
+    neighbours), the illumination of a fixed-size spread-out subset does not.
+    """
+    if len(zs) <= n:
+        return zs
+    chosen = [0]
+    best_sim = zs @ zs[0]
+    for _ in range(n - 1):
+        nxt = int(np.argmin(best_sim))
+        chosen.append(nxt)
+        best_sim = np.maximum(best_sim, zs @ zs[nxt])
+    return zs[chosen]

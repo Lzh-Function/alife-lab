@@ -99,6 +99,26 @@ p = 0.024 — the pre-declared hypothesis holds. Per run ≈ 158 s with 4 runs s
 peak torch pool 884 MiB, worker RSS 2.1 GB. Evidence: E1 for "CLIP rates these patterns as
 more cell-like"; nothing here says they are cells.
 
+## Novelty search and IMGEP (ADR 0028)
+Sweep `search_explore_comparison` (confirmatory, seeds 1–5, 2000 evaluations, speed × mass
+grid): coverage random 0.089 ± 0.011, novelty 0.130 ± 0.005, IMGEP 0.150 ± 0.022,
+MAP-Elites 0.153 ± 0.011; novelty vs random and IMGEP vs random: Cliff's δ = 1.0, exact
+p = 0.0079 (Holm 0.024) — both pre-declared hypotheses hold. The random and MAP-Elites values
+equal those of the earlier sweep `search_qd_comparison` exactly (same seeds, different day).
+Pilot seeds 101–102: novelty 0.144–0.156, IMGEP 0.138–0.169.
+
+Exploratory sweep `search_asal_illumination` (multichannel ASAL, seeds 1–3, 640 evaluations,
+GPU, runs serialised by max_active_gpu_jobs = 1): illumination of 32 farthest-point viable
+candidates, random −0.908, novelty in CLIP space −0.903 (δ = 0.78, p = 0.2), CMA-ES −0.929
+(δ = −1, p = 0.1). CMA-ES concentrates its looks; novelty is at most slightly more diverse
+than uniform sampling here — not established.
+
+## Prompt-specificity assay (claim `clip_prompt_specific`, plan clip-1)
+Multichannel CLIP candidate (sweep run, CMA-ES seed 1): reproduce 0.2957 = record, +0.043
+over blank, +0.064 over the best unrelated prompt ("a car"), 2 × horizon +0.026 over blank,
++0.048 over the base creature → validated, E2. Single-channel best candidate (0.2898):
+specific (+0.055) but the look fades over 2 × horizon (0.250 < blank 0.254) → rejected.
+
 ## Limitations
 Lenia is the only target. The centroid speed is not a creature tracker (separate blobs share a
 centroid). With the seed-free pattern initialisation, extra search/holdout seeds repeat the same

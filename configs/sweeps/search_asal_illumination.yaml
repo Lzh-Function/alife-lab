@@ -1,0 +1,19 @@
+# Exploratory: diversity of looks (illumination of 32 farthest-point-selected viable candidates
+# in CLIP space) after 16 x 40 evaluations for novelty search in CLIP space, uniform random
+# search and CMA-ES on the "cell" score. Pilot seed 101 excluded. No hypothesis declared.
+schema_version: 1
+sweep:
+  name: search_asal_illumination
+  base_preset: search_asal_lenia_mc_illuminate
+  overrides:
+    observations:
+      metrics: [best_score, viable_fraction, evaluations, blank_score, illumination]
+  seeds: [1, 2, 3]
+  factors:
+    - path: dynamics.algorithm
+      values: [random, novelty, cma_es]
+      labels: [random, novelty, cma_es]
+  reference_condition: 0
+  endpoint: {metric: illumination, at: final}
+  design: exploratory
+  profile_id: local_gpu

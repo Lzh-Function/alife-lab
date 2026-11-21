@@ -183,6 +183,8 @@ export const FORM_FIELDS: Record<SubstrateId, FormField[]> = {
       options: [
         { value: "cma_es", labelKey: "form.search.algorithm.cma_es" },
         { value: "map_elites", labelKey: "form.search.algorithm.map_elites" },
+        { value: "novelty", labelKey: "form.search.algorithm.novelty" },
+        { value: "imgep", labelKey: "form.search.algorithm.imgep" },
         { value: "random", labelKey: "form.search.algorithm.random" },
       ],
     },
