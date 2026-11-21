@@ -1,0 +1,11 @@
+preset:
+  id: connectome_sysid_fly_shuffled_control
+  scenario: connectome_sysid_fly_olfactory.yaml
+  title_key: preset.connectome_sysid_fly_shuffled_control.title
+  description_key: preset.connectome_sysid_fly_shuffled_control.description
+  overrides:
+    experiment:
+      name: connectome_sysid_fly_shuffled_control
+      wiring: shuffled_control
+  expected_observation: 'Negative control: same recording and PyTorch optimizer on degree-preserving shuffled wiring fails to match biological wiring on unobserved neurons and hidden sign-flip detection.'
+  negative_control: preset connectome_sysid_fly_olfactory (biological FlyWire wiring)

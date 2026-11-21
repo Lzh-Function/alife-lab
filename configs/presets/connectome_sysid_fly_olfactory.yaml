@@ -1,0 +1,8 @@
+preset:
+  id: connectome_sysid_fly_olfactory
+  scenario: connectome_sysid_fly_olfactory.yaml
+  title_key: preset.connectome_sysid_fly_olfactory.title
+  description_key: preset.connectome_sysid_fly_olfactory.description
+  overrides: {}
+  expected_observation: 'FlyWire v783 olfactory-AL-MB-LH subcircuit (11,276 cells, 1,105,291 edges; only 25% recorded): fitting recovers hidden sign flips and lifts unseen-stimulus prediction on the 8,457 unobserved neurons well above shuffled wiring.'
+  negative_control: preset connectome_sysid_fly_shuffled_control (degree-preserving shuffled wiring)

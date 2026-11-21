@@ -187,11 +187,14 @@ _ALLOWED_OVERRIDE_KEYS = {
     "qd",
     "asal",
     "dataset_id",
+    "subcircuit_id",
     "wiring",
     "stimuli",
     "silenced_ports",
     "silenced_cell_types",
     "plasticity",
+    "mechanisms",
+    "observation",
 }
 
 

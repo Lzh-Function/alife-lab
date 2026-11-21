@@ -651,9 +651,7 @@ def cmd_connectome(args: argparse.Namespace) -> int:
 
         if args.connectome_cmd == "summary":
             t0 = time.perf_counter()
-            pack = load_connectome_pack(
-                args.dataset_id, ds_dir, verify_hashes=not args.no_verify
-            )
+            pack = load_connectome_pack(args.dataset_id, ds_dir, verify_hashes=not args.no_verify)
             load_s = round(time.perf_counter() - t0, 3)
             summary = summarize_connectome_pack(pack)
             summary["measured"] = {"load_seconds": load_s}
@@ -835,6 +833,146 @@ def cmd_connectome(args: argparse.Namespace) -> int:
                     f"no_dan={sm['changed_edges_no_dan']['mean']:.1f})"
                 )
             return 0
+
+        if args.connectome_cmd in ("sysid", "sysid-map"):
+            from alife_lab.connectome.subcircuit import (
+                extract_subcircuit,
+                make_synthetic_olfactory_pack,
+            )
+            from alife_lab.connectome.sysid import (
+                HiddenMechanismSpec,
+                ObservationSpec,
+                SysIDTrainConfig,
+                run_hidden_truth_experiment,
+                run_observability_study,
+            )
+
+            if args.dataset_id == "synthetic_olfactory":
+                pack = make_synthetic_olfactory_pack()
+                sc_id = "full"
+            else:
+                pack = load_connectome_pack(
+                    args.dataset_id, ds_dir, verify_hashes=not args.no_verify
+                )
+                sc_id = args.subcircuit
+            sub_ref = extract_subcircuit(pack, subcircuit_id=sc_id, wiring="reference")
+            mechs = {m.strip().lower() for m in args.mechanisms.split(",") if m.strip()}
+            all_on = "all" in mechs
+            m_spec = HiddenMechanismSpec(
+                tau_enabled=all_on or ("tau" in mechs),
+                sign_flip_fraction=args.sign_flip_fraction if (all_on or "sign" in mechs) else 0.0,
+                neuromod_enabled=all_on or ("neuromod" in mechs),
+                gap_junctions_enabled=all_on or ("gap" in mechs),
+                gap_candidates=args.gap_candidates,
+            )
+            t_cfg = SysIDTrainConfig(
+                epochs=args.epochs,
+                lr=args.lr,
+                n_restarts=args.restarts,
+                device=args.device,
+            )
+            if args.connectome_cmd == "sysid":
+                obs_classes = tuple(c.strip() for c in args.obs_classes.split(",") if c.strip())
+                sub_shuf = (
+                    None
+                    if args.no_shuffled
+                    else extract_subcircuit(
+                        pack,
+                        subcircuit_id=sc_id,
+                        wiring="shuffled_control",
+                        shuffle_seed=args.seed,
+                    )
+                )
+                report = run_hidden_truth_experiment(
+                    sub_ref,
+                    sub_shuffled=sub_shuf,
+                    mech=m_spec,
+                    obs=ObservationSpec(
+                        obs_fraction=args.obs_fraction,
+                        obs_classes=obs_classes,
+                        bin_ms=args.bin_ms,
+                        noise_sd=args.noise_sd,
+                    ),
+                    cfg=t_cfg,
+                    seed=args.seed,
+                )
+                if args.json:
+                    _print_json(report)
+                else:
+                    c = report["circuit"]
+                    u = report["untrained"]
+                    rb = report["reference_best"]
+                    sh = report["shuffled_control"]
+                    idn = report["identifiability"]
+                    print(
+                        f"sysid {report['dataset_id']} ({report['subcircuit_id']}) "
+                        f"cells={c['num_cells']:,} obs={c['observed_cells']:,} "
+                        f"edges={c['num_edges']:,} device={report['device']} "
+                        f"wall={report['wall_seconds']:.2f}s vram={report['peak_vram_mb']:.1f}MiB"
+                    )
+                    print(
+                        f"  untrained : heldout_all_r2={u['heldout_all_r2']} "
+                        f"unobs_r2={u['heldout_unobs_r2']} sign_auroc={u['sign_flip_auroc']}"
+                    )
+                    print(
+                        f"  reference : heldout_all_r2={rb['heldout_all_r2']} "
+                        f"unobs_r2={rb['heldout_unobs_r2']} tau_r={rb['tau_pearson_r']} "
+                        f"sign_auroc={rb['sign_flip_auroc']} nm_r={rb['neuromod_pearson_r']} "
+                        f"gap_auroc={rb['gap_auroc']}"
+                    )
+                    if sh is not None:
+                        print(
+                            f"  shuffled  : heldout_all_r2={sh['heldout_all_r2']} "
+                            f"unobs_r2={sh['heldout_unobs_r2']} tau_r={sh['tau_pearson_r']} "
+                            f"sign_auroc={sh['sign_flip_auroc']}"
+                        )
+                    print(
+                        f"  identifiability: {idn['verdict']} "
+                        f"(restarts={idn['n_restarts']}, fit_spread={idn['fit_r2_spread']}, "
+                        f"tau_sd={idn['tau_disagreement_ms']}ms, "
+                        f"unobs_spread={idn['heldout_unobs_r2_spread']})"
+                    )
+                return 0
+
+            fractions = tuple(float(x.strip()) for x in args.fractions.split(",") if x.strip())
+            classes = tuple(c.strip() for c in args.classes.split(",") if c.strip())
+            map_rep = run_observability_study(
+                sub_ref,
+                fractions=fractions,
+                class_targets=classes,
+                mech=m_spec,
+                bin_ms=args.bin_ms,
+                noise_sd=args.noise_sd,
+                cfg=t_cfg,
+                seed=args.seed,
+            )
+            if args.json:
+                _print_json(map_rep)
+            else:
+                print(
+                    f"sysid-map {map_rep['dataset_id']} ({map_rep['subcircuit_id']}) "
+                    f"wall={map_rep['wall_seconds']:.2f}s"
+                )
+                print(
+                    "  Fraction curve "
+                    "(obs_fraction -> obs_cells | unobs_r2 | tau_r | sign_auroc | verdict):"
+                )
+                for r in map_rep["fraction_curve"]:
+                    rb = r["reference_best"]
+                    print(
+                        f"    frac={r['obs_fraction']:.2f} ({r['observed_cells']:5d} cells): "
+                        f"unobs_r2={rb['heldout_unobs_r2']} tau_r={rb['tau_pearson_r']} "
+                        f"sign_auroc={rb['sign_flip_auroc']} [{r['identifiability']['verdict']}]"
+                    )
+                print("  Cell-class observability map (sorted by heldout_unobs_r2):")
+                for r in map_rep["cell_class_map"]:
+                    rb = r["reference_best"]
+                    print(
+                        f"    class={r['obs_class']:14s} ({r['observed_cells']:5d} cells): "
+                        f"unobs_r2={rb['heldout_unobs_r2']} tau_r={rb['tau_pearson_r']} "
+                        f"sign_auroc={rb['sign_flip_auroc']} [{r['identifiability']['verdict']}]"
+                    )
+            return 0
     except (DatasetError, ValueError) as exc:
         print(f"connectome error: {exc}", file=sys.stderr)
         return 1
@@ -984,6 +1122,56 @@ def build_parser() -> argparse.ArgumentParser:
     cpav.add_argument("--backend", choices=["auto", "numpy", "cupy"], default="auto")
     cpav.add_argument("--no-verify", action="store_true")
     cpav.add_argument("--json", action="store_true")
+
+    csid = csub.add_parser(
+        "sysid",
+        help="run F5 hidden-truth connectome system identification and identifiability check",
+    )
+    csid.add_argument("dataset_id")
+    csid.add_argument(
+        "--subcircuit", choices=["olfactory_mb_lh", "full"], default="olfactory_mb_lh"
+    )
+    csid.add_argument(
+        "--mechanisms", default="all", help="all or comma list: tau,sign,neuromod,gap"
+    )
+    csid.add_argument("--sign-flip-fraction", type=float, default=0.15)
+    csid.add_argument("--gap-candidates", type=int, default=128)
+    csid.add_argument("--obs-fraction", type=float, default=0.25)
+    csid.add_argument("--obs-classes", default="", help="comma list of cell classes to record")
+    csid.add_argument("--bin-ms", type=float, default=10.0)
+    csid.add_argument("--noise-sd", type=float, default=0.015)
+    csid.add_argument("--epochs", type=int, default=100)
+    csid.add_argument("--lr", type=float, default=0.06)
+    csid.add_argument("--restarts", type=int, default=3)
+    csid.add_argument("--seed", type=int, default=1)
+    csid.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
+    csid.add_argument("--no-shuffled", action="store_true")
+    csid.add_argument("--no-verify", action="store_true")
+    csid.add_argument("--json", action="store_true")
+
+    cmap = csub.add_parser(
+        "sysid-map",
+        help="run F5 observability curve (fraction sweep) and cell-class observability map",
+    )
+    cmap.add_argument("dataset_id")
+    cmap.add_argument(
+        "--subcircuit", choices=["olfactory_mb_lh", "full"], default="olfactory_mb_lh"
+    )
+    cmap.add_argument("--mechanisms", default="all")
+    cmap.add_argument("--sign-flip-fraction", type=float, default=0.15)
+    cmap.add_argument("--gap-candidates", type=int, default=128)
+    cmap.add_argument("--fractions", default="0.05,0.20,0.50,1.0")
+    cmap.add_argument("--classes", default="ALPN,ALLN,Kenyon_Cell,MBON,LHLN")
+    cmap.add_argument("--bin-ms", type=float, default=10.0)
+    cmap.add_argument("--noise-sd", type=float, default=0.015)
+    cmap.add_argument("--epochs", type=int, default=80)
+    cmap.add_argument("--lr", type=float, default=0.06)
+    cmap.add_argument("--restarts", type=int, default=2)
+    cmap.add_argument("--seed", type=int, default=1)
+    cmap.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
+    cmap.add_argument("--no-verify", action="store_true")
+    cmap.add_argument("--json", action="store_true")
+
     p.set_defaults(func=cmd_connectome)
     return parser
 

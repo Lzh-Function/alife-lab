@@ -1,0 +1,45 @@
+schema_version: 1
+experiment:
+  name: connectome_sysid_olfactory_tiny
+  mode: exploratory
+  substrate: connectome_sysid
+  seed: 1
+  dataset_id: synthetic_olfactory
+  subcircuit_id: full
+  wiring: reference
+  mechanisms:
+    tau_enabled: true
+    sign_flip_fraction: 0.15
+    neuromod_enabled: true
+    gap_junctions_enabled: true
+    gap_candidates: 24
+    gap_active_fraction: 0.25
+  observation:
+    obs_fraction: 0.5
+    obs_classes: []
+    bin_ms: 10.0
+    noise_sd: 0.01
+  dynamics:
+    clock_unit: epoch
+    numeric_policy: float32_torch
+    dt_ms: 2.0
+    sim_ms: 100.0
+    n_train_stimuli: 8
+    n_holdout_stimuli: 4
+    lr: 0.06
+    l1_gap: 0.001
+    l2_reg: 0.0005
+    restart_index: 0
+  runner:
+    max_steps: 120
+    checkpoint_interval: 30
+  observations:
+    metrics:
+      - loss
+      - train_obs_r2
+      - heldout_all_r2
+      - heldout_unobs_r2
+      - tau_pearson_r
+      - sign_flip_auroc
+      - neuromod_pearson_r
+      - gap_auroc

@@ -19,7 +19,7 @@ test("connectome F2: create, search, stimulate/silence, 2D & 3D brain view, rewi
     await page.getByTestId("input-name").fill("e2e_connectome_f2");
     await page.getByTestId("field-runner.max_steps").fill("500");
     await page.getByTestId("field-runner.checkpoint_interval").fill("25");
-    await page.getByTestId("input-profile").selectOption("cpu_dev");
+    await page.getByTestId("input-profile").selectOption("local_cpu");
     await page.getByTestId("input-tps").fill("80");
     await expect(page.getByTestId("validation")).toContainText("OK");
     await page.getByTestId("btn-create").click();
@@ -129,7 +129,7 @@ test("connectome F4: Mushroom Body KC->MBON plasticity displays changed synapses
     await page.getByTestId("input-name").fill("e2e_connectome_f4");
     await page.getByTestId("field-runner.max_steps").fill("300");
     await page.getByTestId("field-runner.checkpoint_interval").fill("50");
-    await page.getByTestId("input-profile").selectOption("cpu_dev");
+    await page.getByTestId("input-profile").selectOption("local_cpu");
     await page.getByTestId("input-tps").fill("0");
     await expect(page.getByTestId("validation")).toContainText("OK");
     await page.getByTestId("btn-create").click();
@@ -156,6 +156,38 @@ test("connectome F4: Mushroom Body KC->MBON plasticity displays changed synapses
     await expect(page).not.toHaveURL(new RegExp(runId), { timeout: 20_000 });
     expect(await tick(page)).toBe(50);
     await expect(page.getByTestId("lineage")).toContainText(runId);
+  } finally {
+    await stopServer(server);
+  }
+});
+
+test("connectome F5: hidden-truth system ID runs in browser, renders RGB diagnostics and reports recovery", async ({ page }) => {
+  const server = startServer();
+  await waitHealthy();
+  try {
+    await page.goto(`${BASE}/#/catalog`);
+    await openPreset(page, "connectome_sysid_olfactory_tiny");
+    await page.getByTestId("input-name").fill("e2e_connectome_f5");
+    await page.getByTestId("field-runner.max_steps").fill("80");
+    await page.getByTestId("field-runner.checkpoint_interval").fill("40");
+    await page.getByTestId("input-profile").selectOption("local_cpu");
+    await page.getByTestId("input-tps").fill("0");
+    await expect(page.getByTestId("validation")).toContainText("OK");
+    await page.getByTestId("btn-create").click();
+    await expect(page).toHaveURL(/#\/lab\/run_[0-9a-f]{16}/);
+
+    await expect(page.getByTestId("world-canvas")).toBeVisible({ timeout: 25_000 });
+    await expectState(page, "completed");
+    await expect
+      .poll(async () => Number(await page.getByTestId("metric-train_obs_r2").textContent()), {
+        timeout: 20_000,
+      })
+      .toBeGreaterThan(0.8);
+    await expect
+      .poll(async () => Number(await page.getByTestId("metric-heldout_all_r2").textContent()), {
+        timeout: 20_000,
+      })
+      .toBeGreaterThan(0.5);
   } finally {
     await stopServer(server);
   }

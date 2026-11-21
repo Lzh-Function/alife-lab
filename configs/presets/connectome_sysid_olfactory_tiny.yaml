@@ -1,0 +1,8 @@
+preset:
+  id: connectome_sysid_olfactory_tiny
+  scenario: connectome_sysid_olfactory_tiny.yaml
+  title_key: preset.connectome_sysid_olfactory_tiny.title
+  description_key: preset.connectome_sysid_olfactory_tiny.description
+  overrides: {}
+  expected_observation: 'Offline 40-neuron olfactory hidden-truth test (50% cells recorded, 10 ms bins, noise): PyTorch fitting recovers hidden tau_m, sign flips, neuromodulation and gap junctions while lifting unseen-stimulus heldout R^2.'
+  negative_control: preset connectome_sysid_fly_shuffled_control (shuffled wiring degrades unobserved prediction)

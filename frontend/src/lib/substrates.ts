@@ -4,12 +4,12 @@
 import type { Frame } from "./api";
 import { popcount } from "./api";
 
-export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network" | "nca_train" | "nca" | "pd_nca" | "protocell" | "agent_world" | "lenia_mc" | "creature" | "search" | "connectome";
+export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network" | "nca_train" | "nca" | "pd_nca" | "protocell" | "agent_world" | "lenia_mc" | "creature" | "search" | "connectome" | "connectome_sysid";
 
 /** Substrates rendered as continuous particles (vs. grids). */
 export const PARTICLE_SUBSTRATES = new Set(["boids", "particle_life"]);
 /** Substrates rendered as a continuous scalar field (codec field_u8). */
-export const FIELD_SUBSTRATES = new Set(["lenia", "flow_lenia", "gray_scott", "physarum", "reaction_network", "nca_train", "nca", "pd_nca", "protocell", "agent_world", "lenia_mc", "search"]);
+export const FIELD_SUBSTRATES = new Set(["lenia", "flow_lenia", "gray_scott", "physarum", "reaction_network", "nca_train", "nca", "pd_nca", "protocell", "agent_world", "lenia_mc", "search", "connectome_sysid"]);
 /** Non-spatial substrates whose display is a species x time image (rows = species). */
 export const ROW_DISPLAY_SUBSTRATES = new Set(["reaction_network"]);
 
@@ -36,6 +36,9 @@ export function displayWorld(substrate: string, experiment: Record<string, unkno
   if (substrate === "reaction_network") {
     const species = ((experiment.dynamics as { species?: unknown[] } | undefined)?.species ?? []).length;
     return { width: 256, height: Math.max(1, species) };
+  }
+  if (substrate === "connectome_sysid") {
+    return { width: 160, height: 120 };
   }
   return { width: 64, height: 64 };
 }
@@ -160,6 +163,11 @@ export const TOOLS: Record<SubstrateId, ToolDescriptor> = {
     modes: ["off"],
     radius: { min: 0, max: 0, step: 1, initial: 0 },
     noteKey: "lab.tool.connectome_note",
+  },
+  connectome_sysid: {
+    modes: ["off", "inspect"],
+    radius: { min: 0, max: 0, step: 1, initial: 0 },
+    noteKey: "lab.tool.connectome_sysid_note",
   },
 };
 
@@ -498,6 +506,23 @@ export const FORM_FIELDS: Record<SubstrateId, FormField[]> = {
     { path: "dynamics.r_max", labelKey: "form.particles.r_max", kind: "float", min: 0.1 },
     { path: "dynamics.force_factor", labelKey: "form.particles.force_factor", kind: "float", min: 0 },
     { path: "dynamics.friction_half_life", labelKey: "form.particles.friction_half_life", kind: "float", min: 0.001 },
+    ...RUNNER,
+  ],
+  connectome_sysid: [
+    { path: "seed", labelKey: "form.seed", kind: "int", min: 0 },
+    {
+      path: "wiring",
+      labelKey: "form.connectome.wiring",
+      kind: "select",
+      options: [
+        { value: "reference", labelKey: "form.connectome.wiring.reference" },
+        { value: "shuffled_control", labelKey: "form.connectome.wiring.shuffled_control" },
+      ],
+    },
+    { path: "observation.obs_fraction", labelKey: "form.sysid.obs_fraction", kind: "float", min: 0.01, max: 1, step: 0.05 },
+    { path: "observation.bin_ms", labelKey: "form.sysid.bin_ms", kind: "float", min: 2, max: 50, step: 2 },
+    { path: "observation.noise_sd", labelKey: "form.sysid.noise_sd", kind: "float", min: 0, max: 0.2, step: 0.005 },
+    { path: "dynamics.lr", labelKey: "form.nca.lr", kind: "float", min: 0.001, max: 0.5, step: 0.01 },
     ...RUNNER,
   ],
 };

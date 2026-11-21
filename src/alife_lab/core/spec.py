@@ -1855,6 +1855,97 @@ class ConnectomeExperiment(_Frozen):
         return out
 
 
+# --------------------------------------------------------------------------- #
+# Connectome System Identification (Phase F5: hidden-truth external fitting)
+# --------------------------------------------------------------------------- #
+
+
+ConnectomeSysIDDatasetId = Literal["flywire_783", "synthetic_olfactory"]
+ConnectomeSubcircuitId = Literal["olfactory_mb_lh", "full"]
+
+
+class ConnectomeSysIDMechanisms(_Frozen):
+    tau_enabled: bool = True
+    sign_flip_fraction: Annotated[float, Field(ge=0.0, le=0.5)] = 0.15
+    neuromod_enabled: bool = True
+    gap_junctions_enabled: bool = True
+    gap_candidates: Annotated[int, Field(ge=0, le=2048)] = 64
+    gap_active_fraction: Annotated[float, Field(ge=0.0, le=1.0)] = 0.25
+
+
+class ConnectomeSysIDObservation(_Frozen):
+    obs_fraction: Annotated[float, Field(gt=0.0, le=1.0)] = 0.25
+    obs_classes: tuple[str, ...] = ()
+    bin_ms: Annotated[float, Field(ge=2.0, le=100.0)] = 10.0
+    noise_sd: Annotated[float, Field(ge=0.0, le=0.5)] = 0.015
+
+
+class ConnectomeSysIDDynamics(_Frozen):
+    clock_unit: Literal["epoch"] = "epoch"
+    numeric_policy: Literal["float32_torch"] = "float32_torch"
+    dt_ms: Annotated[float, Field(ge=0.5, le=10.0)] = 2.0
+    sim_ms: Annotated[float, Field(ge=20.0, le=500.0)] = 100.0
+    n_train_stimuli: Annotated[int, Field(ge=2, le=32)] = 8
+    n_holdout_stimuli: Annotated[int, Field(ge=1, le=16)] = 4
+    lr: Annotated[float, Field(gt=0.0, le=1.0)] = 0.06
+    l1_gap: Annotated[float, Field(ge=0.0, le=1.0)] = 1e-3
+    l2_reg: Annotated[float, Field(ge=0.0, le=1.0)] = 5e-4
+    restart_index: Annotated[int, Field(ge=0, le=32)] = 0
+
+
+ConnectomeSysIDMetric = Literal[
+    "loss",
+    "train_obs_r2",
+    "heldout_all_r2",
+    "heldout_obs_r2",
+    "heldout_unobs_r2",
+    "tau_pearson_r",
+    "tau_mae_ms",
+    "sign_flip_auroc",
+    "sign_flip_accuracy",
+    "neuromod_pearson_r",
+    "gap_auroc",
+    "gap_pearson_r",
+]
+
+
+class ConnectomeSysIDObservationSpec(_Frozen):
+    metrics: tuple[ConnectomeSysIDMetric, ...] = (
+        "loss",
+        "train_obs_r2",
+        "heldout_all_r2",
+        "heldout_unobs_r2",
+        "tau_pearson_r",
+        "sign_flip_auroc",
+        "neuromod_pearson_r",
+        "gap_auroc",
+    )
+
+
+class ConnectomeSysIDExperiment(_Frozen):
+    name: _NAME
+    mode: Literal["reference", "exploratory"] = "exploratory"
+    substrate: Literal["connectome_sysid"]
+    seed: _SEED
+    dataset_id: ConnectomeSysIDDatasetId = "synthetic_olfactory"
+    subcircuit_id: ConnectomeSubcircuitId = "olfactory_mb_lh"
+    wiring: ConnectomeWiring = "reference"
+    mechanisms: ConnectomeSysIDMechanisms = ConnectomeSysIDMechanisms()
+    observation: ConnectomeSysIDObservation = ConnectomeSysIDObservation()
+    dynamics: ConnectomeSysIDDynamics = ConnectomeSysIDDynamics()
+    runner: RunnerSpec = RunnerSpec(max_steps=120, checkpoint_interval=30)
+    observations: ConnectomeSysIDObservationSpec = ConnectomeSysIDObservationSpec()
+
+    @model_validator(mode="after")
+    def _check_mode(self) -> ConnectomeSysIDExperiment:
+        if self.mode == "reference":
+            raise ValueError(
+                "connectome_sysid is an external hidden-truth fitting benchmark without a "
+                "biological reference mode; use mode='exploratory'"
+            )
+        return self
+
+
 SearchExperiment.model_rebuild()
 
 
@@ -1876,7 +1967,8 @@ AnyExperiment = Annotated[
     | LeniaMCExperiment
     | CreatureExperiment
     | SearchExperiment
-    | ConnectomeExperiment,
+    | ConnectomeExperiment
+    | ConnectomeSysIDExperiment,
     Field(discriminator="substrate"),
 ]
 

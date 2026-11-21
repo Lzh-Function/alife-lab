@@ -1,6 +1,6 @@
-# Reference fidelity — Adult *Drosophila* connectome (`flywire_783`, F0–F4)
+# Reference fidelity — Adult *Drosophila* connectome (`flywire_783`, F0–F5)
 
-Status: **F0–F4 complete** (2026-11-21); F5+ not yet implemented.
+Status: **F0–F5 complete** (2026-11-21); F6+ not yet implemented.
 
 > **Honest framing:** This dataset and the upcoming model are a hypothesis-testing
 > simplification derived from one adult female *Drosophila melanogaster* wiring diagram, not a
@@ -295,6 +295,78 @@ Parameters: `odor_hz = 150`, `dan_hz = 220`, `probe_ms = 300`, `trial_ms = 200`,
 3. **Bitwise CPU/GPU & checkpoint equivalence:** Verified on `synthetic_mb` in
    `tests/reference/test_connectome_f4.py` (`exact_equal=True`, `max_plastic_scale_diff=0.0`),
    and verified in Chromium via Playwright E2E `e2e/connectome.spec.ts` (3/3 passed).
+
+---
+
+## Phase F5: Hidden-Truth System Identification on FlyWire v783 Olfactory–MB–LH Subcircuit (2026-11-21)
+
+> **Honest framing:** Phase F5 is an **external gradient-based system identification benchmark**
+> (`connectome_sysid` substrate / `alife connectome sysid`), using a differentiable firing-rate
+> connectome in PyTorch. Recovering synthetic hidden mechanisms from simulated recordings tests
+> *identifiability under partial, coarse, noisy observations* — it does not prove biological truth.
+
+### 1. Subcircuit & measured GPU compute budget (RTX 5070 12 GiB)
+
+- Extracted subcircuit (`olfactory_mb_lh`): **11,276 cells**, **1,105,291 internal edges**,
+  **1,094 cell types**, **17 cell classes** (Antennal Lobe `AL_L/R` + `olfactory` ORNs +
+  Mushroom Body `Kenyon_Cell`/`MBON`/`DAN` + Lateral Horn `LH_L/R`), driven by 12 disjoint
+  glomerular ORN input groups (8 training odor mixtures, 4 unseen holdout odor mixtures).
+- Single BPTT forward+backward epoch (`B = 8`, `T = 50` steps = `100 ms`, `dt = 2 ms`):
+  **108.4 ms/epoch**, **184.4 MiB** (bare benchmark) / **340.3 MiB peak VRAM** during full
+  3-restart + shuffled-control experiment (`58.23 s` total wall time).
+
+### 2. Main hidden-truth recovery benchmark (25% cells recorded = 2,819 obs / 8,457 unobs, 10 ms bins, noise SD 0.015)
+
+Command: `uv run alife connectome sysid flywire_783 --subcircuit olfactory_mb_lh --obs-fraction 0.25 --bin-ms 10 --noise-sd 0.015 --epochs 100 --restarts 3 --device cuda`
+Hidden teacher mechanisms: heterogeneous per-type `tau_m` (1,094 types), 15% hidden sign flips
+(164 active types), 17-class neuromodulation (gain + bias), 128 candidate electrical gap junctions
+(32 active).
+
+| Arm | Unseen `heldout_all_r2` | Unseen `heldout_unobs_r2` (8,457 unrecorded cells) | `tau_pearson_r` | `sign_flip_auroc` | `neuromod_pearson_r` | `gap_auroc` |
+|---|---:|---:|---:|---:|---:|---:|
+| `untrained` (uniform baseline) | 0.4934 | 0.4909 | n/a | 0.5000 | n/a | 0.5000 |
+| **`reference` (biological FlyWire wiring, best of 3)** | **0.9694** | **0.9619** | **0.4895** | **0.8319** | **0.3567** | 0.5342 |
+| `shuffled_control` (degree-preserving shuffled wiring) | 0.6254 | 0.5838 | 0.1979 | 0.4473 | — | — |
+
+- Multi-restart identifiability (`n_restarts = 3` on identical recording): `verdict = well_identified`
+  (`fit_r2_spread = 0.0012`, `heldout_unobs_r2_spread = 0.0031`, `tau_disagreement_ms = 1.784 ms`).
+
+### 3. Observability curve & cell-class observability map (`alife connectome sysid-map`, 160.03 s)
+
+#### Recording fraction curve ("how much recording is needed?")
+
+| `obs_fraction` | Observed cells | Unseen `heldout_unobs_r2` | `tau_pearson_r` | `sign_flip_auroc` | Identifiability verdict |
+|---:|---:|---:|---:|---:|---|
+| 0.05 | 564 | **0.8946** | 0.2021 | 0.7263 | `well_identified` |
+| 0.20 | 2,255 | **0.9421** | 0.4083 | 0.7861 | `well_identified` |
+| 0.50 | 5,638 | **0.9633** | 0.5936 | 0.8049 | `well_identified` |
+| 1.00 | 11,276 | **0.9773** | 0.6878 | 0.8125 | `well_identified` |
+
+#### Single-class observability map ("which cells are most informative to record?")
+
+| Recorded class only | Observed cells | Unseen `heldout_unobs_r2` | `tau_pearson_r` | `sign_flip_auroc` | Identifiability verdict |
+|---|---:|---:|---:|---:|---|
+| `LHLN` | 517 | **0.6978** | 0.0739 | 0.6187 | **`non_unique_sloppy`** |
+| `ALLN` | 429 | **0.6358** | 0.1324 | 0.5691 | `well_identified` |
+| `Kenyon_Cell` | 5,177 | **0.6118** | 0.0480 | 0.5974 | **`non_unique_sloppy`** |
+| `MBON` | 96 | **0.5711** | 0.0536 | 0.5786 | `partially_identifiable` |
+| `ALPN` | 685 | 0.2271 | **0.1499** | **0.6621** | **`non_unique_sloppy`** |
+
+### 4. Key honest findings & non-identifiability limits (F5)
+
+1. **Cross-layer stratified sampling dramatically beats single-layer recording:** Recording just
+   **564 random cells across layers (5%)** yields `heldout_unobs_r2 = 0.8946` and `well_identified`
+   solutions, outperforming **5,177 `Kenyon_Cell`s (46% of the circuit)** (`0.6118`,
+   `non_unique_sloppy`) because single-layer recordings leave upstream/downstream mechanisms
+   underdetermined.
+2. **Sparse single-pair gap junctions are near-unidentifiable at low coverage in large circuits:**
+   On the 40-cell `synthetic_olfactory` circuit at 50% coverage, gap-junction discovery reaches
+   `AUROC = 0.8241`. On 11,276 FlyWire neurons at 25% coverage, only `0.25^2 = 6.25%` of random
+   gap pairs have both endpoints observed, so `gap_auroc = 0.5342` (near chance) — an explicit,
+   quantified limit of partial recording.
+3. **Browser & offline CPU verification:** `tests/reference/test_connectome_f5.py` (4/4 passed on
+   CPU) and Playwright E2E `e2e/connectome.spec.ts` (4/4 passed) verify `connectome_sysid`
+   end-to-end without loading PyTorch in the FastAPI process.
 
 
 
