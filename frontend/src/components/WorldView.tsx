@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useImperativeHandle, useRef } from "react";
+import { forwardRef, lazy, Suspense, useCallback, useImperativeHandle, useRef } from "react";
 import type { Frame } from "../lib/api";
 import { FIELD_SUBSTRATES, PARTICLE_SUBSTRATES, ROW_DISPLAY_SUBSTRATES, TOOLS, type SubstrateId, type ToolState } from "../lib/substrates";
 import { useT } from "../i18n";
@@ -6,6 +6,10 @@ import { ParticleCanvas, type ParticleCanvasHandle } from "./ParticleCanvas";
 import { WorldCanvas, type WorldCanvasHandle } from "./WorldCanvas";
 import { SoupCanvas, type SoupCanvasHandle } from "./SoupCanvas";
 import { FieldCanvas, type FieldCanvasHandle } from "./FieldCanvas";
+import type { Scene3DHandle } from "./Scene3D";
+
+// three.js is loaded only when an embodied creature is shown.
+const Scene3D = lazy(() => import("./Scene3D").then((m) => ({ default: m.Scene3D })));
 
 export interface WorldViewHandle {
   draw: (frame: Frame) => void;
@@ -33,9 +37,12 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
   const particles = useRef<ParticleCanvasHandle>(null);
   const soup = useRef<SoupCanvasHandle>(null);
   const field = useRef<FieldCanvasHandle>(null);
+  const scene = useRef<Scene3DHandle>(null);
   useImperativeHandle(ref, () => ({
     draw: (frame: Frame) =>
-      substrate === "bff"
+      substrate === "creature"
+        ? scene.current?.draw(frame)
+        : substrate === "bff"
         ? soup.current?.draw(frame)
         : FIELD_SUBSTRATES.has(substrate)
           ? field.current?.draw(frame)
@@ -68,6 +75,14 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
     [tool, onIntervene, onInspect, substrate],
   );
 
+  if (substrate === "creature") {
+    // Inspection covers the whole creature; clicking the 3D view in inspect mode requests it.
+    return (
+      <Suspense fallback={<div className="scene3d muted">3D…</div>}>
+        <Scene3D ref={scene} onDisplayFps={onDisplayFps} testId={testId} width={Math.min(maxPixels ?? 720, 720)} onClick={inspecting ? () => onInspect?.(0, 0) : undefined} />
+      </Suspense>
+    );
+  }
   if (substrate === "bff") {
     return (
       <SoupCanvas

@@ -317,6 +317,31 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
           </label>
         </div>
         <ToolBar substrate={summary.substrate} tool={currentTool} setTool={setTool} disabled={!live} channels={summary.spec.experiment.dynamics?.channels ?? summary.spec.experiment.dynamics?.n_ncas ?? 1} />
+        {summary.substrate === "creature" && (
+          <div className="toolbar" role="group" aria-label={t("lab.push")} data-testid="push-panel">
+            <strong>{t("lab.push")}:</strong>
+            {(
+              [
+                ["+x", 1.5, 0],
+                ["-x", -1.5, 0],
+                ["+y", 0, 1.5],
+                ["-y", 0, -1.5],
+                ["up", 0, 0],
+              ] as const
+            ).map(([label, vx, vy]) => (
+              <button
+                key={label}
+                type="button"
+                data-testid={`push-${label}`}
+                disabled={!live}
+                onClick={() => onIntervene("push", label === "up" ? { vz: 2.5 } : { vx, vy })}
+              >
+                {t(`lab.push.${label}`)}
+              </button>
+            ))}
+            <span className="small muted">{t("lab.push.note")}</span>
+          </div>
+        )}
         {error && <p className="error" role="alert">{t("common.error")}: {error}</p>}
         {summary.restorable && <p className="notice">{t("lab.restorable")}</p>}
         {!live && !summary.restorable && <p className="muted">{t("lab.not_live")}</p>}

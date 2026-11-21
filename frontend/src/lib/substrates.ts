@@ -4,7 +4,7 @@
 import type { Frame } from "./api";
 import { popcount } from "./api";
 
-export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network" | "nca_train" | "nca" | "pd_nca" | "protocell" | "agent_world" | "lenia_mc" | "search";
+export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network" | "nca_train" | "nca" | "pd_nca" | "protocell" | "agent_world" | "lenia_mc" | "creature" | "search";
 
 /** Substrates rendered as continuous particles (vs. grids). */
 export const PARTICLE_SUBSTRATES = new Set(["boids", "particle_life"]);
@@ -88,6 +88,11 @@ export const TOOLS: Record<SubstrateId, ToolDescriptor> = {
     value: { initial: 1 },
     channelSelect: true,
     noteKey: "lab.tool.flow_lenia_note",
+  },
+  creature: {
+    modes: ["off", "inspect"],
+    radius: { min: 0, max: 0, step: 1, initial: 0 },
+    noteKey: "lab.tool.creature_note",
   },
   lenia_mc: {
     modes: ["off", "inspect", "paint", "erase"],
@@ -286,6 +291,23 @@ export const FORM_FIELDS: Record<SubstrateId, FormField[]> = {
     { path: "initialization.size", labelKey: "form.flow_lenia.init_size", kind: "int", min: 1, max: 1024 },
     { path: "dynamics.dt", labelKey: "form.flow_lenia.dt", kind: "float", min: 0.001, max: 10, step: 0.01 },
     { path: "dynamics.sigma", labelKey: "form.flow_lenia.sigma", kind: "float", min: 0.01, max: 5, step: 0.05 },
+    ...RUNNER,
+  ],
+  creature: [
+    { path: "dynamics.controller.frequency_hz", labelKey: "form.creature.frequency", kind: "float", min: 0.05, max: 5, step: 0.1 },
+    { path: "dynamics.gear", labelKey: "form.creature.gear", kind: "float", min: 1, max: 500, step: 5 },
+    { path: "dynamics.joint_stiffness", labelKey: "form.creature.stiffness", kind: "float", min: 0, max: 1000, step: 5 },
+    { path: "dynamics.friction", labelKey: "form.creature.friction", kind: "float", min: 0.05, max: 5, step: 0.1 },
+    { path: "dynamics.body.torso_radius", labelKey: "form.creature.torso", kind: "float", min: 0.05, max: 0.6, step: 0.05 },
+    {
+      path: "dynamics.controller.kind",
+      labelKey: "form.creature.controller",
+      kind: "select",
+      options: [
+        { value: "cpg", labelKey: "form.creature.controller.cpg" },
+        { value: "off", labelKey: "form.creature.controller.off" },
+      ],
+    },
     ...RUNNER,
   ],
   lenia_mc: [

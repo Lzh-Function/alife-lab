@@ -31,6 +31,10 @@ asal = [
     "safetensors>=0.6",
     "torch>=2.14",
 ]
+# MuJoCo physics (CPU, float64) for embodied creatures. MJX (JAX) was measured and not adopted
+# for small creatures: 4096-way MJX batches on an RTX 5070 reach ~0.37 M steps/s, one CPU
+# core ~0.18 M steps/s (ADR 0030).
+embodied = ["mujoco>=3.17"]
 
 [project.scripts]
 alife = "alife_lab.cli:main"
@@ -89,7 +93,7 @@ plugins = ["pydantic.mypy"]
 # pyarrow ships without type information.
 module = ["pyarrow", "pyarrow.*", "brotli", "numba", "numba.*", "cupy", "cupy.*", "jax", "jax.*",
           "torch", "torch.*", "open_clip", "open_clip.*", "safetensors", "safetensors.*",
-          "huggingface_hub", "huggingface_hub.*"]
+          "huggingface_hub", "huggingface_hub.*", "mujoco", "mujoco.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

@@ -1,0 +1,68 @@
+preset:
+  id: creature_hexapod_tripod
+  scenario: creature_quadruped.yaml
+  title_key: preset.creature_hexapod_tripod.title
+  description_key: preset.creature_hexapod_tripod.description
+  overrides:
+    experiment:
+      name: creature_hexapod_tripod
+      dynamics:
+        body:
+          torso_radius: 0.25
+          legs:
+          - angle_deg: 30
+            upper: 0.25
+            lower: 0.35
+            radius: 0.045
+          - angle_deg: 90
+            upper: 0.25
+            lower: 0.35
+            radius: 0.045
+          - angle_deg: 150
+            upper: 0.25
+            lower: 0.35
+            radius: 0.045
+          - angle_deg: 210
+            upper: 0.25
+            lower: 0.35
+            radius: 0.045
+          - angle_deg: 270
+            upper: 0.25
+            lower: 0.35
+            radius: 0.045
+          - angle_deg: 330
+            upper: 0.25
+            lower: 0.35
+            radius: 0.045
+        controller:
+          kind: cpg
+          frequency_hz: 1.5
+          amplitudes:
+          - 0.8
+          - 0.8
+          - 0.8
+          - 0.8
+          - 0.8
+          - 0.8
+          - 0.8
+          - 0.8
+          - 0.8
+          - 0.8
+          - 0.8
+          - 0.8
+          phases:
+          - 0
+          - 0.25
+          - 0.5
+          - 0.75
+          - 0
+          - 0.25
+          - 0.5
+          - 0.75
+          - 0
+          - 0.25
+          - 0.5
+          - 0.75
+  expected_observation: Six legs with a hand-designed tripod gait (alternating triples) stay upright (upright
+    > 0.95) but travel only about 0.1 m in 20 s; a body and gait for evolution to improve.
+  negative_control: preset creature_quadruped_off

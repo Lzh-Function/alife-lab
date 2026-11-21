@@ -1,0 +1,9 @@
+preset:
+  id: creature_quadruped_wave
+  scenario: creature_quadruped.yaml
+  title_key: preset.creature_quadruped_wave.title
+  description_key: preset.creature_quadruped_wave.description
+  overrides: {}
+  expected_observation: 'Hand-designed wave gait: the creature stays upright (upright > 0.85) and
+    creeps, about 1 m in 20 s. A starting point for evolution.'
+  negative_control: preset creature_quadruped_off (no motor torque)

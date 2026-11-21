@@ -37,6 +37,7 @@ ALWAYS_COMPUTED = {
     "protocell": {"population"},
     "agent_world": {"population"},
     "lenia_mc": set(),
+    "creature": set(),
     "search": set(),
 }
 UNIT_NOTE = (

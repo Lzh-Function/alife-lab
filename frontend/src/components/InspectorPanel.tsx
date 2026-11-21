@@ -102,6 +102,10 @@ export interface Inspection extends Partial<SearchInspection> {
   selected_species?: { name: string; count: number; constant: boolean; consumed_by: string[]; produced_by: string[] } | null;
   reactions?: Array<{ id: string; label: string; equation: string; products: string; rate: number; enabled: boolean; propensity: number; fired: number }>;
   cycle_candidates?: { autocatalysis: Array<{ species: string; reaction: string }>; cycles: Array<{ species: string[]; reactions: string[] }>; truncated: boolean; rule: string };
+  // creature
+  torso?: { position: number[]; velocity: number[]; upright: number };
+  legs?: Array<{ leg: number; hip_deg: number; knee_deg: number; hip_ctrl: number; knee_ctrl: number; foot_on_ground: boolean }>;
+  mass_kg?: number;
   // lenia_mc
   values?: number[];
   next_values?: number[];
@@ -526,6 +530,44 @@ export function InspectorPanel({
                 {data.du_dt?.toExponential(3)} / {data.dv_dt?.toExponential(3)}
               </dd>
             </dl>
+          )}
+          {data.substrate === "creature" && data.torso && (
+            <div data-testid="inspector-creature">
+              <dl className="stats small">
+                <dt>{t("inspector.creature.position")}</dt>
+                <dd className="mono">{data.torso.position.map((v) => v.toFixed(2)).join(", ")}</dd>
+                <dt>{t("inspector.creature.velocity")}</dt>
+                <dd className="mono">{data.torso.velocity.map((v) => v.toFixed(2)).join(", ")}</dd>
+                <dt>{t("metric.upright")}</dt>
+                <dd className="mono">{data.torso.upright.toFixed(3)}</dd>
+                <dt>{t("inspector.creature.mass")}</dt>
+                <dd className="mono">{data.mass_kg?.toFixed(1)} kg</dd>
+              </dl>
+              <table className="table small mono">
+                <thead>
+                  <tr>
+                    <th>{t("inspector.creature.leg")}</th>
+                    <th>{t("inspector.creature.hip")}</th>
+                    <th>{t("inspector.creature.knee")}</th>
+                    <th>{t("inspector.creature.ground")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.legs?.map((l) => (
+                    <tr key={l.leg}>
+                      <td>{l.leg}</td>
+                      <td>
+                        {l.hip_deg.toFixed(0)}° ({l.hip_ctrl.toFixed(2)})
+                      </td>
+                      <td>
+                        {l.knee_deg.toFixed(0)}° ({l.knee_ctrl.toFixed(2)})
+                      </td>
+                      <td>{l.foot_on_ground ? "●" : "○"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
           {data.substrate === "lenia_mc" && data.values && (
             <div data-testid="inspector-lenia-mc">

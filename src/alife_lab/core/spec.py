@@ -1293,6 +1293,86 @@ class LeniaMCExperiment(_Frozen):
 
 
 # --------------------------------------------------------------------------- #
+# Embodied creature (MuJoCo, CPU float64): a torso with legs driven by a CPG controller
+# --------------------------------------------------------------------------- #
+
+MAX_CREATURE_LEGS = 8
+
+
+class CreatureLeg(_Frozen):
+    """A leg attached on the torso's equator at ``angle_deg``: a hip joint swings it around the
+    vertical axis, a knee joint lifts the lower segment around the leg's tangent axis."""
+
+    angle_deg: Annotated[float, Field(ge=0.0, lt=360.0)]
+    upper: Annotated[float, Field(ge=0.05, le=1.0)] = 0.3  # thigh length (m)
+    lower: Annotated[float, Field(ge=0.05, le=1.0)] = 0.4  # shin length (m)
+    radius: Annotated[float, Field(ge=0.02, le=0.15)] = 0.05
+
+
+class CreatureBody(_Frozen):
+    torso_radius: Annotated[float, Field(ge=0.05, le=0.6)] = 0.25
+    legs: Annotated[list[CreatureLeg], Field(min_length=1, max_length=MAX_CREATURE_LEGS)]
+
+
+class CreatureController(_Frozen):
+    """Central pattern generator: ctrl_j = amplitude_j sin(2 pi (frequency t + phase_j)).
+    Joints are ordered hip_0, knee_0, hip_1, knee_1, ... ``off`` applies no torque."""
+
+    kind: Literal["cpg", "off"] = "cpg"
+    frequency_hz: Annotated[float, Field(gt=0.0, le=5.0)] = 1.0
+    amplitudes: list[Annotated[float, Field(ge=0.0, le=1.0)]]
+    phases: list[Annotated[float, Field(ge=0.0, le=1.0)]]  # in turns
+
+
+class CreatureDynamics(_Frozen):
+    clock_unit: Literal["tick"] = "tick"
+    numeric_policy: Literal["float64_mujoco_cpu"] = "float64_mujoco_cpu"
+    timestep: Annotated[float, Field(ge=0.001, le=0.02)] = 0.01  # physics step (s)
+    substeps: Annotated[int, Field(ge=1, le=50)] = 5  # physics steps per tick
+    gear: Annotated[float, Field(gt=0.0, le=500.0)] = 60.0  # motor torque scale (N m)
+    friction: Annotated[float, Field(gt=0.0, le=5.0)] = 1.0
+    density: Annotated[float, Field(gt=0.0, le=5000.0)] = 300.0  # kg / m^3 of all parts
+    # Passive joint springs towards the rest posture (N m / rad), like muscle tone.
+    joint_stiffness: Annotated[float, Field(ge=0.0, le=1000.0)] = 20.0
+    body: CreatureBody
+    controller: CreatureController
+
+
+class CreatureInitialization(_Frozen):
+    height: Annotated[float, Field(ge=0.1, le=3.0)] = 0.75  # torso centre above the floor (m)
+
+
+CreatureMetric = Literal["displacement", "forward", "speed", "height", "upright", "energy", "time"]
+
+
+class CreatureObservation(_Frozen):
+    metrics: tuple[CreatureMetric, ...] = (
+        "displacement", "forward", "speed", "height", "upright", "energy", "time",
+    )  # fmt: skip
+
+
+class CreatureExperiment(_Frozen):
+    name: _NAME
+    mode: Literal["reference", "exploratory"] = "exploratory"
+    substrate: Literal["creature"]
+    seed: _SEED
+    initialization: CreatureInitialization = CreatureInitialization()
+    dynamics: CreatureDynamics
+    runner: RunnerSpec = RunnerSpec(max_steps=2000, checkpoint_interval=200)
+    observations: CreatureObservation = CreatureObservation()
+
+    @model_validator(mode="after")
+    def _check(self) -> CreatureExperiment:
+        joints = 2 * len(self.dynamics.body.legs)
+        c = self.dynamics.controller
+        if len(c.amplitudes) != joints or len(c.phases) != joints:
+            raise ValueError(f"the controller needs {joints} amplitudes and phases (2 per leg)")
+        if self.mode == "reference":
+            raise ValueError("creature is a project model without a reference implementation")
+        return self
+
+
+# --------------------------------------------------------------------------- #
 # Search: an external optimisation run over the parameters of a target world
 # --------------------------------------------------------------------------- #
 
@@ -1567,6 +1647,7 @@ AnyExperiment = Annotated[
     | ProtocellExperiment
     | AgentWorldExperiment
     | LeniaMCExperiment
+    | CreatureExperiment
     | SearchExperiment,
     Field(discriminator="substrate"),
 ]

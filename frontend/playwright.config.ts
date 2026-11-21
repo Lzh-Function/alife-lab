@@ -10,7 +10,11 @@ export default defineConfig({
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
     // Optional: reuse an already-installed Chromium instead of `npx playwright install`.
-    launchOptions: process.env.ALIFE_E2E_CHROMIUM ? { executablePath: process.env.ALIFE_E2E_CHROMIUM } : {},
+    // Software WebGL (SwiftShader) so the three.js view also renders in headless runs.
+    launchOptions: {
+      args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
+      ...(process.env.ALIFE_E2E_CHROMIUM ? { executablePath: process.env.ALIFE_E2E_CHROMIUM } : {}),
+    },
   },
   outputDir: "../.alife/e2e-results",
 });

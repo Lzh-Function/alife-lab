@@ -1,0 +1,33 @@
+preset:
+  id: creature_quadruped_trot
+  scenario: creature_quadruped.yaml
+  title_key: preset.creature_quadruped_trot.title
+  description_key: preset.creature_quadruped_trot.description
+  overrides:
+    experiment:
+      name: creature_quadruped_trot
+      dynamics:
+        controller:
+          kind: cpg
+          frequency_hz: 1.5
+          amplitudes:
+          - 0.8
+          - 0.8
+          - 0.8
+          - 0.8
+          - 0.8
+          - 0.8
+          - 0.8
+          - 0.8
+          phases:
+          - 0
+          - 0.25
+          - 0.5
+          - 0.75
+          - 0
+          - 0.25
+          - 0.5
+          - 0.75
+  expected_observation: 'Hand-designed trot (diagonal pairs): travels further but tends to tip over
+    (upright reaches -1): a gait that needs a better body or tuning.'
+  negative_control: preset creature_quadruped_off
