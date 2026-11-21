@@ -1,7 +1,7 @@
 // GPU presentation views for continuous fields (codec field_u8), drawn with three.js/WebGL2.
 //   terrain   — the field as a lit landscape: height and colour = value (multi-channel fields:
 //               height = brightest channel, colour = channels as RGB); bright parts glow.
-//   spacetime — the last received frames stacked upwards into a translucent volume (newest on
+//   spacetime — (UI: 時間の積み重ね / time stack) the last received frames stacked upwards into a translucent volume (newest on
 //               top), rendered by ray marching: moving patterns leave tubes, splits leave forks.
 // These are presentation views only. Heights, glow and opacity exaggerate on purpose; the
 // 2D view remains the measurement view. Slices are received preview frames (which may be
@@ -29,6 +29,8 @@ interface Props {
   onDisplayFps: (fps: number) => void;
   testId?: string;
   width: number;
+  /** Changes when the frame source changes (live run vs replay); the time stack restarts. */
+  source?: string;
 }
 
 const PALETTES: Record<Palette, Array<[number, [number, number, number]]>> = {
@@ -176,7 +178,7 @@ void main() {
 const STACK = 96; // frames in the space-time volume
 const MAX_SIDE = 128; // volume texels per side (downsampled)
 
-export const Field3D = forwardRef<Field3DHandle, Props>(function Field3D({ mode, palette = "viridis", onDisplayFps, testId = "world-canvas", width }, ref) {
+export const Field3D = forwardRef<Field3DHandle, Props>(function Field3D({ mode, palette = "viridis", onDisplayFps, testId = "world-canvas", width, source = "live" }, ref) {
   const t = useT();
   const host = useRef<HTMLDivElement>(null);
   const frames = useRef(0);
@@ -186,7 +188,7 @@ export const Field3D = forwardRef<Field3DHandle, Props>(function Field3D({ mode,
   const everyRef = useRef(1);
   everyRef.current = every;
   const [ticks, setTicks] = useState<[number, number] | null>(null);
-  const api = useRef<{ draw: (f: Frame) => void; setRotate: (on: boolean) => void; setHeight: (h: number) => void } | null>(null);
+  const api = useRef<{ draw: (f: Frame) => void; setRotate: (on: boolean) => void; setHeight: (h: number) => void; restart: () => void } | null>(null);
 
   useEffect(() => {
     const el = host.current;
@@ -354,6 +356,17 @@ export const Field3D = forwardRef<Field3DHandle, Props>(function Field3D({ mode,
             }
           fieldTex.needsUpdate = true;
         } else if (volTex && volume) {
+          // The stack must read old -> new from bottom to top. A frame from an earlier tick
+          // (replay jumped back, or the run was restored) starts a new stack; the same tick
+          // again (e.g. a redraw while paused) is not stacked twice.
+          const last = slices.length ? slices[slices.length - 1].tick : null;
+          if (last !== null && frame.header.tick < last) {
+            slices.length = 0;
+            received = 0;
+          } else if (last !== null && frame.header.tick === last) {
+            frames.current += 1;
+            return;
+          }
           received += 1;
           if ((received - 1) % everyRef.current !== 0 && slices.length > 0) {
             frames.current += 1;
@@ -375,6 +388,10 @@ export const Field3D = forwardRef<Field3DHandle, Props>(function Field3D({ mode,
       },
       setRotate: (on) => {
         controls.autoRotate = on;
+      },
+      restart: () => {
+        slices.length = 0;
+        received = 0;
       },
       setHeight: (hgt) => {
         if (terrain) (terrain.material as THREE.ShaderMaterial).uniforms.uHeight.value = hgt;
@@ -421,6 +438,9 @@ export const Field3D = forwardRef<Field3DHandle, Props>(function Field3D({ mode,
   useEffect(() => {
     api.current?.setHeight(heightScale);
   }, [heightScale]);
+  useEffect(() => {
+    api.current?.restart();
+  }, [source]);
   // Frames that arrive before the scene exists (e.g. the last frame handed over right after
   // mounting) are kept and drawn once it is ready.
   const early = useRef<Frame | null>(null);

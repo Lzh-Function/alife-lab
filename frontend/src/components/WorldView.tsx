@@ -38,13 +38,14 @@ interface Props {
   testId?: string;
   runId?: string;
   viewMode?: ViewMode;
+  frameSource?: string; // "live" or "replay"; the time stack restarts when it changes
 }
 
 const noop = () => undefined;
 
 // Chooses the renderer and maps pointer input to the substrate's intervention payloads.
 export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
-  { substrate, world, tool, onIntervene, onDisplayFps = noop, onInspect, maxPixels, testId, runId, viewMode = "2d" },
+  { substrate, world, tool, onIntervene, onDisplayFps = noop, onInspect, maxPixels, testId, runId, viewMode = "2d", frameSource = "live" },
   ref,
 ) {
   const grid = useRef<WorldCanvasHandle>(null);
@@ -115,6 +116,7 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
         <Field3D
           ref={attachField3d}
           mode={viewMode as "terrain" | "spacetime"}
+          source={frameSource}
           palette={substrate === "physarum" ? "ember" : "viridis"}
           onDisplayFps={onDisplayFps}
           testId={testId}

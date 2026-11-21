@@ -366,6 +366,7 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
             substrate={summary.substrate}
             world={world}
             viewMode={viewMode}
+            frameSource={replay ? "replay" : "live"}
             maxPixels={viewPixels}
             tool={viewMode === "2d" || viewMode === "glow" ? toolForView : null}
             onIntervene={onIntervene}

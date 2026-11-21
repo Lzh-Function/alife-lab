@@ -15,6 +15,9 @@ Status: accepted (2026-11-21)
     3D texture (newest on top) and ray-marched with front-to-back compositing. A selectable
     interval stacks 1 of every k frames. Slices are received preview frames, which may be
     dropped; the tick range is shown, and slice spacing is not claimed to be constant.
+    UI name: 時間の積み重ね / "time stack". The stack always reads old → new from bottom to
+    top: a frame from an earlier tick, or a switch between the live run and replay, restarts
+    it, and the same tick is never stacked twice.
 - Particles (boids, particle_life) add `glow`: additive sprites with fading trails.
 - The view is sized from the available column width and the window height (≥ 720 px,
   ≤ 1400 px), with a fullscreen button. The chosen view is remembered per substrate in
