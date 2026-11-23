@@ -1,0 +1,31 @@
+schema_version: 1
+experiment:
+  name: fly_embodied_flywire_shuffled
+  mode: exploratory
+  substrate: fly_embodied
+  seed: 1
+  dataset_id: flywire_783
+  wiring: shuffled_control
+  arena:
+    foods:
+      - x: 0.28
+        y: 0.0
+        radius: 0.48
+        kind: sugar
+  dynamics:
+    clock_unit: tick
+    numeric_policy: float32_lif_float64_mujoco
+    explore_drive_hz: 110.0
+  runner:
+    max_steps: 30000
+    checkpoint_interval: 15000
+  observations:
+    metrics:
+      - cmd_forward
+      - cmd_turn
+      - cmd_proboscis
+      - cmd_grooming
+      - distance_cm
+      - feeding_ms
+      - grooming_ms
+      - realtime_factor

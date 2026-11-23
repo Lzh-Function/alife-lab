@@ -26,6 +26,8 @@ export const WorldCanvas = forwardRef<WorldCanvasHandle, Props>(function WorldCa
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const offscreen = useRef<HTMLCanvasElement | null>(null);
+  const imgCache = useRef<{ w: number; h: number; img: ImageData; u32: Uint32Array } | null>(null);
+  const colorsCache = useRef<{ alive: number; dead: number } | null>(null);
   const pending = useRef<Frame | null>(null);
   const lastFrame = useRef<Frame | null>(null);
   const stroke = useRef<Map<string, [number, number]> | null>(null);
@@ -43,38 +45,46 @@ export const WorldCanvas = forwardRef<WorldCanvasHandle, Props>(function WorldCa
     if (!ctx) return;
     if (!offscreen.current) offscreen.current = document.createElement("canvas");
     const off = offscreen.current;
-    off.width = width;
-    off.height = height;
+    if (off.width !== width || off.height !== height) {
+      off.width = width;
+      off.height = height;
+      imgCache.current = null;
+    }
     const octx = off.getContext("2d");
     if (!octx) return;
-    const img = octx.createImageData(width, height);
-    const styles = getComputedStyle(canvas);
-    const alive = parseColor(styles.getPropertyValue("--cell-alive"), [32, 201, 151]);
-    const dead = parseColor(styles.getPropertyValue("--cell-dead"), [16, 20, 28]);
+    if (!imgCache.current || imgCache.current.w !== width || imgCache.current.h !== height) {
+      const img = octx.createImageData(width, height);
+      imgCache.current = { w: width, h: height, img, u32: new Uint32Array(img.data.buffer) };
+    }
+    if (!colorsCache.current) {
+      const styles = getComputedStyle(canvas);
+      const a = parseColor(styles.getPropertyValue("--cell-alive"), [32, 201, 151]);
+      const d = parseColor(styles.getPropertyValue("--cell-dead"), [16, 20, 28]);
+      colorsCache.current = {
+        alive: (255 << 24) | (a[2] << 16) | (a[1] << 8) | a[0],
+        dead: (255 << 24) | (d[2] << 16) | (d[1] << 8) | d[0],
+      };
+    }
+    const { img, u32 } = imgCache.current;
+    const { alive, dead } = colorsCache.current;
+    const total = width * height;
     if (frame && frame.header.width === width && frame.header.height === height) {
-      for (let i = 0; i < width * height; i++) {
-        const c = bitAt(frame.bits, i) ? alive : dead;
-        img.data[i * 4] = c[0];
-        img.data[i * 4 + 1] = c[1];
-        img.data[i * 4 + 2] = c[2];
-        img.data[i * 4 + 3] = 255;
+      for (let i = 0; i < total; i++) {
+        u32[i] = bitAt(frame.bits, i) ? alive : dead;
       }
       lastFrame.current = frame;
       frameCount.current += 1;
     } else {
-      for (let i = 0; i < width * height; i++) {
-        img.data.set([dead[0], dead[1], dead[2], 255], i * 4);
-      }
+      u32.fill(dead);
     }
     if (stroke.current) {
-      const color = brushMode === "erase" ? [235, 87, 87] : [250, 200, 60];
+      const sCol = brushMode === "erase" ? (255 << 24) | (87 << 16) | (87 << 8) | 235 : (255 << 24) | (60 << 16) | (200 << 8) | 250;
       for (const [x, y] of stroke.current.values()) {
-        img.data.set([color[0], color[1], color[2], 255], (y * width + x) * 4);
+        u32[y * width + x] = sCol;
       }
     }
     octx.putImageData(img, 0, 0);
     ctx.imageSmoothingEnabled = false;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(off, 0, 0, canvas.width, canvas.height);
   }, [width, height, brushMode]);
 

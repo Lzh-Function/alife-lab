@@ -20,7 +20,7 @@ import { SpeciesChart } from "./SpeciesChart";
 import { ConnectomePanel } from "./ConnectomePanel";
 
 const LIVE = new Set(["starting", "running", "pausing", "paused", "resuming"]);
-const MAX_ROWS = 4000;
+const MAX_ROWS = 600;
 
 export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComparison: (id: string) => void }) {
   const t = useT();
@@ -55,6 +55,7 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
   const replayRef = useRef(false);
   replayRef.current = replay;
   const lastLive = useRef<Frame | null>(null);
+  const lastTickUiRef = useRef<number>(0);
   const [plasticity, setPlasticity] = useState<ConnectomePlasticitySummary | null>(null);
 
   const run = useQuery({ queryKey: ["run", runId], queryFn: () => api.run(runId), refetchInterval: 2000 });
@@ -85,7 +86,6 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
   const conn = useRunStream(runId, {
     onFrame: (frame: Frame) => {
       lastLive.current = frame;
-      setTick(frame.header.tick);
       if (!replayRef.current) {
         canvas.current?.draw(frame);
         gait.current?.push(frame.header as unknown as Record<string, unknown>);
@@ -94,7 +94,13 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
           setPlasticity(ch.plasticity ?? null);
         }
       }
-      if (frame.header.dropped_previews !== undefined) setDropped(frame.header.dropped_previews);
+      // Throttle React tick/dropped re-renders to ~10 Hz so 60 FPS 3D views never stall on DOM diffing.
+      const nowMs = performance.now();
+      if (nowMs - lastTickUiRef.current >= 100 || frame.header.tick === 0) {
+        lastTickUiRef.current = nowMs;
+        setTick(frame.header.tick);
+        if (frame.header.dropped_previews !== undefined) setDropped(frame.header.dropped_previews);
+      }
     },
     onMetrics: (newRows, sps) => {
       setRows((prev) => {
@@ -391,9 +397,10 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
             substrate={summary.substrate}
             world={world}
             datasetId={summary.spec.experiment.dataset_id}
+            live={live}
             viewMode={viewMode}
             frameSource={replay ? "replay" : "live"}
-            maxPixels={viewMode === "terrain" || viewMode === "spacetime" || viewMode === "brain3d" || summary.substrate === "creature" || summary.substrate === "connectome" ? widePixels : viewPixels}
+            maxPixels={viewMode === "terrain" || viewMode === "spacetime" || viewMode === "brain3d" || summary.substrate === "creature" || summary.substrate === "connectome" || summary.substrate === "fly_embodied" ? widePixels : viewPixels}
             tool={viewMode === "2d" || viewMode === "glow" ? toolForView : null}
             onIntervene={onIntervene}
             onInspect={onInspect}

@@ -51,18 +51,21 @@ function regionColor(idx: number): [number, number, number] {
 
 const VERTEX_SHADER = `
 attribute vec3 aColor;
-attribute float aGlow;
+attribute float aFireTime;
 uniform float uBaseSize;
 uniform float uPixelRatio;
+uniform float uTime;
+uniform float uDecayRate;
 varying vec3 vColor;
 varying float vGlow;
 
 void main() {
   vColor = aColor;
-  vGlow = aGlow;
+  float age = max(0.0, uTime - aFireTime);
+  vGlow = aFireTime < -100.0 ? 0.0 : clamp(exp(-age * uDecayRate), 0.0, 1.0);
   vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
   float dist = max(0.35, -mvPosition.z);
-  float size = uBaseSize * (1.0 + aGlow * 3.4) * uPixelRatio / dist;
+  float size = uBaseSize * (1.0 + vGlow * 3.4) * uPixelRatio / dist;
   gl_PointSize = clamp(size, 1.2, 26.0);
   gl_Position = projectionMatrix * mvPosition;
 }
@@ -110,37 +113,61 @@ export const Brain3D = forwardRef<Brain3DHandle, Props>(function Brain3D(
     controls: OrbitControls;
     geom: ConnectomeGeometry | null;
     points: THREE.Points | null;
-    glowAttr: THREE.BufferAttribute | null;
+    fireTimeAttr: THREE.BufferAttribute | null;
     colorAttr: THREE.BufferAttribute | null;
-    glowArr: Float32Array | null;
+    fireTimeArr: Float32Array | null;
+    timeUniform: { value: number } | null;
+    decayUniform: { value: number } | null;
     pendingFrame: Frame | null;
     applyColors: (mode: "role" | "region") => void;
   } | null>(null);
   const framesRef = useRef(0);
+  const lastCountUiRef = useRef(0);
+  const startTimeRef = useRef(performance.now());
 
   const height = Math.round(width * 0.625);
 
   const applyFrame = (frame: Frame) => {
     const eng = engineRef.current;
     if (!eng || frame.header.codec !== "connectome_v1") return;
-    if (!eng.glowArr || !eng.glowAttr) {
+    if (!eng.fireTimeArr || !eng.fireTimeAttr) {
       eng.pendingFrame = frame;
       return;
     }
     const h = frame.header as unknown as ConnectomeFrameHeader;
-    const fired = new Int32Array(frame.bits.slice().buffer);
-    const glow = eng.glowArr;
-    // In replay mode, clear prior glow so scrubbed ticks display exact spikes.
+    const fired = new Int32Array(frame.bits.buffer, frame.bits.byteOffset, Math.floor(frame.bits.byteLength / 4));
+    const arr = eng.fireTimeArr;
+    const nowSec = (performance.now() - startTimeRef.current) * 0.001;
+    // In replay mode, clear prior spikes so scrubbed ticks display exact spikes.
     if (sourceRef.current === "replay") {
-      glow.fill(0);
+      arr.fill(-999);
     }
-    const n = glow.length;
-    for (let i = 0; i < fired.length; i++) {
-      const idx = fired[i];
-      if (idx >= 0 && idx < n) glow[idx] = 1.0;
+    const n = arr.length;
+    if (fired.length > 0 || sourceRef.current === "replay") {
+      let minIdx = n;
+      let maxIdx = -1;
+      for (let i = 0; i < fired.length; i++) {
+        const idx = fired[i];
+        if (idx >= 0 && idx < n) {
+          arr[idx] = nowSec;
+          if (idx < minIdx) minIdx = idx;
+          if (idx > maxIdx) maxIdx = idx;
+        }
+      }
+      if (sourceRef.current === "replay") {
+        eng.fireTimeAttr.clearUpdateRanges();
+        eng.fireTimeAttr.needsUpdate = true;
+      } else if (maxIdx >= minIdx) {
+        eng.fireTimeAttr.clearUpdateRanges();
+        eng.fireTimeAttr.addUpdateRange(minIdx, maxIdx - minIdx + 1);
+        eng.fireTimeAttr.needsUpdate = true;
+      }
     }
-    eng.glowAttr.needsUpdate = true;
-    setActiveCount(h.active_neurons_tick ?? fired.length);
+    const nowMs = performance.now();
+    if (nowMs - lastCountUiRef.current >= 200) {
+      lastCountUiRef.current = nowMs;
+      setActiveCount(h.active_neurons_tick ?? fired.length);
+    }
     framesRef.current += 1;
   };
 
@@ -152,7 +179,11 @@ export const Brain3D = forwardRef<Brain3DHandle, Props>(function Brain3D(
 
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        preserveDrawingBuffer: true,
+        powerPreference: "high-performance",
+      });
     } catch {
       setStatus("webgl_unavailable");
       return;
@@ -199,9 +230,11 @@ export const Brain3D = forwardRef<Brain3DHandle, Props>(function Brain3D(
       controls,
       geom: null as ConnectomeGeometry | null,
       points: null as THREE.Points | null,
-      glowAttr: null as THREE.BufferAttribute | null,
+      fireTimeAttr: null as THREE.BufferAttribute | null,
       colorAttr: null as THREE.BufferAttribute | null,
-      glowArr: null as Float32Array | null,
+      fireTimeArr: null as Float32Array | null,
+      timeUniform: null as { value: number } | null,
+      decayUniform: null as { value: number } | null,
       pendingFrame: null as Frame | null,
       applyColors,
     };
@@ -218,18 +251,24 @@ export const Brain3D = forwardRef<Brain3DHandle, Props>(function Brain3D(
         const colors = new Float32Array(n * 3);
         const colorAttr = new THREE.BufferAttribute(colors, 3);
         geo.setAttribute("aColor", colorAttr);
-        const glowArr = new Float32Array(n);
-        const glowAttr = new THREE.BufferAttribute(glowArr, 1);
-        geo.setAttribute("aGlow", glowAttr);
+        const fireTimeArr = new Float32Array(n);
+        fireTimeArr.fill(-999);
+        const fireTimeAttr = new THREE.BufferAttribute(fireTimeArr, 1);
+        fireTimeAttr.setUsage(THREE.DynamicDrawUsage);
+        geo.setAttribute("aFireTime", fireTimeAttr);
 
         // Larger base points for tiny synthetic circuits, crisp micro-points for 138k neurons.
         const baseSize = n <= 64 ? 22.0 : n <= 2000 ? 7.0 : 3.2;
+        const timeUniform = { value: 0 };
+        const decayUniform = { value: 5.5 };
         const mat = new THREE.ShaderMaterial({
           vertexShader: VERTEX_SHADER,
           fragmentShader: FRAGMENT_SHADER,
           uniforms: {
             uBaseSize: { value: baseSize },
             uPixelRatio: { value: pr },
+            uTime: timeUniform,
+            uDecayRate: decayUniform,
           },
           transparent: true,
           depthWrite: false,
@@ -240,9 +279,11 @@ export const Brain3D = forwardRef<Brain3DHandle, Props>(function Brain3D(
         scene.add(points);
         eng.geom = g;
         eng.points = points;
-        eng.glowAttr = glowAttr;
+        eng.fireTimeAttr = fireTimeAttr;
         eng.colorAttr = colorAttr;
-        eng.glowArr = glowArr;
+        eng.fireTimeArr = fireTimeArr;
+        eng.timeUniform = timeUniform;
+        eng.decayUniform = decayUniform;
         applyColors(colorModeRef.current);
         setCellCount(n);
         setStatus("ready");
@@ -260,21 +301,10 @@ export const Brain3D = forwardRef<Brain3DHandle, Props>(function Brain3D(
     const loop = () => {
       controls.autoRotate = autoRotateRef.current;
       controls.update();
-      // Smoothly decay glow trails during live observation.
-      if (eng.glowArr && eng.glowAttr && sourceRef.current !== "replay") {
-        let changed = false;
-        const arr = eng.glowArr;
-        for (let i = 0; i < arr.length; i++) {
-          const v = arr[i];
-          if (v > 0.005) {
-            arr[i] = v * 0.90;
-            changed = true;
-          } else if (v > 0) {
-            arr[i] = 0;
-            changed = true;
-          }
-        }
-        if (changed) eng.glowAttr.needsUpdate = true;
+      // Pure GPU shader decay: advance one float uniform (zero 138k CPU loop, zero PCIe upload!).
+      if (eng.timeUniform && eng.decayUniform) {
+        eng.timeUniform.value = (performance.now() - startTimeRef.current) * 0.001;
+        eng.decayUniform.value = sourceRef.current === "replay" ? 0.0 : 5.5;
       }
       renderer.render(scene, camera);
       raf = requestAnimationFrame(loop);

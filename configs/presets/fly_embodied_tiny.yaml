@@ -1,0 +1,8 @@
+preset:
+  id: fly_embodied_tiny
+  scenario: fly_embodied_tiny.yaml
+  title_key: preset.fly_embodied_tiny.title
+  description_key: preset.fly_embodied_tiny.description
+  overrides: {}
+  expected_observation: 'Offline 24-neuron embodied fly (Level 1 hand-crafted tripod CPG): extends proboscis on sugar food, stops feeding on bitter food or MN9 silencing, and grooms antennae when poked.'
+  negative_control: preset fly_embodied_flywire_shuffled (degree-preserving shuffled wiring)

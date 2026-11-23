@@ -28,6 +28,14 @@ const LUT = (() => {
   return lut;
 })();
 
+const LUT_U32 = (() => {
+  const out = new Uint32Array(256);
+  for (let v = 0; v < 256; v++) {
+    out[v] = (255 << 24) | (LUT[v * 3 + 2] << 16) | (LUT[v * 3 + 1] << 8) | LUT[v * 3];
+  }
+  return out;
+})();
+
 interface Props {
   width: number;
   height: number;
@@ -45,6 +53,7 @@ export const FieldCanvas = forwardRef<FieldCanvasHandle, Props>(function FieldCa
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const off = useRef<HTMLCanvasElement | null>(null);
+  const imgRef = useRef<{ w: number; h: number; img: ImageData; u32: Uint32Array } | null>(null);
   const pending = useRef<Frame | null>(null);
   const last = useRef<Frame | null>(null);
   const frames = useRef(0);
@@ -66,26 +75,32 @@ export const FieldCanvas = forwardRef<FieldCanvasHandle, Props>(function FieldCa
     const w = frame.header.width ?? width;
     const h = frame.header.height ?? height;
     if (!off.current) off.current = document.createElement("canvas");
-    off.current.width = w;
-    off.current.height = h;
+    if (off.current.width !== w || off.current.height !== h) {
+      off.current.width = w;
+      off.current.height = h;
+      imgRef.current = null;
+    }
     const octx = off.current.getContext("2d");
     if (!octx) return;
-    const img = octx.createImageData(w, h);
+    if (!imgRef.current || imgRef.current.w !== w || imgRef.current.h !== h) {
+      const img = octx.createImageData(w, h);
+      imgRef.current = { w, h, img, u32: new Uint32Array(img.data.buffer) };
+    }
+    const { img, u32 } = imgRef.current;
     const bytes = frame.bits;
     const c = (frame.header as { channels?: number }).channels ?? 1;
+    const n = w * h;
     if (c === 1) {
-      for (let i = 0; i < w * h; i++) {
-        const v = bytes[i] * 3;
-        img.data[i * 4] = LUT[v];
-        img.data[i * 4 + 1] = LUT[v + 1];
-        img.data[i * 4 + 2] = LUT[v + 2];
-        img.data[i * 4 + 3] = 255;
+      for (let i = 0; i < n; i++) u32[i] = LUT_U32[bytes[i]];
+    } else if (c >= 3) {
+      for (let i = 0; i < n; i++) {
+        const o = i * c;
+        u32[i] = (255 << 24) | (bytes[o + 2] << 16) | (bytes[o + 1] << 8) | bytes[o];
       }
     } else {
-      // Channels 0, 1, 2 -> red, green, blue (a 4th channel is not shown).
-      for (let i = 0; i < w * h; i++) {
-        for (let k = 0; k < 3; k++) img.data[i * 4 + k] = k < c ? bytes[i * c + k] : 0;
-        img.data[i * 4 + 3] = 255;
+      for (let i = 0; i < n; i++) {
+        const o = i * c;
+        u32[i] = (255 << 24) | (bytes[o + 1] << 8) | bytes[o];
       }
     }
     octx.putImageData(img, 0, 0);

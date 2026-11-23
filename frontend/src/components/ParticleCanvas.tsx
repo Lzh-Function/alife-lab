@@ -36,6 +36,8 @@ function sprite(hue: number): HTMLCanvasElement {
   return c;
 }
 
+const HSL_360 = Array.from({ length: 360 }, (_, h) => `hsl(${h}, 82%, 61%)`);
+
 // Canvas2D renderer for `particles_f32` frames: [x, y, vx, vy] float32 little-endian per
 // particle. Each boid is a short segment along its heading, coloured by heading angle.
 export const ParticleCanvas = forwardRef<ParticleCanvasHandle, Props>(function ParticleCanvas(
@@ -43,6 +45,7 @@ export const ParticleCanvas = forwardRef<ParticleCanvasHandle, Props>(function P
   ref,
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const bgCache = useRef<string | null>(null);
   const pending = useRef<Frame | null>(null);
   const last = useRef<Frame | null>(null);
   const cursor = useRef<[number, number] | null>(null);
@@ -66,8 +69,10 @@ export const ParticleCanvas = forwardRef<ParticleCanvasHandle, Props>(function P
       ctx.fillStyle = "rgba(4, 6, 11, 0.2)";
       ctx.fillRect(0, 0, pw, ph);
     } else {
-      const styles = getComputedStyle(canvas);
-      ctx.fillStyle = styles.getPropertyValue("--cell-dead").trim() || "#10141c";
+      if (!bgCache.current) {
+        bgCache.current = getComputedStyle(canvas).getPropertyValue("--cell-dead").trim() || "#10141c";
+      }
+      ctx.fillStyle = bgCache.current;
       ctx.fillRect(0, 0, pw, ph);
     }
     if (glow && frame && (frame.header.codec === "particles_typed_f32" || frame.header.codec === "particles_f32")) {
@@ -101,7 +106,7 @@ export const ParticleCanvas = forwardRef<ParticleCanvasHandle, Props>(function P
         const x = view.getFloat32(o, true) * scale;
         const y = view.getFloat32(o + 4, true) * scale;
         const type = view.getFloat32(o + 16, true);
-        ctx.fillStyle = `hsl(${((type * 360) / k + 15).toFixed(0)}, 85%, 60%)`;
+        ctx.fillStyle = HSL_360[(Math.round((type * 360) / k + 15) % 360 + 360) % 360];
         ctx.beginPath();
         ctx.arc(x, y, radius, 0, 2 * Math.PI);
         ctx.fill();
@@ -119,8 +124,8 @@ export const ParticleCanvas = forwardRef<ParticleCanvasHandle, Props>(function P
         const vx = view.getFloat32(o + 8, true);
         const vy = view.getFloat32(o + 12, true);
         const sp = Math.hypot(vx, vy) || 1;
-        const hue = ((Math.atan2(vy, vx) * 180) / Math.PI + 360) % 360;
-        ctx.strokeStyle = `hsl(${hue.toFixed(0)}, 80%, 62%)`;
+        const hue = (Math.round((Math.atan2(vy, vx) * 180) / Math.PI) % 360 + 360) % 360;
+        ctx.strokeStyle = HSL_360[hue];
         ctx.beginPath();
         ctx.moveTo(x - (vx / sp) * len, y - (vy / sp) * len);
         ctx.lineTo(x, y);

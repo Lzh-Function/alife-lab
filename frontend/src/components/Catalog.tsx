@@ -24,16 +24,24 @@ function fieldsFor(substrate: string): FormField[] {
   return FORM_FIELDS[(substrate as SubstrateId) in FORM_FIELDS ? (substrate as SubstrateId) : "conway"];
 }
 
+function defaultTpsFor(substrate: string): number {
+  if (substrate === "fly_embodied") return 1000;
+  if (substrate === "connectome") return 200;
+  if (substrate === "boids") return 30;
+  return 10;
+}
+
 function fromPreset(p: Preset, prev?: FormState): FormState {
   const exp = p.spec.experiment as Record<string, unknown>;
   const values: Record<string, unknown> = {};
   for (const f of fieldsFor(p.substrate)) values[f.path] = getPath(exp, f.path);
+  const sameSubstrate = prev?.preset.substrate === p.substrate;
   return {
     preset: p,
     name: String(exp.name),
     values,
     profile_override: prev?.profile_override ?? null,
-    tps: prev?.tps ?? (p.substrate === "boids" ? 30 : 10),
+    tps: sameSubstrate && prev ? prev.tps : defaultTpsFor(p.substrate),
     start_paused: prev?.start_paused ?? false,
   };
 }

@@ -8,6 +8,10 @@ from alife_lab.substrates.bff.adapter import BFF_MANIFEST, BFFAdapter
 from alife_lab.substrates.boids.boids import BOIDS_MANIFEST, BoidsAdapter
 from alife_lab.substrates.ca.conway import CONWAY_MANIFEST, ConwayAdapter
 from alife_lab.substrates.connectome.adapter import CONNECTOME_MANIFEST, ConnectomeAdapter
+from alife_lab.substrates.connectome.embodied_adapter import (
+    FLY_EMBODIED_MANIFEST,
+    FlyEmbodiedAdapter,
+)
 from alife_lab.substrates.connectome.sysid_adapter import (
     CONNECTOME_SYSID_MANIFEST,
     ConnectomeSysIDAdapter,
@@ -57,6 +61,7 @@ _REGISTRY: dict[str, tuple[PluginManifest, type[SubstrateAdapter]]] = {
     "connectome": (CONNECTOME_MANIFEST, ConnectomeAdapter),
     "connectome_sysid": (CONNECTOME_SYSID_MANIFEST, ConnectomeSysIDAdapter),
     "connectome_task": (CONNECTOME_TASK_MANIFEST, ConnectomeTaskAdapter),
+    "fly_embodied": (FLY_EMBODIED_MANIFEST, FlyEmbodiedAdapter),
 }
 
 

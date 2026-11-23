@@ -1778,7 +1778,7 @@ class Controller:
         run_id = job.run_id
         now = time.time()
         job.last_heartbeat = now
-        if "tick" in message:
+        if "tick" in message and kind != "preview":
             self.db.execute("UPDATE runs SET tick=? WHERE id=?", (int(message["tick"]), run_id))
         if kind == "ready":
             self.db.execute(

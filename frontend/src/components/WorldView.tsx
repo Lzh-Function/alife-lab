@@ -1,4 +1,4 @@
-import { forwardRef, lazy, Suspense, useCallback, useImperativeHandle, useRef } from "react";
+import { forwardRef, lazy, memo, Suspense, useCallback, useImperativeHandle, useRef } from "react";
 import type { Frame } from "../lib/api";
 import { FIELD_SUBSTRATES, PARTICLE_SUBSTRATES, ROW_DISPLAY_SUBSTRATES, TOOLS, type SubstrateId, type ToolState } from "../lib/substrates";
 import { useT } from "../i18n";
@@ -10,11 +10,13 @@ import { ConnectomeView, type ConnectomeViewHandle } from "./ConnectomeView";
 import type { Scene3DHandle } from "./Scene3D";
 import type { Field3DHandle } from "./Field3D";
 import type { Brain3DHandle } from "./Brain3D";
+import type { EmbodiedFlyViewHandle } from "./EmbodiedFlyView";
 
 // three.js is loaded only when an embodied creature, 3D field, or 3D brain view is shown.
 const Scene3D = lazy(() => import("./Scene3D").then((m) => ({ default: m.Scene3D })));
 const Field3D = lazy(() => import("./Field3D").then((m) => ({ default: m.Field3D })));
 const Brain3D = lazy(() => import("./Brain3D").then((m) => ({ default: m.Brain3D })));
+const EmbodiedFlyView = lazy(() => import("./EmbodiedFlyView").then((m) => ({ default: m.EmbodiedFlyView })));
 
 /** Presentation views. "2d" is the measurement view (and the only one taking pointer tools). */
 export type ViewMode = "2d" | "terrain" | "spacetime" | "glow" | "brain3d";
@@ -42,6 +44,7 @@ interface Props {
   testId?: string;
   runId?: string;
   datasetId?: string;
+  live?: boolean;
   viewMode?: ViewMode;
   frameSource?: string; // "live" or "replay"; the time stack restarts when it changes
 }
@@ -49,8 +52,8 @@ interface Props {
 const noop = () => undefined;
 
 // Chooses the renderer and maps pointer input to the substrate's intervention payloads.
-export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
-  { substrate, world, tool, onIntervene, onDisplayFps = noop, onInspect, maxPixels, testId, runId, datasetId, viewMode = "2d", frameSource = "live" },
+export const WorldView = memo(forwardRef<WorldViewHandle, Props>(function WorldView(
+  { substrate, world, tool, onIntervene, onDisplayFps = noop, onInspect, maxPixels, testId, runId, datasetId, live = false, viewMode = "2d", frameSource = "live" },
   ref,
 ) {
   const grid = useRef<WorldCanvasHandle>(null);
@@ -61,6 +64,7 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
   const field3d = useRef<Field3DHandle | null>(null);
   const connectome2d = useRef<ConnectomeViewHandle | null>(null);
   const brain3d = useRef<Brain3DHandle | null>(null);
+  const embodiedFly = useRef<EmbodiedFlyViewHandle | null>(null);
   const lastFrame = useRef<Frame | null>(null);
   const use3d = (viewMode === "terrain" || viewMode === "spacetime") && VIEW3D_SUBSTRATES.has(substrate);
   const useBrain3d = substrate === "connectome" && viewMode === "brain3d";
@@ -85,10 +89,16 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
     brain3d.current = h;
     if (h && lastFrame.current) h.draw(lastFrame.current);
   }, []);
+  const attachEmbodiedFly = useCallback((h: EmbodiedFlyViewHandle | null) => {
+    embodiedFly.current = h;
+    if (h && lastFrame.current) h.draw(lastFrame.current);
+  }, []);
   useImperativeHandle(ref, () => ({
     draw: (frame: Frame) => {
       lastFrame.current = frame;
-      return useBrain3d
+      return substrate === "fly_embodied"
+        ? embodiedFly.current?.draw(frame)
+        : useBrain3d
         ? brain3d.current?.draw(frame)
         : substrate === "connectome"
         ? connectome2d.current?.draw(frame)
@@ -130,6 +140,22 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
     [tool, onIntervene, onInspect, substrate],
   );
 
+  if (substrate === "fly_embodied") {
+    return (
+      <Suspense fallback={<div className="field3d muted">3D…</div>}>
+        <EmbodiedFlyView
+          ref={attachEmbodiedFly}
+          datasetId={datasetId ?? "synthetic_fly_embodied"}
+          live={live && frameSource === "live"}
+          frameSource={frameSource}
+          onIntervene={onIntervene}
+          onDisplayFps={onDisplayFps}
+          maxPixels={maxPixels ?? 1040}
+          testId={testId}
+        />
+      </Suspense>
+    );
+  }
   if (useBrain3d) {
     return (
       <Suspense fallback={<div className="field3d muted">3D…</div>}>
@@ -255,7 +281,7 @@ export const WorldView = forwardRef<WorldViewHandle, Props>(function WorldView(
       onCellClick={inspecting ? onInspect : undefined}
     />
   );
-});
+}));
 
 export function ToolBar({
   substrate,

@@ -135,17 +135,30 @@ export const Scene3D = forwardRef<Scene3DHandle, Props>(function Scene3D({ onDis
     camera: THREE.PerspectiveCamera;
     controls: OrbitControls;
     meshes: THREE.Object3D[];
+    prevPos: THREE.Vector3[];
+    prevQuat: THREE.Quaternion[];
+    targetPos: THREE.Vector3[];
+    targetQuat: THREE.Quaternion[];
+    interpStartMs: number;
+    frameIntervalMs: number;
+    lastFrameArrivalMs: number;
     signature: string;
     lastTorso: THREE.Vector3 | null;
     trail: THREE.Line;
+    trailBuf: Float32Array;
   } | null>(null);
+  const scratchMat4 = useRef(new THREE.Matrix4());
   const terrain = useRef<TerrainGrid | null>(null);
   const frames = useRef(0);
 
   useEffect(() => {
     const el = host.current;
     if (!el) return;
-    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      preserveDrawingBuffer: true,
+      powerPreference: "high-performance",
+    });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(width, height);
     renderer.shadowMap.enabled = true;
@@ -163,17 +176,51 @@ export const Scene3D = forwardRef<Scene3DHandle, Props>(function Scene3D({ onDis
     camera.up.set(0, 0, 1);
     camera.position.set(2.5, -3.5, 2.0);
     const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
     controls.target.set(0, 0, 0.3);
     controls.update();
-    const trail = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xd9480f }));
+    const trailBuf = new Float32Array(512 * 3);
+    const trailGeo = new THREE.BufferGeometry();
+    const trailAttr = new THREE.BufferAttribute(trailBuf, 3);
+    trailAttr.setUsage(THREE.DynamicDrawUsage);
+    trailGeo.setAttribute("position", trailAttr);
+    trailGeo.setDrawRange(0, 0);
+    const trail = new THREE.Line(trailGeo, new THREE.LineBasicMaterial({ color: 0xd9480f }));
     trail.frustumCulled = false;
     scene.add(trail);
-    three.current = { renderer, scene, camera, controls, meshes: [], signature: "", lastTorso: null, trail };
+    three.current = {
+      renderer,
+      scene,
+      camera,
+      controls,
+      meshes: [],
+      prevPos: [],
+      prevQuat: [],
+      targetPos: [],
+      targetQuat: [],
+      interpStartMs: performance.now(),
+      frameIntervalMs: 18,
+      lastFrameArrivalMs: 0,
+      signature: "",
+      lastTorso: null,
+      trail,
+      trailBuf,
+    };
     let raf = 0;
     const loop = () => {
+      raf = requestAnimationFrame(loop);
+      const st = three.current;
+      if (st && st.meshes.length > 0) {
+        const span = Math.max(14, Math.min(120, st.frameIntervalMs * 1.05));
+        const alpha = Math.max(0, Math.min(1, (performance.now() - st.interpStartMs) / span));
+        for (let i = 0; i < st.meshes.length; i++) {
+          st.meshes[i].position.lerpVectors(st.prevPos[i], st.targetPos[i], alpha);
+          st.meshes[i].quaternion.slerpQuaternions(st.prevQuat[i], st.targetQuat[i], alpha);
+        }
+      }
       controls.update();
       renderer.render(scene, camera);
-      raf = requestAnimationFrame(loop);
     };
     loop();
     const timer = window.setInterval(() => {
@@ -223,39 +270,87 @@ export const Scene3D = forwardRef<Scene3DHandle, Props>(function Scene3D({ onDis
         contacts?: boolean[];
         trail?: number[][];
       };
+      const nowMs = performance.now();
+      if (t.lastFrameArrivalMs > 0) {
+        const dtArrival = nowMs - t.lastFrameArrivalMs;
+        if (dtArrival >= 5 && dtArrival <= 250) {
+          t.frameIntervalMs = t.frameIntervalMs * 0.78 + dtArrival * 0.22;
+        }
+      }
+      t.lastFrameArrivalMs = nowMs;
+      t.interpStartMs = nowMs;
+
       const signature = JSON.stringify(header.geoms);
+      let snapImmediate = false;
       if (signature !== t.signature) {
         for (const m of t.meshes) t.scene.remove(m);
+        t.prevPos = [];
+        t.prevQuat = [];
+        t.targetPos = [];
+        t.targetQuat = [];
         t.meshes = header.geoms.map((g) => {
           const m = meshFor(g);
-          m.matrixAutoUpdate = false;
           t.scene.add(m);
+          t.prevPos.push(new THREE.Vector3());
+          t.prevQuat.push(new THREE.Quaternion());
+          t.targetPos.push(new THREE.Vector3());
+          t.targetQuat.push(new THREE.Quaternion());
           return m;
         });
         t.signature = signature;
+        snapImmediate = true;
       }
       // The payload may start at any byte offset inside the message; copy to an aligned buffer.
       const f = new Float32Array(frame.bits.slice().buffer);
+      const mat4 = scratchMat4.current;
       header.geoms.forEach((g, i) => {
         const o = i * 12;
         const m = t.meshes[i];
-        if (g.type === "plane") {
-          m.matrix.identity();
-        } else {
-          // MuJoCo xmat is row-major; Matrix4.set takes row-major arguments.
-          m.matrix.set(f[o + 3], f[o + 4], f[o + 5], f[o], f[o + 6], f[o + 7], f[o + 8], f[o + 1], f[o + 9], f[o + 10], f[o + 11], f[o + 2], 0, 0, 0, 1);
+        if (!snapImmediate) {
+          t.prevPos[i].copy(m.position);
+          t.prevQuat[i].copy(m.quaternion);
         }
-        m.matrixWorldNeedsUpdate = true;
+        if (g.type === "plane") {
+          t.targetPos[i].set(0, 0, 0);
+          t.targetQuat[i].identity();
+        } else {
+          t.targetPos[i].set(f[o], f[o + 1], f[o + 2]);
+          mat4.set(
+            f[o + 3], f[o + 4], f[o + 5], 0,
+            f[o + 6], f[o + 7], f[o + 8], 0,
+            f[o + 9], f[o + 10], f[o + 11], 0,
+            0, 0, 0, 1,
+          );
+          t.targetQuat[i].setFromRotationMatrix(mat4);
+        }
+        if (snapImmediate) {
+          t.prevPos[i].copy(t.targetPos[i]);
+          t.prevQuat[i].copy(t.targetQuat[i]);
+          m.position.copy(t.targetPos[i]);
+          m.quaternion.copy(t.targetQuat[i]);
+        }
         const foot = g.name ? /^foot(\d+)$/.exec(g.name) : null;
         if (foot && m instanceof THREE.Mesh) {
           (m.material as THREE.MeshStandardMaterial).color.copy(header.contacts?.[Number(foot[1])] ? FOOT_DOWN : FOOT);
         }
       });
       if (header.trail && header.trail.length > 1) {
-        const pts = header.trail.map(([x, y]) => new THREE.Vector3(x, y, groundAt(terrain.current, x, y) + 0.02));
-        pts.push(new THREE.Vector3(header.torso[0], header.torso[1], groundAt(terrain.current, header.torso[0], header.torso[1]) + 0.02));
-        t.trail.geometry.dispose();
-        t.trail.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+        const totalPts = Math.min(header.trail.length + 1, t.trailBuf.length / 3);
+        const keepTrail = totalPts - 1;
+        const startIdx = header.trail.length - keepTrail;
+        for (let i = 0; i < keepTrail; i++) {
+          const [tx, ty] = header.trail[startIdx + i];
+          t.trailBuf[i * 3] = tx;
+          t.trailBuf[i * 3 + 1] = ty;
+          t.trailBuf[i * 3 + 2] = groundAt(terrain.current, tx, ty) + 0.02;
+        }
+        t.trailBuf[keepTrail * 3] = header.torso[0];
+        t.trailBuf[keepTrail * 3 + 1] = header.torso[1];
+        t.trailBuf[keepTrail * 3 + 2] = groundAt(terrain.current, header.torso[0], header.torso[1]) + 0.02;
+        (t.trail.geometry.getAttribute("position") as THREE.BufferAttribute).needsUpdate = true;
+        t.trail.geometry.setDrawRange(0, totalPts);
+      } else {
+        t.trail.geometry.setDrawRange(0, 0);
       }
       // Follow the torso: shift camera and target by the torso's planar motion.
       const torso = new THREE.Vector3(header.torso[0], header.torso[1], 0);

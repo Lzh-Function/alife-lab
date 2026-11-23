@@ -193,7 +193,11 @@ export const Field3D = forwardRef<Field3DHandle, Props>(function Field3D({ mode,
   useEffect(() => {
     const el = host.current;
     if (!el) return;
-    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      preserveDrawingBuffer: true,
+      powerPreference: "high-performance",
+    });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.domElement.dataset.testid = testId;
     el.appendChild(renderer.domElement);

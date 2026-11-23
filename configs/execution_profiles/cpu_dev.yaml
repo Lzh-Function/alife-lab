@@ -9,7 +9,7 @@ execution:
   scheduling:
     max_active_jobs: 1
   preview:
-    max_fps: 2
+    max_fps: 30
   limits:
     max_walltime_seconds: 1200
     max_disk_mb: 1024

@@ -12,7 +12,8 @@ execution:
   scheduling:
     max_active_gpu_jobs: 1
   preview:
-    max_fps: 5
+    max_fps: 60
+    adaptive_quality: true
   limits:
     max_walltime_seconds: 3600
     max_disk_mb: 4096

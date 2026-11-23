@@ -2010,6 +2010,82 @@ class ConnectomeTaskExperiment(_Frozen):
         return self
 
 
+# --------------------------------------------------------------------------- #
+# Embodied Drosophila Brain <-> Body (F8 Level 1)
+# --------------------------------------------------------------------------- #
+
+EmbodiedFlyDatasetId = Literal["flywire_783", "synthetic_fly_embodied"]
+EmbodiedFoodKind = Literal["sugar", "bitter"]
+
+
+class EmbodiedFoodSpec(_Frozen):
+    x: Annotated[float, Field(ge=-14.5, le=14.5)] = 1.25
+    y: Annotated[float, Field(ge=-14.5, le=14.5)] = 0.25
+    radius: Annotated[float, Field(ge=0.15, le=1.0)] = 0.36
+    kind: EmbodiedFoodKind = "sugar"
+
+
+class EmbodiedArenaSpec(_Frozen):
+    half_size: Annotated[float, Field(ge=2.0, le=15.0)] = 6.0
+    foods: Annotated[tuple[EmbodiedFoodSpec, ...], Field(max_length=12)] = (
+        EmbodiedFoodSpec(x=1.25, y=0.25, radius=0.36, kind="sugar"),
+    )
+
+
+class FlyEmbodiedDynamics(_Frozen):
+    clock_unit: Literal["tick"] = "tick"
+    numeric_policy: Literal["float32_lif_float64_mujoco"] = "float32_lif_float64_mujoco"
+    explore_drive_hz: Annotated[float, Field(ge=0.0, le=300.0)] = 110.0
+
+
+FlyEmbodiedMetric = Literal[
+    "cmd_forward",
+    "cmd_turn",
+    "cmd_proboscis",
+    "cmd_grooming",
+    "distance_cm",
+    "feeding_ms",
+    "grooming_ms",
+    "realtime_factor",
+]
+
+
+class FlyEmbodiedObservationSpec(_Frozen):
+    metrics: tuple[FlyEmbodiedMetric, ...] = (
+        "cmd_forward",
+        "cmd_turn",
+        "cmd_proboscis",
+        "cmd_grooming",
+        "distance_cm",
+        "feeding_ms",
+        "grooming_ms",
+        "realtime_factor",
+    )
+
+
+class FlyEmbodiedExperiment(_Frozen):
+    name: _NAME
+    mode: Literal["reference", "exploratory"] = "exploratory"
+    substrate: Literal["fly_embodied"]
+    seed: _SEED
+    dataset_id: EmbodiedFlyDatasetId = "synthetic_fly_embodied"
+    wiring: ConnectomeWiring = "reference"
+    silenced_ports: tuple[str, ...] = ()
+    arena: EmbodiedArenaSpec = EmbodiedArenaSpec()
+    dynamics: FlyEmbodiedDynamics = FlyEmbodiedDynamics()
+    runner: RunnerSpec = RunnerSpec(max_steps=4000, checkpoint_interval=500)
+    observations: FlyEmbodiedObservationSpec = FlyEmbodiedObservationSpec()
+
+    @model_validator(mode="after")
+    def _check_mode(self) -> FlyEmbodiedExperiment:
+        if self.mode == "reference":
+            raise ValueError(
+                "fly_embodied Level 1 uses a hand-crafted tripod CPG and is exploratory only; "
+                "use mode='exploratory'"
+            )
+        return self
+
+
 SearchExperiment.model_rebuild()
 
 
@@ -2033,7 +2109,8 @@ AnyExperiment = Annotated[
     | SearchExperiment
     | ConnectomeExperiment
     | ConnectomeSysIDExperiment
-    | ConnectomeTaskExperiment,
+    | ConnectomeTaskExperiment
+    | FlyEmbodiedExperiment,
     Field(discriminator="substrate"),
 ]
 
@@ -2080,7 +2157,7 @@ class SchedulingPolicy(_Frozen):
 
 
 class PreviewPolicy(_Frozen):
-    max_fps: Annotated[float, Field(gt=0.0, le=60.0)] = 5.0
+    max_fps: Annotated[float, Field(gt=0.0, le=120.0)] = 60.0
     adaptive_quality: bool = False
 
 

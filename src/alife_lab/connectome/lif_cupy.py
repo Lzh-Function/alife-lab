@@ -393,6 +393,7 @@ class CupyLIFRunner:
 
         self._stream = cp.cuda.Stream(non_blocking=False)
         self._graphs: dict[tuple[int, bool], Any] = {}
+        self._cached_idx: dict[tuple[int, int], Any] = {}
         cp.cuda.get_current_stream().synchronize()
 
     def upload_state(self, state: LIFState) -> None:
@@ -429,6 +430,47 @@ class CupyLIFRunner:
         self.d_stim_rate_hz.set(np.ascontiguousarray(state.stim_rate_hz, dtype=np.float32))
         self.d_silenced.set(np.ascontiguousarray(state.silenced, dtype=np.uint8))
         self.cp.cuda.get_current_stream().synchronize()
+
+    def _device_indices(self, indices: np.ndarray[Any, np.dtype[np.int32]]) -> Any:
+        key = (id(indices), int(indices.size))
+        d_idx = self._cached_idx.get(key)
+        if d_idx is None:
+            d_idx = self.cp.asarray(np.ascontiguousarray(indices, dtype=np.int32))
+            self._cached_idx[key] = d_idx
+        return d_idx
+
+    def upload_stim_subset(
+        self,
+        indices: np.ndarray[Any, np.dtype[np.int32]],
+        rates_hz: np.ndarray[Any, np.dtype[np.float32]],
+    ) -> None:
+        """Minimal-transfer (< 4 KB) update of sensory neuron stimulation rates on GPU."""
+        if indices.size == 0:
+            return
+        d_idx = self._device_indices(indices)
+        d_val = self.cp.asarray(np.ascontiguousarray(rates_hz, dtype=np.float32))
+        self.d_stim_rate_hz[d_idx] = d_val
+
+    def read_spike_subset(
+        self, indices: np.ndarray[Any, np.dtype[np.int32]]
+    ) -> np.ndarray[Any, np.dtype[np.int32]]:
+        """Minimal-transfer (< 1 KB) read of command/motor neuron spikes from the last tick."""
+        if indices.size == 0:
+            return np.zeros(0, dtype=np.int32)
+        self._stream.synchronize()
+        d_idx = self._device_indices(indices)
+        out: np.ndarray[Any, np.dtype[np.int32]] = self.cp.asnumpy(
+            self.d_last_tick_spikes[d_idx]
+        ).astype(np.int32, copy=False)
+        return out
+
+    def read_fired_indices(self) -> np.ndarray[Any, np.dtype[np.int32]]:
+        """Return indices of neurons that fired during the last tick (for preview frames)."""
+        self._stream.synchronize()
+        # A single 554 KB D2H copy + vectorized CPU flatnonzero (~0.16 ms) is ~8x faster than
+        # cupy.flatnonzero (~1.35 ms) because it avoids temporary GPU alloc + prefix-sum syncs.
+        host_spikes: np.ndarray[Any, Any] = self.cp.asnumpy(self.d_last_tick_spikes)
+        return np.flatnonzero(host_spikes > 0).astype(np.int32, copy=False)
 
     def _launch_substep(self) -> None:
         n = self.num_cells

@@ -1,0 +1,8 @@
+preset:
+  id: fly_embodied_flywire
+  scenario: fly_embodied_flywire.yaml
+  title_key: preset.fly_embodied_flywire.title
+  description_key: preset.fly_embodied_flywire.description
+  overrides: {}
+  expected_observation: 'Full 138,639-neuron FlyWire v783 brain coupled to a 6-legged MuJoCo fly (Level 1 tripod CPG): walks toward sugar odor plume, halts and extends proboscis via MN9 (CB0701) upon sugar contact, and grooms antennae via DNg84 when poked.'
+  negative_control: preset fly_embodied_flywire_shuffled (degree-preserving shuffled wiring)

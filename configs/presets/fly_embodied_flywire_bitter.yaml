@@ -1,0 +1,8 @@
+preset:
+  id: fly_embodied_flywire_bitter
+  scenario: fly_embodied_flywire_bitter.yaml
+  title_key: preset.fly_embodied_flywire_bitter.title
+  description_key: preset.fly_embodied_flywire_bitter.description
+  overrides: {}
+  expected_observation: 'Full 138,639-neuron FlyWire v783 brain over co-located sugar + bitter food: bitter GRNs suppress MN9 proboscis extension via biological FlyWire inhibitory circuits.'
+  negative_control: preset fly_embodied_flywire (sugar alone without bitter suppression)

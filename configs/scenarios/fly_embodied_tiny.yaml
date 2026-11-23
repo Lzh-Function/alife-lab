@@ -1,0 +1,31 @@
+schema_version: 1
+experiment:
+  name: fly_embodied_tiny
+  mode: exploratory
+  substrate: fly_embodied
+  seed: 1
+  dataset_id: synthetic_fly_embodied
+  wiring: reference
+  arena:
+    foods:
+      - x: 0.30
+        y: 0.0
+        radius: 0.48
+        kind: sugar
+  dynamics:
+    clock_unit: tick
+    numeric_policy: float32_lif_float64_mujoco
+    explore_drive_hz: 95.0
+  runner:
+    max_steps: 2000
+    checkpoint_interval: 250
+  observations:
+    metrics:
+      - cmd_forward
+      - cmd_turn
+      - cmd_proboscis
+      - cmd_grooming
+      - distance_cm
+      - feeding_ms
+      - grooming_ms
+      - realtime_factor

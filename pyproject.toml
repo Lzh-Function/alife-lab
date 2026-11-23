@@ -105,5 +105,6 @@ module = [
     "alife_lab.substrates.pd_nca.model",
     "alife_lab.connectome.sysid",
     "alife_lab.connectome.tasks",
+    "alife_lab.connectome.real_fit",
 ]
 disable_error_code = ["untyped-decorator", "unused-ignore"]

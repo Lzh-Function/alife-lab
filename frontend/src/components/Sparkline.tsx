@@ -1,5 +1,7 @@
+import { memo } from "react";
+
 // Minimal SVG line chart; downsamples for display while the full series stays in memory.
-export function Sparkline({ values, height = 48 }: { values: Array<number | null>; height?: number }) {
+export const Sparkline = memo(function Sparkline({ values, height = 48 }: { values: Array<number | null>; height?: number }) {
   const width = 280;
   const step = Math.max(1, Math.ceil(values.length / width));
   const sampled: Array<number | null> = [];
@@ -28,4 +30,4 @@ export function Sparkline({ values, height = 48 }: { values: Array<number | null
       <text x={2} y={height - 2} className="spark-label">{min.toPrecision(4)}</text>
     </svg>
   );
-}
+});

@@ -422,5 +422,100 @@ Before execution, `make_preregistration()` locks the hypothesis and evaluation r
 4. **Offline & browser verification:** `tests/reference/test_connectome_f6.py` (5/5 passed on CPU)
    and Playwright E2E `e2e/connectome.spec.ts` (5/5 passed) verify `connectome_task` end-to-end.
 
+---
+
+## Phase F7: Fitting to Real Public *Drosophila* Brain Activity Recordings (2026-11-23)
+
+> **Honest framing:** Phase F7 fits a FlyWire v783-constrained dynamical/coupling model (PyTorch,
+> external fitting layer) to **real *in vivo* adult *Drosophila* recordings** and evaluates
+> strictly on held-out time segments, completely unseen flies, unobserved brain regions, and unseen
+> odorants. Both positive matches and honest null/negative limits are recorded below.
+
+### 1. Real datasets & FlyWire v783 anatomical mapping (SHA-256 verified, outside Git)
+
+| Dataset | Citation & Source | Format & Security | Mapped to FlyWire v783 (`c9ae3bcd…`) |
+|---|---|---|---|
+| **Aimon et al. (2023)** | *eLife* 85202; Zenodo `7849014` (`Walk_anatomical_regions.zip`, 176.09 MiB) | Pure `.npy` (`allow_pickle=False`), SHA-256 `14039b2a…` | **74 / 75** JRC2018 brain regions (`MBPED/VL/ML/CA -> MB_*`, `IVLP -> WED`; `EPA_R` absent), **22,086,546** aggregated inter-neuropil synapses |
+| **DoOR 2.0** | Münch & Galizia (2016, *Sci Rep* 6:21841) + FlyWire mapping (`door_or_merged.csv`, `door_to_flywire_mapping.csv`) | Plain CSV, SHA-256 `e80cd3ed…` / `903abffd…` | **692** real odorants × **37** unique `ORN_<glomerulus>` types (41/52 receptors mapped 1:1) |
+
+### 2. Aimon et al. (2023) whole-brain calcium imaging (10 pan-neuronal flies × 5 seeds, 5 Hz)
+
+Command: `uv run alife connectome fit-real aimon2023 --max-flies 10 --epochs 120 --seeds 1,2,3,4,5 --device cpu` (`94.49 s` wall time; 7 train flies, 3 completely unseen cross-fly test flies; 70% train / 30% test temporal split; zero teacher forcing).
+
+| Generalization test | FlyWire `reference` | `shuffled_control` (5 seeds) | `unconnected` (behavior only) | `reference` vs control |
+|---|---:|---:|---:|---|
+| **Spatial unobserved regions** (unseen flies, 38 unrecorded regions from 37 recorded) — $R^2$ | **+0.5415 ± 0.0345** | +0.4993 ± 0.0364 | -1.2823 ± 0.1264 | vs shuf: **Δ = +0.0422** (95% CI `[+0.0040, +0.0819]`, δ = +0.60, p = 0.1111, **5/5 paired wins**); vs unconn: **p = 0.0079**, δ = +1.00 |
+| **Spatial unobserved regions** (unseen flies) — Pearson $r$ | **+0.6969 ± 0.0235** | +0.6682 ± 0.0236 | +0.4111 ± 0.0236 | Real FlyWire consistently highest across all 5 seeds |
+| **Cross-fly open-loop** (unseen flies, `Walk/Left/Right` only) — Pearson $r$ | **+0.4629 ± 0.0000** | +0.3449 ± 0.0550 | **+0.5214 ± 0.0000** | `reference` beats `shuffled` in 5/5 seeds (`+0.463` vs `0.276–0.403`); `unconnected` avoids recurrent drift |
+| **Cross-fly open-loop** — raw $R^2$ | -1.6055 | -1.9402 ± 0.6053 | -0.7328 | Negative $R^2$ in all arms (baseline drift / unmodeled spontaneous state) |
+| **Within-fly temporal holdout** (unseen last 30%) — $R^2$ / $r$ | -0.2977 / +0.3449 | -0.3418 / +0.3761 | -0.0487 / +0.4162 | Untrained baseline $R^2 = -1.3898$ |
+
+### 3. DoOR 2.0 real odorant generalization (692 odors × 37 FlyWire ORN glomeruli × 5 seeds, CUDA)
+
+Command: `uv run alife connectome fit-real door2 --epochs 120 --seeds 1,2,3,4,5 --device cuda` (`2.99 s` wall time; 519 train / 173 unseen test odors × 50% masked glomeruli per seed).
+
+| Arm | Held-out odor $R^2$ (mean ± SD) | Held-out odor Pearson $r$ (mean ± SD) | Comparison (`ref − shuf`) |
+|---|---:|---:|---|
+| FlyWire `reference` 2-hop antennal-lobe coupling | +0.1746 ± 0.0392 | +0.4297 ± 0.0461 | **Null result:** ΔR² = -0.0007, 95% CI `[-0.0437, +0.0427]`, δ = -0.04, exact **p = 0.9444** |
+| `shuffled_control` coupling | +0.1753 ± 0.0385 | +0.4298 ± 0.0460 | — |
+
+### 4. Honest interpretation & non-matches recorded for F7
+
+1. **Why FlyWire beats shuffled on Aimon spatial coupling (5/5 paired seeds, $+0.042$ $R^2$) yet shuffled still reaches $+0.50$:** Whole-brain walking imaging in *Drosophila* is dominated by a strong global walk-arousal mode shared across nearly all 75 neuropils, so any dense positive inter-region matrix captures the global mode ($R^2 \approx 0.50$). Real FlyWire neuropil anatomy adds consistent region-specific structure above this global mode ($+0.042$ $R^2$, 95% CI strictly positive), though unpaired 5-seed permutation $p = 0.1111$ is directional rather than $p < 0.05$.
+2. **Why open-loop $R^2$ is negative from 3 behavioral regressors alone:** Raw $\Delta F/F$ recordings contain baseline drift and rich spontaneous/sensory states independent of walking speed/turning. Open-loop rollout from `Walk/Left/Right` alone therefore yields positive correlation ($r = 0.34–0.52$) but negative raw $R^2$.
+3. **Why DoOR 2.0 yields an exact null result ($p = 0.9444$):** DoOR 2.0 records *peripheral* receptor affinity to odor chemistry *before* synaptic antennal-lobe processing, while FlyWire's 2-hop `ALLN` lateral network performs broad all-to-all gain control rather than encoding peripheral odorant similarity. Testing antennal-lobe wiring on *post-synaptic* `ALPN` or `KC` calcium recordings (rather than peripheral ORNs) is the right next experimental target.
+
+---
+
+## Phase F8 Level 1: Real-Time Embodied *Drosophila* — Brain ↔ Body (2026-11-23)
+
+> **Honest Level 1 framing (mandatory):** Descending and motor behavior switching (`forward`,
+> `turn`, `backward`, `proboscis`, `grooming`) is driven by the spiking connectome brain, while
+> **6-leg tripod oscillation rhythms and the stumble reflex are hand-crafted (Level 1 CPG)** —
+> NOT generated by a biological VNC wiring diagram (Level 2). Observed behavior reflects this
+> specific brain model, decoder, and Level 1 controller.
+
+### 1. Body assets & real-time architecture
+
+- **Body assets:** Apache-2.0 NeuroMechFly v2 body asset pack downloaded outside Git to
+  `.alife/datasets/neuromechfly_v2/` (51 files, 3.50 MiB, 45 simplified CT STL meshes,
+  `manifest.json` SHA-256 `b8ba6568…`; zero FlyGym Python code installed), paired with a
+  deterministic CPU float64 MuJoCo 3.17.0 capsule-contact 6-legged fly MJCF (19 position actuators,
+  2 × 0.5 ms physics substeps per 1 ms tick).
+- **Brain ↔ Body coupling (1 ms tick):** GPU `CupyLIFRunner` CUDA graph (10 × 0.1 ms substeps,
+  138,639 cells, 15,091,983 edges) with minimal per-tick transfer (`< 4 KB` sensory rates up,
+  `< 1 KB` descending/motor spikes down).
+- **Anatomical specificity discovery during F8 verification:** Probing FlyWire v783 showed that
+  `DNg35` responds to both olfactory (41 spikes) and mechanosensory (24 spikes) inputs, whereas
+  `DNg84` responds selectively to `antennal_grooming_mechanosensory` (30 spikes vs 0 for sugar,
+  0 for odor, 0 for `DNp09`), yielding zero-crosstalk separation from `MN9` (`CB0701`, 31 spikes
+  for sugar vs 0 for odor/touch).
+
+### 2. Measured F8 acceptance gates & real-time latency breakdown (`alife connectome embody`)
+
+Command: `uv run alife connectome embody flywire_783 --no-verify` (RTX 5070 CUDA + CPU MuJoCo 3.17.0, 250 ticks/scene, `6.91 s` total) and `uv run alife connectome embody synthetic_fly_embodied` (CPU NumPy + MuJoCo, `0.57 s` total).
+
+| Scene / Control | FlyWire v783 (138,639 cells, GPU + MuJoCo) | Real-time factor (brain / body / xfer ms) | Synthetic 24-cell (CPU + MuJoCo) | Gate result |
+|---|---|---|---|---|
+| `sugar_feeding` (`reference` over sugar) | `prob = 1.00`, `feed = 184 ms`, `groom = 0 ms` | **1.86x** (`0.036 / 0.106 / 0.394 ms`) | `prob = 1.00`, `feed = 218 ms`, `groom = 0 ms` (**2.77x**) | **PASS** (`sugar_triggers_feeding`) |
+| `bitter_suppression` (`reference` sugar + bitter) | `prob = 0.30`, `feed = 0 ms`, `groom = 0 ms` | **2.39x** (`0.014 / 0.095 / 0.309 ms`) | `prob = 0.00`, `feed = 0 ms`, `groom = 0 ms` (**2.73x**) | **PASS** (`bitter_suppresses_feeding`) |
+| `antennal_grooming` (`reference` antennal poke) | `prob = 0.00`, `feed = 0 ms`, `groom = 243 ms` | **1.80x** (`0.043 / 0.130 / 0.382 ms`) | `prob = 0.00`, `feed = 0 ms`, `groom = 227 ms` (**3.08x**) | **PASS** (`antenna_poke_triggers_grooming`) |
+| `silenced_mn9` (sugar + `MN9` silenced) | `prob = 0.00`, `feed = 0 ms`, `groom = 0 ms` | **2.46x** (`0.012 / 0.096 / 0.298 ms`) | `prob = 0.00`, `feed = 0 ms`, `groom = 0 ms` (**3.08x**) | **PASS** (`mn9_silencing_breaks_feeding`) |
+| `shuffled_sugar` (`shuffled_control` over sugar) | `prob = 0.00`, `feed = 0 ms`, `groom = 0 ms` | **2.70x** (`0.013 / 0.093 / 0.265 ms`) | `prob = 0.56`, `feed = 30 ms`, `groom = 150 ms` (**2.93x**) | **PASS** (`shuffled_wiring_breaks_feeding`) |
+| `shuffled_grooming` (`shuffled_control` poke) | `prob = 0.00`, `feed = 0 ms`, `groom = 0 ms` | **1.96x** (`0.032 / 0.102 / 0.376 ms`) | `prob = 0.71`, `feed = 200 ms`, `groom = 0 ms` (**3.38x**) | **PASS** (`shuffled_wiring_breaks_grooming`) |
+
+### 3. Honest limitations recorded for F8 Level 1
+
+1. **Hand-crafted tripod CPG & traction assist:** Level 1 generates 6-leg tripod oscillation phases
+   and mild planar traction stabilization algorithmically rather than from a VNC connectome or
+   micro-adhesion pad physics; biological gait generation is deferred to Phase F8 Level 2 (BANC/MaleCNS).
+2. **Baseline walking arousal & olfactory-cascade finding:** Because Shiu et al. (2024)'s resting LIF model has zero spontaneous activity without input and lacks APL divisive inhibition, we discovered experimentally that sustained raw ORN stimulation (`20–45 Hz` for `500 ms`) ignites a whole-brain KC/GABA cascade that tonically suppresses `MN9` (`45 -> 2–6` spikes over `300 ms`) and biases `DNa01/02 Left`. On `flywire_783`, bilateral odor-contrast steering therefore routes into `DNa01`/`DNa02` directly alongside configurable `explore_drive_hz` arousal on `DNp09`; all gustatory feeding (`sugar_grn -> MN9`), bitter suppression (`bitter_grn -| MN9`), and antennal grooming (`antennal_grooming_mechanosensory -> DNg84`) pathways flow purely through FlyWire's internal synaptic graph, reliably steering to and halting on sugar droplets placed either left or right (`1,941 ms` / `1,924 ms` feeding over `2,500 ms`).
+3. **Transfer overhead dominance:** On the RTX 5070, the 138,639-cell CUDA graph takes only
+   `0.012–0.043 ms` and MuJoCo takes `0.093–0.130 ms`, while synchronous Python/CuPy subset copies
+   account for `0.265–0.394 ms` — still achieving **1.80x – 2.70x real time** overall, with headroom
+   for pinned-memory async transfers if needed in F9.
+
+
+
 
 

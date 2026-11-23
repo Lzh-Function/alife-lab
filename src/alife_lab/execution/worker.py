@@ -41,7 +41,7 @@ from alife_lab.substrates import get_adapter
 MAX_STEP_PER_COMMAND = 10_000
 METRIC_FLUSH_SECONDS = 0.25
 HEARTBEAT_SECONDS = 1.0
-UNLIMITED_TICK_BUDGET_SECONDS = 0.02
+UNLIMITED_TICK_BUDGET_SECONDS = 0.012
 
 
 class Connection(Protocol):
@@ -115,6 +115,7 @@ class _Worker:
         self.started_monotonic = time.monotonic()
         self.limits = self.profile.execution.limits
         self.dirty_preview = True
+        self._pace_reset_needed = False
         self.ticks_since_rate = 0
         self.rate_window_start = time.monotonic()
         self.steps_per_second = 0.0
@@ -181,15 +182,30 @@ class _Worker:
         if not self.metric_buffer:
             return
         rows, self.metric_buffer = self.metric_buffer, []
+        # Always persist every tick durably (scientific state is never dropped).
         self.metrics.append(rows)
+        # Downsample ONLY the live WebSocket UI broadcast when stepping fast (>20 rows/flush)
+        # so high-tps runs (e.g. 1000 tps) never stall browser React rendering.
+        if len(rows) > 20:
+            step = max(1, len(rows) // 19)
+            ui_rows = rows[::step]
+            if ui_rows[-1] is not rows[-1]:
+                ui_rows.append(rows[-1])
+        else:
+            ui_rows = rows
         self.send(
-            {"type": "metrics", "rows": rows, "steps_per_second": round(self.steps_per_second, 2)}
+            {
+                "type": "metrics",
+                "rows": ui_rows,
+                "steps_per_second": round(self.steps_per_second, 2),
+            }
         )
         self.compact_metrics(force=False)
 
     def compact_metrics(self, force: bool) -> None:
         receipt = self.metrics.compact(force=force)
         if receipt is not None:
+            self._pace_reset_needed = True
             self.send({"type": "metrics_chunk", "receipt": receipt.to_json()})
 
     def send_preview(self) -> None:
@@ -232,6 +248,7 @@ class _Worker:
             self.job.run_id, logical, data, kind="checkpoint", mime_type="application/x-npz"
         )
         self.last_checkpoint_tick = self.tick
+        self._pace_reset_needed = True
         message = {
             "type": "checkpoint",
             "tick": self.tick,
@@ -360,8 +377,9 @@ class _Worker:
                 self.checkpoint("walltime")
                 raise _Stop("interrupted", "max_walltime_seconds reached")
             if self.running:
+                preview_due = last_preview + self.preview_interval
                 if self.ticks_per_second == 0:
-                    budget_end = now + UNLIMITED_TICK_BUDGET_SECONDS
+                    budget_end = min(now + UNLIMITED_TICK_BUDGET_SECONDS, preview_due)
                     while time.monotonic() < budget_end and self.running:
                         self.advance()
                         if self.conn.poll(0):
@@ -369,16 +387,33 @@ class _Worker:
                     timeout = 0.0
                 else:
                     period = 1.0 / self.ticks_per_second
+                    burst_end = min(
+                        now + UNLIMITED_TICK_BUDGET_SECONDS, max(now + 0.002, preview_due)
+                    )
                     ticks_done = 0
-                    while self.running and time.monotonic() >= next_tick_due and ticks_done < 1000:
+                    while (
+                        self.running
+                        and time.monotonic() >= next_tick_due
+                        and time.monotonic() < burst_end
+                        and ticks_done < 1000
+                    ):
                         self.advance()
                         ticks_done += 1
+                        if self._pace_reset_needed:
+                            self._pace_reset_needed = False
+                            next_tick_due = time.monotonic() + period
+                            break
                         next_tick_due += period
                         if self.conn.poll(0):
                             self.handle(self.conn.recv())
-                    if time.monotonic() - next_tick_due > 1.0:
-                        next_tick_due = time.monotonic()  # do not accumulate unbounded debt
-                    timeout = max(0.0, min(next_tick_due - time.monotonic(), 0.05))
+                    # Cap catch-up debt to ~2 preview frames so a periodic checkpoint or OS hiccup
+                    # never causes a visual "freeze-then-warp" catch-up burst in the browser.
+                    max_debt = max(0.035, 2.0 * self.preview_interval)
+                    now_after = time.monotonic()
+                    if now_after - next_tick_due > max_debt:
+                        next_tick_due = now_after
+                    wait_next = min(next_tick_due, preview_due) - now_after
+                    timeout = max(0.0, min(wait_next, 0.012))
             else:
                 timeout = 0.05
                 next_tick_due = time.monotonic()
@@ -387,6 +422,9 @@ class _Worker:
                 while self.conn.poll(0):
                     self.handle(self.conn.recv())
             now = time.monotonic()
+            if self._pace_reset_needed:
+                self._pace_reset_needed = False
+                next_tick_due = now
             if now - self.rate_window_start >= 1.0:
                 self.steps_per_second = self.ticks_since_rate / (now - self.rate_window_start)
                 self.ticks_since_rate = 0
@@ -396,7 +434,9 @@ class _Worker:
                 last_flush = now
             if self.dirty_preview and now - last_preview >= self.preview_interval:
                 self.send_preview()
-                last_preview = now
+                last_preview += self.preview_interval
+                if now - last_preview > self.preview_interval:
+                    last_preview = now
             if now - last_heartbeat >= HEARTBEAT_SECONDS:
                 self.send(
                     {

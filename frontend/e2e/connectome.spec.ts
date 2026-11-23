@@ -219,3 +219,42 @@ test("connectome F6: fixed-topology task learning runs in browser and beats chan
     await stopServer(server);
   }
 });
+
+test("connectome F8: embodied fly runs 2-pane 3D arena + brain, feeds on sugar, grooms on poke", async ({ page }) => {
+  const server = startServer();
+  await waitHealthy();
+  try {
+    await page.goto(`${BASE}/#/catalog`);
+    await openPreset(page, "fly_embodied_tiny");
+    await page.getByTestId("input-name").fill("e2e_connectome_f8");
+    await page.getByTestId("field-runner.max_steps").fill("2000");
+    await page.getByTestId("field-runner.checkpoint_interval").fill("250");
+    await page.getByTestId("input-profile").selectOption("local_cpu");
+    await page.getByTestId("input-tps").fill("0");
+    await expect(page.getByTestId("validation")).toContainText("OK");
+    await page.getByTestId("btn-create").click();
+    await expect(page).toHaveURL(/#\/lab\/run_[0-9a-f]{16}/);
+
+    await expect(page.getByTestId("fly-level1-banner")).toBeVisible({ timeout: 25_000 });
+    await expect(page.getByTestId("fly-arena-pane")).toBeVisible();
+    await expect(page.getByTestId("fly-brain-pane")).toBeVisible();
+    await expect(page.getByTestId("fly-command-meters")).toBeVisible();
+
+    // Wait for sugar feeding to accumulate from the initial sugar spot.
+    await expect
+      .poll(async () => Number(await page.getByTestId("metric-feeding_ms").textContent()), {
+        timeout: 20_000,
+      })
+      .toBeGreaterThan(20);
+
+    // Poke antenna live intervention -> grooming_ms increases!
+    await page.getByTestId("btn-fly-poke").click();
+    await expect
+      .poll(async () => Number(await page.getByTestId("metric-grooming_ms").textContent()), {
+        timeout: 20_000,
+      })
+      .toBeGreaterThan(20);
+  } finally {
+    await stopServer(server);
+  }
+});

@@ -1045,7 +1045,151 @@ def cmd_connectome(args: argparse.Namespace) -> int:
                     f"p={cm['permutation']['p_value']:.4f})"
                 )
             return 0
-    except (DatasetError, ValueError) as exc:
+
+        if args.connectome_cmd == "fit-real":
+            from alife_lab.connectome.real_fit import (
+                run_aimon2023_fit,
+                run_door2_fit,
+                run_synthetic_f7_check,
+            )
+
+            seeds = tuple(int(s.strip()) for s in args.seeds.split(",") if s.strip())
+            if args.source == "synthetic":
+                rep = run_synthetic_f7_check(
+                    seed=int(seeds[0]), epochs=args.epochs, device=args.device
+                )
+                if args.json:
+                    _print_json(rep)
+                else:
+                    for arm in ("reference", "shuffled", "unconnected"):
+                        r = rep[arm]
+                        print(
+                            f"  {arm:11s}: temporal_r2={r['temporal_holdout_r2']:+.4f} "
+                            f"cross_fly_r2={r['cross_fly_holdout_r2']} "
+                            f"spatial_unobs_r2={r['spatial_unobs_r2']:+.4f}"
+                        )
+                return 0
+
+            pack = load_connectome_pack(args.dataset_id, ds_dir, verify_hashes=not args.no_verify)
+            if args.source == "aimon2023":
+                rep = run_aimon2023_fit(
+                    pack,
+                    ds_dir,
+                    max_flies=args.max_flies,
+                    epochs=args.epochs,
+                    lr=args.lr,
+                    seeds=seeds,
+                    device=args.device,
+                )
+                if args.json:
+                    _print_json(rep)
+                else:
+                    sm = rep["summary"]
+                    cp = rep["comparisons"]
+                    print(
+                        f"fit-real aimon2023 flies={rep['n_flies']} "
+                        f"regions={rep['matched_flywire_regions']}/{rep['n_regions']} "
+                        f"synapses={rep['aggregated_flywire_synapses']:,} "
+                        f"device={rep['device']} wall={rep['wall_seconds']:.2f}s"
+                    )
+                    print(
+                        f"  temporal holdout R2 : "
+                        f"ref={sm['reference_temporal_r2']['mean']:+.4f} "
+                        f"shuf={sm['shuffled_temporal_r2']['mean']:+.4f} "
+                        f"unconn={sm['unconnected_temporal_r2']['mean']:+.4f}"
+                    )
+                    print(
+                        f"  cross-fly holdout R2: "
+                        f"ref={sm['reference_cross_fly_r2']['mean']:+.4f} "
+                        f"shuf={sm['shuffled_cross_fly_r2']['mean']:+.4f} "
+                        f"unconn={sm['unconnected_cross_fly_r2']['mean']:+.4f}"
+                    )
+                    sp_cmp = cp["spatial_unobs_r2_ref_vs_shuffled"]
+                    print(
+                        f"  spatial unobs R2    : "
+                        f"ref={sm['reference_spatial_unobs_r2']['mean']:+.4f} "
+                        f"(r={sm['reference_spatial_unobs_r']['mean']:+.4f}) "
+                        f"shuf={sm['shuffled_spatial_unobs_r2']['mean']:+.4f} "
+                        f"unconn={sm['unconnected_spatial_unobs_r2']['mean']:+.4f} "
+                        f"(ref vs shuf: d={sp_cmp['cliffs_delta']:+.2f}, "
+                        f"p={sp_cmp['permutation']['p_value']:.4f})"
+                    )
+                return 0
+
+            rep = run_door2_fit(
+                pack,
+                ds_dir,
+                epochs=args.epochs,
+                lr=args.lr,
+                seeds=seeds,
+                device=args.device,
+            )
+            if args.json:
+                _print_json(rep)
+            else:
+                sm = rep["summary"]
+                cm = rep["comparison"]
+                print(
+                    f"fit-real door2 odors={rep['n_odors']} "
+                    f"glomeruli={rep['n_glomeruli']} "
+                    f"device={rep['device']} wall={rep['wall_seconds']:.2f}s"
+                )
+                print(
+                    f"  held-out odor R2: "
+                    f"ref={sm['reference_heldout_r2']['mean']:+.4f} "
+                    f"(r={sm['reference_heldout_r']['mean']:+.4f}) "
+                    f"shuf={sm['shuffled_heldout_r2']['mean']:+.4f} "
+                    f"(r={sm['shuffled_heldout_r']['mean']:+.4f}) "
+                    f"d={cm['cliffs_delta']:+.2f} p={cm['permutation']['p_value']:.4f}"
+                )
+            return 0
+
+        if args.connectome_cmd == "embody":
+            from alife_lab.connectome.embodied import (
+                make_synthetic_fly_embodied_pack,
+                run_embodied_verification,
+            )
+
+            if args.dataset_id == "synthetic_fly_embodied":
+                pack = make_synthetic_fly_embodied_pack()
+            else:
+                pack = load_connectome_pack(
+                    args.dataset_id, ds_dir, verify_hashes=not args.no_verify
+                )
+            backend = args.backend
+            if backend == "auto":
+                from alife_lab.connectome.lif_cupy import available as cupy_ok
+
+                backend = "cupy" if (pack.cells.num_cells > 5000 and cupy_ok()) else "numpy"
+            rep = run_embodied_verification(
+                pack,
+                backend=backend,
+                seed=args.seed,
+                ticks_per_scene=args.ticks,
+                datasets_dir=ds_dir,
+            )
+            if args.json:
+                _print_json(rep)
+            else:
+                print(
+                    f"embody {rep['dataset_id']} cells={rep['num_cells']:,} "
+                    f"backend={rep['backend']} wall={rep['wall_seconds']:.2f}s "
+                    f"all_checks_passed={rep['all_checks_passed']}"
+                )
+                print(f"  framing: {rep['framing_note']}")
+                for ck, ok in rep["checks"].items():
+                    print(f"  [{'PASS' if ok else 'FAIL'}] {ck}")
+                for sname, sc in rep["scenes"].items():
+                    tm = sc["timing_ms"]
+                    print(
+                        f"  {sname:20s}: prob={sc['max_proboscis_cmd']:.2f} "
+                        f"feed={sc['feeding_ms']:3d}ms groom={sc['grooming_ms']:3d}ms "
+                        f"rtf={tm['realtime_factor']:.2f}x "
+                        f"(brain={tm['brain_ms']:.3f} body={tm['body_ms']:.3f} "
+                        f"xfer={tm['transfer_ms']:.3f} ms)"
+                    )
+            return 0 if rep["all_checks_passed"] else 1
+    except (DatasetError, ValueError, FileNotFoundError) as exc:
         print(f"connectome error: {exc}", file=sys.stderr)
         return 1
     return 2
@@ -1271,6 +1415,31 @@ def build_parser() -> argparse.ArgumentParser:
     ctsk.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
     ctsk.add_argument("--no-verify", action="store_true")
     ctsk.add_argument("--json", action="store_true")
+
+    cfit = csub.add_parser(
+        "fit-real",
+        help="run F7 connectome fitting on real public Drosophila activity (Aimon 2023 / DoOR 2.0)",
+    )
+    cfit.add_argument("source", choices=["aimon2023", "door2", "synthetic"])
+    cfit.add_argument("--dataset-id", default="flywire_783")
+    cfit.add_argument("--max-flies", type=int, default=10)
+    cfit.add_argument("--epochs", type=int, default=120)
+    cfit.add_argument("--lr", type=float, default=0.04)
+    cfit.add_argument("--seeds", default="1,2,3,4,5")
+    cfit.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
+    cfit.add_argument("--no-verify", action="store_true")
+    cfit.add_argument("--json", action="store_true")
+
+    cemb = csub.add_parser(
+        "embody",
+        help="run F8 Level 1 closed-loop embodied fly verification & real-time latency benchmark",
+    )
+    cemb.add_argument("dataset_id", choices=["flywire_783", "synthetic_fly_embodied"])
+    cemb.add_argument("--backend", choices=["auto", "numpy", "cupy"], default="auto")
+    cemb.add_argument("--seed", type=int, default=1)
+    cemb.add_argument("--ticks", type=int, default=250)
+    cemb.add_argument("--no-verify", action="store_true")
+    cemb.add_argument("--json", action="store_true")
 
     p.set_defaults(func=cmd_connectome)
     return parser

@@ -159,6 +159,11 @@ def get_connectome_index(dataset_id: str, datasets_dir: Path) -> ConnectomeIndex
     elif dataset_id == "synthetic_mb":
         pack = make_synthetic_mb_pack()
         index = _build_index(dataset_id, pack.cells, pack.io_ports, pack.provenance)
+    elif dataset_id == "synthetic_fly_embodied":
+        from alife_lab.connectome.embodied import make_synthetic_fly_embodied_pack
+
+        pack = make_synthetic_fly_embodied_pack()
+        index = _build_index(dataset_id, pack.cells, pack.io_ports, pack.provenance)
     elif dataset_id == "flywire_783":
         cells, io_ports, prov = load_flywire_783_cells(datasets_dir, verify_hashes=False)
         index = _build_index(dataset_id, cells, io_ports, prov)

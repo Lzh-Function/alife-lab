@@ -1,0 +1,8 @@
+preset:
+  id: fly_embodied_flywire_shuffled
+  scenario: fly_embodied_flywire_shuffled.yaml
+  title_key: preset.fly_embodied_flywire_shuffled.title
+  description_key: preset.fly_embodied_flywire_shuffled.description
+  overrides: {}
+  expected_observation: 'Negative control with degree-preserving shuffled FlyWire v783 wiring: sugar food fails to trigger MN9 feeding and antennal pokes fail to trigger DNg84 grooming.'
+  negative_control: preset fly_embodied_flywire (biological FlyWire v783 wiring)

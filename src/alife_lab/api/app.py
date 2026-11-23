@@ -195,6 +195,7 @@ _ALLOWED_OVERRIDE_KEYS = {
     "plasticity",
     "mechanisms",
     "observation",
+    "arena",
 }
 
 
@@ -640,6 +641,20 @@ def create_app(
             content=_pack_frame(header, body),
             media_type="application/octet-stream",
             headers={"Cache-Control": "private, max-age=3600"},
+        )
+
+    @app.get(f"{API}/connectome/neuromechfly/mesh/{{mesh_name}}")
+    async def neuromechfly_mesh(mesh_name: str) -> Response:
+        """Serve verified Apache-2.0 NeuroMechFly v2 CT-scanned STL meshes for 3D fly rendering."""
+        if not re.fullmatch(r"[a-z0-9_]+\.stl", mesh_name):
+            raise ControllerError("invalid STL mesh name", "invalid_name")
+        mesh_path = settings.resolved_datasets_dir / "neuromechfly_v2" / "meshes" / mesh_name
+        if not mesh_path.is_file():
+            raise NotFound(f"mesh {mesh_name} not installed")
+        return Response(
+            content=mesh_path.read_bytes(),
+            media_type="application/octet-stream",
+            headers={"Cache-Control": "public, max-age=86400"},
         )
 
     # ------------------------------------------------------------------- tools
