@@ -1,0 +1,8 @@
+preset:
+  id: fly_swarm_courtship_16
+  scenario: fly_swarm_courtship_16.yaml
+  title_key: preset.fly_swarm_courtship_16.title
+  description_key: preset.fly_swarm_courtship_16.description
+  overrides: {}
+  expected_observation: '16 real FlyWire v783 whole-brain flies (8 males in blue, 8 females in rose; 2,218,224 concurrent neurons) interact in mixed-sex courtship mode: males pursue nearby females and emit golden courtship song rings while females slow down upon hearing song.'
+  negative_control: switch wiring to shuffled_control

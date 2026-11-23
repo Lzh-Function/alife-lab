@@ -1,0 +1,8 @@
+preset:
+  id: fly_swarm_flywire_no_touch
+  scenario: fly_swarm_flywire_no_touch.yaml
+  title_key: preset.fly_swarm_flywire_no_touch.title
+  description_key: preset.fly_swarm_flywire_no_touch.description
+  overrides: {}
+  expected_observation: 'Negative control (Ramdya 2015 mechanosensory ablation): the same 24 FlyWire v783 whole brains with leg-touch disabled show zero encounter cascades and markedly lower collective odor avoidance.'
+  negative_control: compare against preset fly_swarm_flywire_24 (intact leg touch)

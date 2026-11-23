@@ -2106,6 +2106,59 @@ class FlyEmbodiedExperiment(_Frozen):
         return self
 
 
+# --------------------------------------------------------------------------- #
+# Collective Whole-Brain Fly Swarm (F11 Stage 3: Ramdya 2015 & Social Swarm)
+# --------------------------------------------------------------------------- #
+
+FlySwarmSocialMode = Literal["ramdya_odor_avoidance", "mixed_courtship_swarm"]
+FlySwarmMetric = Literal[
+    "clean_zone_fraction",
+    "encounter_rate",
+    "mean_speed_cm_s",
+    "active_singers",
+    "realtime_factor",
+]
+
+
+class FlySwarmDynamics(_Frozen):
+    clock_unit: Literal["tick"] = "tick"
+    numeric_policy: Literal["float32_lif_float64_arena"] = "float32_lif_float64_arena"
+    social_mode: FlySwarmSocialMode = "ramdya_odor_avoidance"
+    enable_touch: bool = True
+    odor_enabled: bool = True
+    arena_half_size: Annotated[float, Field(ge=2.0, le=12.0)] = 4.5
+    explore_drive_hz: Annotated[float, Field(ge=0.0, le=220.0)] = 55.0
+
+
+class FlySwarmObservationSpec(_Frozen):
+    metrics: tuple[FlySwarmMetric, ...] = (
+        "clean_zone_fraction",
+        "encounter_rate",
+        "mean_speed_cm_s",
+        "active_singers",
+        "realtime_factor",
+    )
+
+
+class FlySwarmExperiment(_Frozen):
+    name: _NAME
+    mode: Literal["reference", "exploratory"] = "exploratory"
+    substrate: Literal["fly_swarm"]
+    seed: _SEED
+    dataset_id: EmbodiedFlyDatasetId = "synthetic_fly_embodied"
+    num_flies: Annotated[int, Field(ge=1, le=64)] = 16
+    wiring: ConnectomeWiring = "reference"
+    dynamics: FlySwarmDynamics = FlySwarmDynamics()
+    runner: RunnerSpec = RunnerSpec(max_steps=15000, checkpoint_interval=5000)
+    observations: FlySwarmObservationSpec = FlySwarmObservationSpec()
+
+    @model_validator(mode="after")
+    def _check_mode(self) -> FlySwarmExperiment:
+        if self.mode == "reference":
+            raise ValueError("fly_swarm is exploratory only; use mode='exploratory'")
+        return self
+
+
 SearchExperiment.model_rebuild()
 
 
@@ -2130,7 +2183,8 @@ AnyExperiment = Annotated[
     | ConnectomeExperiment
     | ConnectomeSysIDExperiment
     | ConnectomeTaskExperiment
-    | FlyEmbodiedExperiment,
+    | FlyEmbodiedExperiment
+    | FlySwarmExperiment,
     Field(discriminator="substrate"),
 ]
 

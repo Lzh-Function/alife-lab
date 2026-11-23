@@ -1,0 +1,8 @@
+preset:
+  id: fly_swarm_tiny
+  scenario: fly_swarm_tiny.yaml
+  title_key: preset.fly_swarm_tiny.title
+  description_key: preset.fly_swarm_tiny.description
+  overrides: {}
+  expected_observation: '16 offline synthetic whole-brain flies interact in one arena: moving neighbors brush paused flies, recruiting DNg84 mechanosensory arousal and driving collective escape from the left aversive odor zone (x < 0) to clean air (x > 0).'
+  negative_control: toggle leg touch off in toolbar or switch wiring to shuffled_control

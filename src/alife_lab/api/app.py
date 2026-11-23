@@ -196,6 +196,7 @@ _ALLOWED_OVERRIDE_KEYS = {
     "mechanisms",
     "observation",
     "arena",
+    "num_flies",
 }
 
 

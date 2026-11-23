@@ -4,7 +4,7 @@
 import type { Frame } from "./api";
 import { popcount } from "./api";
 
-export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network" | "nca_train" | "nca" | "pd_nca" | "protocell" | "agent_world" | "lenia_mc" | "creature" | "search" | "connectome" | "connectome_sysid" | "connectome_task" | "fly_embodied";
+export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network" | "nca_train" | "nca" | "pd_nca" | "protocell" | "agent_world" | "lenia_mc" | "creature" | "search" | "connectome" | "connectome_sysid" | "connectome_task" | "fly_embodied" | "fly_swarm";
 
 /** Substrates rendered as continuous particles (vs. grids). */
 export const PARTICLE_SUBSTRATES = new Set(["boids", "particle_life"]);
@@ -178,6 +178,11 @@ export const TOOLS: Record<SubstrateId, ToolDescriptor> = {
     modes: ["off", "inspect"],
     radius: { min: 0, max: 0, step: 1, initial: 0 },
     noteKey: "lab.tool.fly_embodied_note",
+  },
+  fly_swarm: {
+    modes: ["off", "inspect"],
+    radius: { min: 0, max: 0, step: 1, initial: 0 },
+    noteKey: "lab.tool.fly_swarm_note",
   },
 };
 
@@ -582,6 +587,21 @@ export const FORM_FIELDS: Record<SubstrateId, FormField[]> = {
     },
     { path: "arena.half_size", labelKey: "form.fly.arena_half_size", kind: "float", min: 2, max: 15, step: 0.5 },
     { path: "dynamics.explore_drive_hz", labelKey: "form.fly.explore_drive", kind: "float", min: 0, max: 300, step: 10 },
+    ...RUNNER,
+  ],
+  fly_swarm: [
+    { path: "seed", labelKey: "form.seed", kind: "int", min: 0 },
+    { path: "num_flies", labelKey: "form.swarm.num_flies", kind: "int", min: 1, max: 64 },
+    {
+      path: "wiring",
+      labelKey: "form.connectome.wiring",
+      kind: "select",
+      options: [
+        { value: "reference", labelKey: "form.connectome.wiring.reference" },
+        { value: "shuffled_control", labelKey: "form.connectome.wiring.shuffled_control" },
+      ],
+    },
+    { path: "dynamics.arena_half_size", labelKey: "form.fly.arena_half_size", kind: "float", min: 2, max: 12, step: 0.5 },
     ...RUNNER,
   ],
 };

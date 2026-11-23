@@ -400,7 +400,7 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
             live={live}
             viewMode={viewMode}
             frameSource={replay ? "replay" : "live"}
-            maxPixels={viewMode === "terrain" || viewMode === "spacetime" || viewMode === "brain3d" || summary.substrate === "creature" || summary.substrate === "connectome" || summary.substrate === "fly_embodied" ? widePixels : viewPixels}
+            maxPixels={viewMode === "terrain" || viewMode === "spacetime" || viewMode === "brain3d" || summary.substrate === "creature" || summary.substrate === "connectome" || summary.substrate === "fly_embodied" || summary.substrate === "fly_swarm" ? widePixels : viewPixels}
             tool={viewMode === "2d" || viewMode === "glow" ? toolForView : null}
             onIntervene={onIntervene}
             onInspect={onInspect}

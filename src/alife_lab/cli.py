@@ -1576,6 +1576,54 @@ def cmd_connectome(args: argparse.Namespace) -> int:
                             f"({ab['female_aud_suppression_pct']:+5.1f}%)"
                         )
             return 0 if rep["all_checks_passed"] else 1
+        if args.connectome_cmd == "swarm":
+            from alife_lab.connectome.embodied import make_synthetic_fly_embodied_pack
+            from alife_lab.connectome.fly_swarm import run_ramdya_collective_assay
+
+            if args.dataset_id == "synthetic_fly_embodied":
+                pack = make_synthetic_fly_embodied_pack()
+            else:
+                pack = load_connectome_pack(
+                    args.dataset_id,
+                    ds_dir,
+                    verify_hashes=not args.no_verify,
+                )
+            sizes = tuple(int(s.strip()) for s in args.sizes.split(",") if s.strip())
+            rep = run_ramdya_collective_assay(
+                pack,
+                group_sizes=sizes,
+                ticks=args.ticks,
+                seed=args.seed,
+                backend=args.backend,
+            )
+            if args.json:
+                _print_json(rep)
+            else:
+                print(
+                    f"swarm dataset={rep['dataset_id']} cells/fly={rep['cells_per_fly']:,} "
+                    f"max_concurrent_neurons={rep['max_concurrent_neurons']:,} "
+                    f"ticks={rep['ticks']} wall={rep['wall_seconds']:.2f}s "
+                    f"all_checks_passed={rep['all_checks_passed']}"
+                )
+                for ck, ok in rep["checks"].items():
+                    print(f"  [{'PASS' if ok else 'FAIL'}] {ck}")
+                print("  Ramdya (2015) group-size avoidance curve:")
+                for row in rep["group_size_curve"]:
+                    print(
+                        f"    N={row['num_flies']:2d} (trials={row['trials']}): "
+                        f"clean={row['final_clean_fraction'] * 100:5.1f}% "
+                        f"(mean={row['mean_clean_fraction'] * 100:5.1f}%) "
+                        f"encounters={row['encounters_per_fly_s']:5.2f}/fly·s "
+                        f"RTF={row['realtime_factor']:.2f}x"
+                    )
+                print("  Negative controls (at max N):")
+                for cname, row in rep["controls"].items():
+                    print(
+                        f"    {cname:18s}: clean={row['final_clean_fraction'] * 100:5.1f}% "
+                        f"(mean={row['mean_clean_fraction'] * 100:5.1f}%) "
+                        f"encounters={row['encounters_per_fly_s']:5.2f}/fly·s"
+                    )
+            return 0 if rep["all_checks_passed"] else 1
     except (DatasetError, ValueError, FileNotFoundError) as exc:
         print(f"connectome error: {exc}", file=sys.stderr)
         return 1
@@ -1924,6 +1972,18 @@ def build_parser() -> argparse.ArgumentParser:
     csoc.add_argument("--no-ablations", action="store_true")
     csoc.add_argument("--no-verify", action="store_true")
     csoc.add_argument("--json", action="store_true")
+
+    cswm = csub.add_parser(
+        "swarm",
+        help="run F11 Stage 3 collective whole-brain fly swarm (Ramdya 2015 odor avoidance)",
+    )
+    cswm.add_argument("dataset_id", nargs="?", default="synthetic_fly_embodied")
+    cswm.add_argument("--sizes", default="1,8,16,24")
+    cswm.add_argument("--backend", choices=["auto", "numpy", "cupy"], default="auto")
+    cswm.add_argument("--seed", type=int, default=1)
+    cswm.add_argument("--ticks", type=int, default=2000)
+    cswm.add_argument("--no-verify", action="store_true")
+    cswm.add_argument("--json", action="store_true")
 
     p.set_defaults(func=cmd_connectome)
     return parser

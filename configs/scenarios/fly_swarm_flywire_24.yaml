@@ -1,0 +1,27 @@
+schema_version: 1
+experiment:
+  name: fly_swarm_flywire_24
+  mode: exploratory
+  substrate: fly_swarm
+  seed: 1
+  dataset_id: flywire_783
+  num_flies: 24
+  wiring: reference
+  dynamics:
+    clock_unit: tick
+    numeric_policy: float32_lif_float64_arena
+    social_mode: ramdya_odor_avoidance
+    enable_touch: true
+    odor_enabled: true
+    arena_half_size: 4.5
+    explore_drive_hz: 55.0
+  runner:
+    max_steps: 20000
+    checkpoint_interval: 10000
+  observations:
+    metrics:
+      - clean_zone_fraction
+      - encounter_rate
+      - mean_speed_cm_s
+      - active_singers
+      - realtime_factor

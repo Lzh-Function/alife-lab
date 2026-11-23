@@ -13,6 +13,24 @@ describe("frame decoding", () => {
     expect(frame.header.tick).toBe(3);
     expect([0, 1, 2, 3, 4, 5, 6, 7].map((i) => bitAt(frame.bits, i))).toEqual([1, 0, 1, 0, 0, 0, 0, 1]);
   });
+
+  it("handles float32 payloads safely even when JSON header length is not a multiple of 4", () => {
+    const header = new TextEncoder().encode(JSON.stringify({ tick: 7, codec: "fly_swarm_v1", num_flies: 1, x: "abc" }));
+    expect(header.length % 4).not.toBe(0);
+    const payload = new Float32Array([1.25, -2.5, 0.5, 1.0, 1.0, 0.0, 0.0, 0.75]);
+    const payloadBytes = new Uint8Array(payload.buffer);
+    const buf = new Uint8Array(4 + header.length + payloadBytes.length);
+    new DataView(buf.buffer).setUint32(0, header.length, false);
+    buf.set(header, 4);
+    buf.set(payloadBytes, 4 + header.length);
+    const frame = unpackFrame(buf.buffer);
+    const aligned = new Uint8Array(frame.bits.byteLength);
+    aligned.set(frame.bits);
+    const decoded = new Float32Array(aligned.buffer);
+    expect(decoded[0]).toBeCloseTo(1.25);
+    expect(decoded[1]).toBeCloseTo(-2.5);
+    expect(decoded[7]).toBeCloseTo(0.75);
+  });
 });
 
 describe("circleCells", () => {

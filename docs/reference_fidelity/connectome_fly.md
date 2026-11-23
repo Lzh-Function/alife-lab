@@ -734,3 +734,19 @@ To settle unambiguously whether point-neuron ALIF on fixed biological VNC wiring
 | `male_shuffled` | `0.362 cm` | `272 ms` | **`48 ms`** (24× drop) | `1.376 cm` | **`0.45 Hz`** (180× drop) |
 
 *\* Honest limitation (`connectome_plan.md §4 F11`): Female third-order receptivity neurons `pC1a–e` remain `0.0 Hz` under uniform resting LIF without mating-state neuromodulation; first- and second-order female auditory relays (`SAD052/53`, `CB1078`, `AVLP082/194_a`) respond robustly (`65.1–81.2 Hz` intact vs `0.10 Hz` shuffled).*
+
+### 4. Stage ③ — Collective Whole-Brain Fly Swarm (`alife connectome swarm flywire_783`, 3,327,336 Concurrent Neurons, **4/4 PASS**)
+
+> **Note:** RTX 5070 throughput (`RTF`) below was measured under concurrent desktop gaming load and therefore represents a **conservative lower-bound reference**.
+
+| Condition (`flywire_783`, `2,000 ms`, `138,639` cells/fly) | Concurrent Neurons | Final Clean Zone (`x > 0`) | Mean Clean Zone | Encounters (`/fly·s`) | Speed (`RTF`, lower bound) |
+|---|---:|---:|---:|---:|---:|
+| `N = 1` lone fly (8 trials) | `138,639` | `12.5%` | `2.3%` | `0.00` | `1.95×` |
+| `N = 8` group (2 trials) | `1,109,112` | `0.0%` | `0.0%` | `0.06` | `1.41×` |
+| **`N = 16` swarm** | **`2,218,224`** | **`43.8%`** | `18.8%` | `0.53` | **`1.20×`** |
+| **`N = 24` swarm (intact)** | **`3,327,336`** | **`45.8%`** | `21.0%` | **`0.81`** | **`0.55×`** |
+| `N = 24` `touch_silenced` (control) | `3,327,336` | **`4.2%`** (11× drop) | `1.1%` | `0.00` | — |
+| `N = 24` `shuffled_control` (control) | `3,327,336` | **`12.5%`** (3.7× drop) | `2.6%` | `0.62` | — |
+| `N = 24` `no_odor_control` (control) | `3,327,336` | **`45.8%`** (chance) | **`48.5%`** | `0.77` | — |
+
+- **Scientific fidelity & honest caveats:** All 4 pre-registered Ramdya et al. (2015) gates pass on both CPU offline `synthetic_fly_embodied` and real GPU `flywire_783` (`40.21 s` wall). Crucially, `shuffled_control` still experiences frequent physical encounters (`0.62 /fly·s`) yet collapses to `12.5%`, confirming that the collective avoidance surge requires intact biological mechanosensory → `DNg84` connectome signaling. Bodies in `fly_swarm` use planar kinematics with steric separation and animated 3D legs (not 24 coupled 18-DOF MuJoCo contact solvers), and spontaneous walk/rest bout transitions are modeled phenomenologically.

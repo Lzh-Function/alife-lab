@@ -25,7 +25,7 @@ function fieldsFor(substrate: string): FormField[] {
 }
 
 function defaultTpsFor(substrate: string): number {
-  if (substrate === "fly_embodied") return 1000;
+  if (substrate === "fly_embodied" || substrate === "fly_swarm") return 1000;
   if (substrate === "connectome") return 200;
   if (substrate === "boids") return 30;
   return 10;

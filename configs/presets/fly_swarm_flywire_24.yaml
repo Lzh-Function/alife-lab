@@ -1,0 +1,8 @@
+preset:
+  id: fly_swarm_flywire_24
+  scenario: fly_swarm_flywire_24.yaml
+  title_key: preset.fly_swarm_flywire_24.title
+  description_key: preset.fly_swarm_flywire_24.description
+  overrides: {}
+  expected_observation: '24 full 138,639-neuron FlyWire v783 whole brains (3,327,336 concurrent biological neurons) run together in one 3D petri dish: leg-touch cascades trigger DNg84 + DNp09 escape into the clean-air right half.'
+  negative_control: preset fly_swarm_flywire_no_touch (leg mechanosensory touch disabled)
