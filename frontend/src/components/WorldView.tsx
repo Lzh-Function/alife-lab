@@ -51,13 +51,15 @@ interface Props {
   live?: boolean;
   viewMode?: ViewMode;
   frameSource?: string; // "live" or "replay"; the time stack restarts when it changes
+  onReplayFullBrain?: (flyId?: number) => void;
+  replayBusy?: boolean;
 }
 
 const noop = () => undefined;
 
 // Chooses the renderer and maps pointer input to the substrate's intervention payloads.
 export const WorldView = memo(forwardRef<WorldViewHandle, Props>(function WorldView(
-  { substrate, world, tool, onIntervene, onDisplayFps = noop, onInspect, maxPixels, testId, runId, datasetId, live = false, viewMode = "2d", frameSource = "live" },
+  { substrate, world, tool, onIntervene, onDisplayFps = noop, onInspect, maxPixels, testId, runId, datasetId, live = false, viewMode = "2d", frameSource = "live", onReplayFullBrain, replayBusy = false },
   ref,
 ) {
   const grid = useRef<WorldCanvasHandle>(null);
@@ -166,6 +168,8 @@ export const WorldView = memo(forwardRef<WorldViewHandle, Props>(function WorldV
           live={live && frameSource === "live"}
           onIntervene={onIntervene}
           onDisplayFps={onDisplayFps}
+          onReplayFullBrain={onReplayFullBrain}
+          replayBusy={replayBusy}
           maxPixels={maxPixels ?? 1040}
           testId={testId}
         />

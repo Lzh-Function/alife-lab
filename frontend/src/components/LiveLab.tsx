@@ -7,7 +7,7 @@ import { useRunStream, type GpuMemory } from "../lib/stream";
 import { useT } from "../i18n";
 import { ToolBar, WorldView, type ViewMode, type WorldViewHandle } from "./WorldView";
 import { Help, metricHelp } from "./Help";
-import { CPU_PROFILE } from "../lib/compute";
+import { CPU_PROFILE, GPU_PROFILE, useCompute } from "../lib/compute";
 import { SUBSTRATE_GUIDE } from "../guide/content";
 import { displayWorld, initialTool, type ToolState } from "../lib/substrates";
 import { Sparkline } from "./Sparkline";
@@ -224,6 +224,8 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
       .catch((e) => setInspectError(e instanceof ApiError ? e.message : String(e)));
   };
 
+  const computeMode = useCompute((s) => s.mode);
+
   // nca_train: checkpoint the current weights, export them into an nca spec and start a run.
   const runTrainedModel = async () => {
     try {
@@ -238,6 +240,37 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
       window.location.hash = `/lab/${run.id}`;
     } catch (e) {
       setInspectError(e instanceof ApiError ? e.message : String(e));
+    }
+  };
+
+  // Phase F12d: checkpoint current fly_world run, export selected descendant into full-brain + MuJoCo fly_embodied, and launch!
+  const replayFullBrain = async (flyId?: number) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const current = tick ?? summary?.clock.value ?? 0;
+      if (live) await api.control(runId, "checkpoints");
+      let exported = await api.exportFlyWorldReplay(runId, flyId);
+      for (let i = 0; i < 20 && live && exported.checkpoint.tick < current; i++) {
+        await new Promise((r) => window.setTimeout(r, 250));
+        exported = await api.exportFlyWorldReplay(runId, flyId);
+      }
+      const dsId = exported.descendant.dataset_id;
+      const profileId =
+        dsId !== "synthetic_fly_embodied" && (summary?.profile_id === GPU_PROFILE || computeMode === "gpu")
+          ? GPU_PROFILE
+          : CPU_PROFILE;
+      const newRun = await api.create({
+        spec: exported.spec,
+        profile_id: profileId,
+        ticks_per_second: 60,
+        auto_start: true,
+      });
+      window.location.hash = `/lab/${newRun.id}`;
+    } catch (e) {
+      setError(e instanceof ApiError ? `${e.code}: ${e.message}` : String(e));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -405,6 +438,8 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
             onIntervene={onIntervene}
             onInspect={onInspect}
             onDisplayFps={setUiFps}
+            onReplayFullBrain={summary.substrate === "fly_world" ? replayFullBrain : undefined}
+            replayBusy={busy}
             runId={runId}
           />
         </div>

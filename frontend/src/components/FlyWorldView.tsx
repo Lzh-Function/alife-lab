@@ -21,6 +21,18 @@ interface SignalDictEntry {
   receiver_response: number;
 }
 
+interface TopDescendant {
+  slot_index: number;
+  fly_id: number;
+  generation: number;
+  sex: string;
+  fly_distance: number;
+  energy: number;
+  body_scale: number;
+  leg_length: number;
+  wing_span: number;
+}
+
 interface WorldHeader {
   codec: "fly_world_v1";
   tick: number;
@@ -51,12 +63,15 @@ interface WorldHeader {
   predator: { active: boolean; x: number; y: number; r: number };
   feeding: number[];
   recent_births: Array<{ id: number; parents: number[]; gen: number; tick: number; fly_distance: number }>;
+  top_descendants?: TopDescendant[];
 }
 
 interface Props {
   live: boolean;
   onIntervene: (kind: string, payload: Record<string, unknown>) => void;
   onDisplayFps?: (fps: number) => void;
+  onReplayFullBrain?: (flyId?: number) => void;
+  replayBusy?: boolean;
   maxPixels?: number;
   testId?: string;
 }
@@ -172,7 +187,7 @@ function makeEvoFlyRig(): EvoFlyRig {
 }
 
 export const FlyWorldView = forwardRef<FlyWorldViewHandle, Props>(function FlyWorldView(
-  { live, onIntervene, onDisplayFps, maxPixels = 1040, testId = "fly-world-view" },
+  { live, onIntervene, onDisplayFps, onReplayFullBrain, replayBusy = false, maxPixels = 1040, testId = "fly-world-view" },
   ref,
 ) {
   const t = useT();
@@ -548,6 +563,59 @@ export const FlyWorldView = forwardRef<FlyWorldViewHandle, Props>(function FlyWo
               </tbody>
             </table>
           </div>
+
+          {/* Phase F12d: 1-Click Full-Resolution Spiking Brain + MuJoCo 6-Legged Replay */}
+          {onReplayFullBrain && (hud.top_descendants?.length ?? 0) > 0 && (
+            <div
+              className="panel"
+              data-testid="flyworld-f12d-panel"
+              style={{ margin: 0, padding: "10px 12px", fontSize: "0.82rem", borderLeft: "3px solid #a855f7" }}
+            >
+              <strong style={{ display: "block", marginBottom: "4px" }}>{t("flyworld.f12d_title")}</strong>
+              <p className="muted small" style={{ margin: "0 0 8px" }}>
+                {t("flyworld.f12d_hint").replace("{cells}", (hud.source_cells ?? 0).toLocaleString())}
+              </p>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ textAlign: "left", borderBottom: "1px solid #334155" }}>
+                    <th style={{ padding: "4px" }}>{t("flyworld.col.fly")}</th>
+                    <th style={{ padding: "4px" }}>{t("flyworld.col.gen")}</th>
+                    <th style={{ padding: "4px" }}>{t("metric.fly_distance")}</th>
+                    <th style={{ padding: "4px" }}>{t("flyworld.col.morph")}</th>
+                    <th style={{ padding: "4px", textAlign: "right" }}>{t("flyworld.col.action")}</th>
+                  </tr>
+                </thead>
+                <tbody className="mono">
+                  {(hud.top_descendants ?? []).map((desc) => (
+                    <tr key={desc.fly_id} style={{ borderBottom: "1px solid #1e293b" }}>
+                      <td style={{ padding: "4px" }}>
+                        #{desc.fly_id} ({desc.sex === "M" ? "♂" : "♀"})
+                      </td>
+                      <td style={{ padding: "4px", color: "#34d399" }}>Gen {desc.generation}</td>
+                      <td style={{ padding: "4px", color: "#d946ef", fontWeight: 700 }}>
+                        {desc.fly_distance.toFixed(3)}
+                      </td>
+                      <td style={{ padding: "4px", color: "#94a3b8" }}>
+                        B:{desc.body_scale.toFixed(2)}× L:{desc.leg_length.toFixed(2)}× W:{desc.wing_span.toFixed(2)}×
+                      </td>
+                      <td style={{ padding: "4px", textAlign: "right" }}>
+                        <button
+                          type="button"
+                          className="primary"
+                          data-testid={`btn-f12d-replay-${desc.fly_id}`}
+                          disabled={replayBusy}
+                          style={{ padding: "3px 10px", fontSize: "0.78rem" }}
+                          onClick={() => onReplayFullBrain(desc.fly_id)}
+                        >
+                          🧠 {t("flyworld.f12d_btn")}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </>
       )}
     </div>

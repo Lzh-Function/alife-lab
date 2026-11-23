@@ -24,6 +24,7 @@ sexual reproduction alone drive selection — strictly obeying ``AGENTS.md``):
 
 from __future__ import annotations
 
+import importlib
 import math
 import time
 from dataclasses import dataclass, field
@@ -31,7 +32,6 @@ from typing import Any
 
 import numpy as np
 import numpy.typing as npt
-from scipy import sparse  # type: ignore[import-untyped]
 
 from alife_lab.connectome.embodied import (
     make_synthetic_fly_embodied_pack,
@@ -58,6 +58,23 @@ U8 = npt.NDArray[np.uint8]
 GENOME_DIM = 24
 
 
+class _NumpyCSR:
+    """Minimal pure-NumPy CSR matrix supporting ``w @ X`` without requiring SciPy."""
+
+    def __init__(self, shape: tuple[int, int], rows: I32, cols: I32, data: F32) -> None:
+        self.shape = shape
+        self.rows = rows
+        self.cols = cols
+        self.data = data
+        self.nnz = int(data.size)
+
+    def __matmul__(self, x: F32) -> F32:
+        out = np.zeros((self.shape[0], x.shape[1]), dtype=np.float32)
+        if self.nnz > 0:
+            np.add.at(out, self.rows, self.data[:, None] * x[self.cols])
+        return out
+
+
 @dataclass
 class CompressedAncestralBrain:
     """Explicit cell-type-compressed ancestral connectome (``cell_type_compressed`` resolution)."""
@@ -66,7 +83,7 @@ class CompressedAncestralBrain:
     source_cells: int
     num_nodes: int
     num_edges: int
-    w_csr: sparse.csr_matrix
+    w_csr: Any
     i_sugar: int
     i_bitter: int
     i_groom: int
@@ -117,20 +134,57 @@ def build_compressed_ancestral_brain(
     n_nodes = len(uniq)
     counts = np.bincount(inv)
     signed_w = pack.edges.count.astype(np.float32) * pack.edges.sign.astype(np.float32)
-    w_coo = sparse.coo_matrix(
-        (signed_w, (inv[pack.edges.post], inv[pack.edges.pre])),
-        shape=(n_nodes, n_nodes),
-        dtype=np.float32,
-    )
+    post_g = inv[pack.edges.post].astype(np.int32)
+    pre_g = inv[pack.edges.pre].astype(np.int32)
     inv_cnt = (1.0 / np.maximum(1, counts)).astype(np.float32)
-    w_csr = (sparse.diags(inv_cnt) @ w_coo.tocsr()).tocsr()
+
+    try:
+        sp = importlib.import_module("scipy.sparse")
+    except ImportError:
+        sp = None
+
+    if sp is not None:
+        w_coo = sp.coo_matrix(
+            (signed_w, (post_g, pre_g)), shape=(n_nodes, n_nodes), dtype=np.float32
+        )
+        w_csr: Any = (sp.diags(inv_cnt) @ w_coo.tocsr()).tocsr()
+    else:
+        # Pure-NumPy coalesced sparse matrix (used in SciPy-free minimal CPU CI).
+        if post_g.size > 0:
+            keys = post_g.astype(np.int64) * np.int64(n_nodes) + pre_g.astype(np.int64)
+            order = np.argsort(keys, kind="mergesort")
+            k_sorted = keys[order]
+            w_sorted = signed_w[order]
+            first = np.concatenate(([True], k_sorted[1:] != k_sorted[:-1]))
+            starts = np.flatnonzero(first)
+            u_keys = k_sorted[starts]
+            u_rows = (u_keys // np.int64(n_nodes)).astype(np.int32)
+            u_cols = (u_keys % np.int64(n_nodes)).astype(np.int32)
+            u_vals = (np.add.reduceat(w_sorted, starts) * inv_cnt[u_rows]).astype(np.float32)
+            nz = u_vals != 0.0
+            w_csr = _NumpyCSR((n_nodes, n_nodes), u_rows[nz], u_cols[nz], u_vals[nz])
+        else:
+            w_csr = _NumpyCSR(
+                (n_nodes, n_nodes),
+                np.zeros(0, np.int32),
+                np.zeros(0, np.int32),
+                np.zeros(0, np.float32),
+            )
     t2i = {str(u): i for i, u in enumerate(uniq)}
 
     w_gpu = None
     if use_gpu:
-        import cupyx.scipy.sparse as cpsp  # type: ignore[import-untyped]
+        cpsp = importlib.import_module("cupyx.scipy.sparse")
+        if sp is not None:
+            w_gpu = cpsp.csr_matrix(w_csr)
+        else:
+            import cupy as cp
 
-        w_gpu = cpsp.csr_matrix(w_csr)
+            w_gpu = cpsp.coo_matrix(
+                (cp.asarray(w_csr.data), (cp.asarray(w_csr.rows), cp.asarray(w_csr.cols))),
+                shape=w_csr.shape,
+                dtype=cp.float32,
+            ).tocsr()
 
     return CompressedAncestralBrain(
         dataset_id=pack.dataset_id,
@@ -874,6 +928,161 @@ def build_signal_dictionary(state: FlyWorldState) -> list[dict[str, Any]]:
     ]
 
 
+def replay_evolved_genome_in_full_spiking_brain(
+    pack: ConnectomePack,
+    genome: npt.ArrayLike,
+    *,
+    backend: str = "auto",
+    seed: int = 1,
+    ticks: int = 250,
+    fly_id: int | None = None,
+    generation: int | None = None,
+) -> dict[str, Any]:
+    """Phase F12d: replay an evolved ``fly_world`` descendant's genome in BOTH the
+    ``cell_type_compressed`` brain AND the full spiking LIF connectome brain, recording
+    side-by-side firing rates, qualitative agreement, and any discrepancies explicitly."""
+    from alife_lab.connectome.lif import LIFParams, make_initial_state, step_tick_cpu
+
+    t0 = time.perf_counter()
+    g = np.asarray(genome, dtype=np.float32).reshape(-1)
+    if g.size != GENOME_DIM:
+        raise ValueError(f"evolved genome must have {GENOME_DIM} floats, got {g.size}")
+
+    sugar_scale = float(np.exp(np.clip(g[0], -0.8, 0.8)))
+    bitter_scale = float(np.exp(np.clip(g[1], -0.8, 0.8)))
+    touch_scale = float(np.exp(np.clip(g[2], -0.8, 0.8)))
+
+    # 1. Evaluate evolved genome in the compressed brain (cell_type_compressed)
+    brain = build_compressed_ancestral_brain(pack, use_gpu=False)
+    gain = 0.70 if brain.source_cells > 1000 else 1.25
+
+    def _eval_comp(stims: list[tuple[int, float]]) -> tuple[float, float]:
+        r = np.zeros((brain.num_nodes, 1), dtype=np.float32)
+        ext = np.zeros((brain.num_nodes, 1), dtype=np.float32)
+        for idx, hz in stims:
+            if idx >= 0:
+                ext[idx, 0] = hz
+        for _ in range(50):
+            r = _analytical_lif_step(brain.w_csr, r, ext, gain=gain, is_gpu=False)
+        mn9 = float(r[brain.i_mn9, 0]) if brain.i_mn9 >= 0 else 0.0
+        dng = float(r[brain.i_dng84, 0]) if brain.i_dng84 >= 0 else 0.0
+        return round(mn9, 1), round(dng, 1)
+
+    c_b_mn9, c_b_dng = _eval_comp([])
+    c_s_mn9, _ = _eval_comp([(brain.i_sugar, 150.0 * sugar_scale)])
+    c_sb_mn9, _ = _eval_comp(
+        [(brain.i_sugar, 150.0 * sugar_scale), (brain.i_bitter, 200.0 * bitter_scale)]
+    )
+    _, c_p_dng = _eval_comp([(brain.i_groom, 150.0 * touch_scale)])
+
+    # 2. Evaluate the exact same evolved genome in the FULL spiking LIF connectome brain!
+    eff_b = backend
+    if eff_b == "auto":
+        from alife_lab.connectome.lif_cupy import available as cupy_ok
+
+        eff_b = "cupy" if (pack.cells.num_cells > 500 and cupy_ok()) else "numpy"
+
+    csr = pack.edges.to_csr(pack.cells.num_cells)
+    params = LIFParams()
+    ports = resolve_embodied_ports(pack)
+    gpu_runner: Any = None
+    if eff_b == "cupy":
+        from alife_lab.connectome.lif_cupy import CupyLIFRunner
+
+        gpu_runner = CupyLIFRunner(csr, params, seed=int(seed))
+
+    def _eval_full(port_stims: list[tuple[I32, float]]) -> tuple[float, float]:
+        lif = make_initial_state(pack.cells.num_cells, params)
+        for p_idx, hz in port_stims:
+            if p_idx.size > 0:
+                lif.stim_rate_hz[p_idx] = np.float32(hz)
+        if gpu_runner is not None:
+            gpu_runner.upload_state(lif)
+            for _ in range(ticks):
+                gpu_runner.step_tick()
+            gpu_runner.download_state(lif)
+        else:
+            for _ in range(ticks):
+                step_tick_cpu(lif, csr, params, int(seed))
+        sec = max(1e-3, ticks / 1000.0)
+        mn9_hz = (
+            float(lif.total_spikes[ports.proboscis_mn].mean()) / sec
+            if ports.proboscis_mn.size > 0
+            else 0.0
+        )
+        dng_hz = (
+            float(lif.total_spikes[ports.grooming_dn].mean()) / sec
+            if ports.grooming_dn.size > 0
+            else 0.0
+        )
+        return round(mn9_hz, 1), round(dng_hz, 1)
+
+    f_b_mn9, f_b_dng = _eval_full([])
+    f_s_mn9, _ = _eval_full([(ports.sugar_grn, 150.0 * sugar_scale)])
+    f_sb_mn9, _ = _eval_full(
+        [(ports.sugar_grn, 150.0 * sugar_scale), (ports.bitter_grn, 200.0 * bitter_scale)]
+    )
+    _, f_p_dng = _eval_full([(ports.groom_mech, 150.0 * touch_scale)])
+
+    comp_checks = {
+        "baseline_quiescent": bool(c_b_mn9 < 1.0 and c_b_dng < 1.0),
+        "sugar_recruits_mn9": bool(c_s_mn9 > 15.0),
+        "bitter_suppresses_mn9": bool(c_sb_mn9 < c_s_mn9 * 0.5),
+        "antennal_poke_recruits_dng84": bool(c_p_dng > 15.0),
+    }
+    full_checks = {
+        "baseline_quiescent": bool(f_b_mn9 < 1.0 and f_b_dng < 1.0),
+        "sugar_recruits_mn9": bool(f_s_mn9 > 15.0),
+        "bitter_suppresses_mn9": bool(f_sb_mn9 < f_s_mn9 * 0.5),
+        "antennal_poke_recruits_dng84": bool(f_p_dng > 15.0),
+    }
+    agreements = {k: bool(comp_checks[k] == full_checks[k]) for k in comp_checks}
+
+    return {
+        "phase": "F12d_full_brain_replay",
+        "dataset_id": pack.dataset_id,
+        "full_cells": pack.cells.num_cells,
+        "compressed_nodes": brain.num_nodes,
+        "backend": eff_b,
+        "ticks": ticks,
+        "wall_seconds": round(time.perf_counter() - t0, 2),
+        "descendant": {
+            "fly_id": fly_id,
+            "generation": generation,
+            "fly_distance": round(compute_fly_distance(g), 4),
+            "sugar_scale": round(sugar_scale, 3),
+            "bitter_scale": round(bitter_scale, 3),
+            "touch_scale": round(touch_scale, 3),
+            "body_scale": round(float(np.exp(np.clip(g[8], -0.45, 0.45))), 3),
+            "leg_length": round(float(np.exp(np.clip(g[9], -0.45, 0.45))), 3),
+            "wing_span": round(float(np.exp(np.clip(g[10], -0.45, 0.45))), 3),
+        },
+        "compressed_rates_hz": {
+            "baseline_mn9": c_b_mn9,
+            "sugar_mn9": c_s_mn9,
+            "sugar_bitter_mn9": c_sb_mn9,
+            "antennal_poke_dng84": c_p_dng,
+        },
+        "full_spiking_rates_hz": {
+            "baseline_mn9": f_b_mn9,
+            "sugar_mn9": f_s_mn9,
+            "sugar_bitter_mn9": f_sb_mn9,
+            "antennal_poke_dng84": f_p_dng,
+        },
+        "discrepancy_hz": {
+            "baseline_mn9": round(f_b_mn9 - c_b_mn9, 1),
+            "sugar_mn9": round(f_s_mn9 - c_s_mn9, 1),
+            "sugar_bitter_mn9": round(f_sb_mn9 - c_sb_mn9, 1),
+            "antennal_poke_dng84": round(f_p_dng - c_p_dng, 1),
+        },
+        "compressed_checks": comp_checks,
+        "full_spiking_checks": full_checks,
+        "qualitative_agreements": agreements,
+        "qualitative_agreement_count": sum(1 for v in agreements.values() if v),
+        "all_qualitative_agree": all(agreements.values()),
+    }
+
+
 def run_f12_signal_emergence_assay(
     pack: ConnectomePack | None = None,
     *,
@@ -881,6 +1090,7 @@ def run_f12_signal_emergence_assay(
     evo_ticks: int = 1200,
     eval_ticks: int = 400,
     backend: str = "auto",
+    replay_fine: bool = False,
 ) -> dict[str, Any]:
     """Run Phase F12 evolutionary trials + all 3 rigorous emergent-signal tests.
 
@@ -889,6 +1099,8 @@ def run_f12_signal_emergence_assay(
     2. **Receiver response:** Receivers measurably shift approach/flee behavior vs muted channel.
     3. **Causal survival/foraging utility:** Forking the evolved population and blocking the
        signal channel reduces foraging/survival relative to the intact evolved twin.
+    Optionally runs Phase F12d full-resolution spiking brain replay of the top evolved descendant
+    when ``replay_fine=True``.
     """
     t0 = time.perf_counter()
     if pack is None:
@@ -896,6 +1108,7 @@ def run_f12_signal_emergence_assay(
     fidelity = verify_compressed_vs_spiking_fidelity(pack)
 
     seed_reports: list[dict[str, Any]] = []
+    top_descendant_state: tuple[F32, int, int] | None = None
     for sd in seeds:
         # 1. Autonomous evolution (NO external fitness function!)
         w = make_fly_world(
@@ -912,6 +1125,18 @@ def run_f12_signal_emergence_assay(
         )
         for _ in range(evo_ticks):
             step_fly_world_tick(w)
+        if top_descendant_state is None:
+            a_idx = np.flatnonzero(w.alive > 0)
+            if a_idx.size > 0:
+                best_s = max(
+                    a_idx.tolist(),
+                    key=lambda s: (int(w.generation[s]), compute_fly_distance(w.genomes[s])),
+                )
+                top_descendant_state = (
+                    w.genomes[best_s].copy(),
+                    int(w.fly_id[best_s]),
+                    int(w.generation[best_s]),
+                )
 
         # 2. Fork evolved population into TWO identical twins: intact vs channel-blocked!
         def _clone_world(
@@ -992,6 +1217,19 @@ def run_f12_signal_emergence_assay(
     mean_intact_food = float(np.mean([r["fork_intact_food"] for r in seed_reports]))
     mean_muted_food = float(np.mean([r["fork_muted_food"] for r in seed_reports]))
 
+    fine_replay: dict[str, Any] | None = None
+    if replay_fine and top_descendant_state is not None:
+        g_top, top_id, top_gen = top_descendant_state
+        fine_replay = replay_evolved_genome_in_full_spiking_brain(
+            pack,
+            g_top,
+            backend=backend,
+            seed=int(seeds[0]),
+            ticks=250,
+            fly_id=top_id,
+            generation=top_gen,
+        )
+
     checks = {
         "compressed_brain_fidelity_passed": bool(fidelity["all_checks_passed"]),
         "autonomous_generations_and_drift": bool(mean_births >= 5.0 and mean_dist > 0.05),
@@ -1016,6 +1254,7 @@ def run_f12_signal_emergence_assay(
             "mean_fork_intact_food": round(mean_intact_food, 3),
             "mean_fork_muted_food": round(mean_muted_food, 3),
         },
+        "fine_replay": fine_replay,
         "seed_reports": seed_reports,
         "checks": checks,
         "all_checks_passed": all(checks.values()),

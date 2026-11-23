@@ -288,6 +288,17 @@ interface EmbodiedHeader {
   has_stl_meshes?: boolean;
   body_asset_source: string;
   level_note: string;
+  evolved_descendant?: {
+    fly_id: number | null;
+    generation: number | null;
+    fly_distance: number;
+    sugar_scale: number;
+    bitter_scale: number;
+    touch_scale: number;
+    body_scale: number;
+    leg_length: number;
+    wing_span: number;
+  } | null;
 }
 
 interface Props {
@@ -894,7 +905,7 @@ export const EmbodiedFlyView = forwardRef<EmbodiedFlyViewHandle, Props>(function
 
   return (
     <div data-testid={testId} style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%" }}>
-      {/* Honest Level 1 / Level 2 VNC Banner */}
+      {/* Honest Level 1 / Level 2 VNC / F12d Full-Brain Replay Banner */}
       <div
         data-testid="fly-level1-banner"
         className="notice small"
@@ -904,20 +915,29 @@ export const EmbodiedFlyView = forwardRef<EmbodiedFlyViewHandle, Props>(function
           justifyContent: "space-between",
           flexWrap: "wrap",
           gap: "8px",
-          borderLeft:
-            hud?.control_mode && hud.control_mode !== "level1_cpg"
+          borderLeft: hud?.evolved_descendant
+            ? "3px solid #d946ef"
+            : hud?.control_mode && hud.control_mode !== "level1_cpg"
               ? "3px solid #10b981"
               : undefined,
         }}
       >
         <span>
-          {hud?.vnc_profile
-            ? t("fly.level2_alif_banner").replace("{profile}", hud.vnc_profile)
-            : hud?.control_mode === "level2_vnc_tuned"
-              ? t("fly.level2_tuned_banner")
-              : hud?.control_mode === "level2_vnc"
-                ? t("fly.level2_banner")
-                : t("fly.level1_banner")}
+          {hud?.evolved_descendant
+            ? t("fly.f12d_replay_banner")
+                .replace("{id}", String(hud.evolved_descendant.fly_id ?? 0))
+                .replace("{gen}", String(hud.evolved_descendant.generation ?? 0))
+                .replace("{dist}", hud.evolved_descendant.fly_distance.toFixed(3))
+                .replace("{sugar}", hud.evolved_descendant.sugar_scale.toFixed(2))
+                .replace("{bitter}", hud.evolved_descendant.bitter_scale.toFixed(2))
+                .replace("{touch}", hud.evolved_descendant.touch_scale.toFixed(2))
+            : hud?.vnc_profile
+              ? t("fly.level2_alif_banner").replace("{profile}", hud.vnc_profile)
+              : hud?.control_mode === "level2_vnc_tuned"
+                ? t("fly.level2_tuned_banner")
+                : hud?.control_mode === "level2_vnc"
+                  ? t("fly.level2_banner")
+                  : t("fly.level1_banner")}
         </span>
         {tm && (
           <span className="mono" data-testid="fly-realtime-badge">

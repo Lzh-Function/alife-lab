@@ -513,6 +513,104 @@ class Controller:
         spec = nca_spec_from_training(train, decode_checkpoint(data), run_id, row["sha256"])
         return {"spec": spec, "checkpoint": {"id": row["id"], "tick": row["simulation_clock"]}}
 
+    def export_fly_world_replay_spec(
+        self,
+        run_id: str,
+        *,
+        fly_id: int | None = None,
+        checkpoint_id: str = "latest",
+    ) -> dict[str, Any]:
+        """Phase F12d: build a ``fly_embodied`` full-brain + MuJoCo replay spec from a
+        ``fly_world`` checkpoint's evolved descendant genome (NumPy-only in controller)."""
+        import numpy as np
+
+        from alife_lab.artifacts.store import decode_checkpoint
+        from alife_lab.connectome.fly_world import compute_fly_distance
+        from alife_lab.core.hashing import sha256_bytes
+        from alife_lab.core.spec import FlyWorldExperiment
+
+        fw = self.run_spec(run_id).experiment
+        if not isinstance(fw, FlyWorldExperiment):
+            raise ControllerError("only fly_world runs can export a full-brain F12d replay")
+        if checkpoint_id == "latest":
+            row = self.latest_checkpoint(run_id)
+        else:
+            found = self.db.one(
+                "SELECT * FROM checkpoints WHERE run_id=? AND id=?", (run_id, checkpoint_id)
+            )
+            row = dict(found) if found else None
+        if row is None:
+            raise NotFound("checkpoint not found")
+        data = self.store.resolve(run_id, row["logical_path"]).read_bytes()
+        if sha256_bytes(data) != row["sha256"]:
+            raise Conflict("checkpoint checksum mismatch", "checksum_mismatch")
+
+        decoded = decode_checkpoint(data)
+        arrs = decoded["arrays"]
+        alive = np.asarray(arrs["alive"])
+        fly_ids = np.asarray(arrs["fly_id"])
+        generations = np.asarray(arrs["generation"])
+        genomes = np.asarray(arrs["genomes"], dtype=np.float32)
+
+        alive_idx = np.flatnonzero(alive > 0)
+        if alive_idx.size == 0:
+            raise Conflict("no living descendants found in this checkpoint")
+
+        slot: int | None = None
+        if fly_id is not None:
+            matches = [int(i) for i in alive_idx.tolist() if int(fly_ids[i]) == int(fly_id)]
+            if matches:
+                slot = matches[0]
+        if slot is None:
+            slot = max(
+                alive_idx.tolist(),
+                key=lambda s: (int(generations[s]), compute_fly_distance(genomes[s])),
+            )
+
+        g_vec = [round(float(v), 5) for v in genomes[slot].tolist()]
+        chosen_id = int(fly_ids[slot])
+        chosen_gen = int(generations[slot])
+        chosen_dist = round(compute_fly_distance(genomes[slot]), 4)
+
+        spec_dict: dict[str, Any] = {
+            "schema_version": 1,
+            "experiment": {
+                "name": f"F12d replay fly-{chosen_id} gen-{chosen_gen} from {fw.name}"[:110],
+                "mode": "exploratory",
+                "substrate": "fly_embodied",
+                "seed": int(fw.seed),
+                "dataset_id": fw.dataset_id,
+                "wiring": "reference",
+                "arena": {
+                    "half_size": 6.0,
+                    "foods": [
+                        {"x": 1.1, "y": 0.2, "radius": 0.42, "kind": "sugar"},
+                        {"x": -1.4, "y": -0.8, "radius": 0.36, "kind": "bitter"},
+                    ],
+                },
+                "dynamics": {
+                    "control_mode": "level1_cpg",
+                    "explore_drive_hz": 110.0,
+                    "evolved_genome": g_vec,
+                    "evolved_fly_id": chosen_id,
+                    "evolved_generation": chosen_gen,
+                    "evolved_fly_distance": chosen_dist,
+                },
+                "runner": {"max_steps": 6000, "checkpoint_interval": 1000},
+            },
+        }
+        validated = ExperimentSpec.model_validate(spec_dict).model_dump(mode="json")
+        return {
+            "spec": validated,
+            "checkpoint": {"id": row["id"], "tick": row["simulation_clock"]},
+            "descendant": {
+                "fly_id": chosen_id,
+                "generation": chosen_gen,
+                "fly_distance": chosen_dist,
+                "dataset_id": fw.dataset_id,
+            },
+        }
+
     def checkpoint_frame(self, run_id: str, checkpoint_id: str) -> tuple[dict[str, Any], bytes]:
         """Decode a checkpoint into a preview frame for display (not the research state)."""
         from alife_lab.artifacts.store import decode_checkpoint

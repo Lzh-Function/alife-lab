@@ -444,6 +444,12 @@ export const api = {
       `/experiments/${id}/inspect?x=${x}&y=${y}&radius=${radius}${tick === undefined ? "" : `&tick=${tick}`}${mode ? `&mode=${mode}` : ""}`,
     ),
   exportNca: (id: string) => request<{ spec: unknown; checkpoint: { id: string; tick: number } }>("POST", `/experiments/${id}/nca/export`, {}),
+  exportFlyWorldReplay: (id: string, flyId?: number) =>
+    request<{
+      spec: unknown;
+      checkpoint: { id: string; tick: number };
+      descendant: { fly_id: number; generation: number; fly_distance: number; dataset_id: string };
+    }>("POST", `/experiments/${id}/fly-world/replay`, flyId !== undefined ? { fly_id: flyId } : {}),
   bffAssay: (body: { program?: string; encoding?: "text" | "hex"; run_id?: string; index?: number; tick?: number; params?: Record<string, unknown> }) =>
     request<import("../components/AssayResult").AssayResultData>("POST", "/tools/bff/assay", body),
   bffTrace: (body: { program_a: string; program_b: string; encoding: "text" | "hex"; variant: string; step_limit: number }) =>

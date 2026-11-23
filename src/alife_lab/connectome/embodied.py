@@ -82,6 +82,12 @@ EMBODIED_LEVEL2_TUNED_FRAMING = (
     "CPG, ZERO added synapses), with tuned global synaptic gain (w_syn), proprioceptive gain, and "
     "physiological MN-to-joint readout scaling."
 )
+EMBODIED_F12D_REPLAY_FRAMING = (
+    "F12d Full-Brain + MuJoCo Replay of evolved fly_world descendant "
+    "(fly #{fly_id}, Gen {gen}, fly_distance={dist:.3f}): full biological spiking connectome "
+    "wiring intact with evolved sensory/descending gains and morphology applied "
+    "(artificial-life descendant, no longer a pure biological fly model)."
+)
 
 
 def make_synthetic_fly_embodied_pack() -> ConnectomePack:
@@ -739,6 +745,11 @@ class EmbodiedFlyWorld:
     vnc_femur_gain: float = 0.55
     vnc_tibia_gain: float = 0.50
     vnc_profile_name: str | None = None
+    # Phase F12d: optional evolved fly_world descendant genome (24 floats) for full-brain replay
+    evolved_genome: F32 | None = None
+    evolved_fly_id: int | None = None
+    evolved_generation: int | None = None
+    evolved_fly_distance: float | None = None
     gpu_runner: Any = None
     gpu_synced_to_host: bool = True
     # Separate user manual stimulus rates so sensor updates never overwrite user interventions!
@@ -770,6 +781,12 @@ class EmbodiedFlyWorld:
 
     @property
     def framing_note(self) -> str:
+        if self.evolved_genome is not None:
+            return EMBODIED_F12D_REPLAY_FRAMING.format(
+                fly_id=self.evolved_fly_id if self.evolved_fly_id is not None else 0,
+                gen=self.evolved_generation if self.evolved_generation is not None else 0,
+                dist=float(self.evolved_fly_distance or 0.0),
+            )
         if self.control_mode == "level2_vnc":
             return EMBODIED_LEVEL2_FRAMING
         if self.control_mode == "level2_vnc_tuned":
@@ -804,6 +821,10 @@ def make_embodied_world(
     vnc_femur_gain: float = 0.55,
     vnc_tibia_gain: float = 0.50,
     datasets_dir: Path | None = None,
+    evolved_genome: list[float] | None = None,
+    evolved_fly_id: int | None = None,
+    evolved_generation: int | None = None,
+    evolved_fly_distance: float | None = None,
 ) -> EmbodiedFlyWorld:
     """Initialize a deterministic closed-loop Brain(+VNC) <-> Body embodied fly world."""
     csr = pack.edges.to_csr(pack.cells.num_cells)
@@ -861,6 +882,12 @@ def make_embodied_world(
         vnc_coxa_gain=float(vnc_coxa_gain),
         vnc_femur_gain=float(vnc_femur_gain),
         vnc_tibia_gain=float(vnc_tibia_gain),
+        evolved_genome=(
+            np.asarray(evolved_genome, dtype=np.float32) if evolved_genome is not None else None
+        ),
+        evolved_fly_id=evolved_fly_id,
+        evolved_generation=evolved_generation,
+        evolved_fly_distance=evolved_fly_distance,
         gpu_runner=gpu_runner,
         gpu_synced_to_host=True,
         manual_stim_hz=np.zeros(pack.cells.num_cells, dtype=np.float32),
@@ -877,20 +904,34 @@ def step_embodied_tick(world: EmbodiedFlyWorld) -> MotorCommands:
     world.last_sensors = sensors
     p = world.ports
 
+    # Optional Phase F12d evolved fly_world descendant pathway & morphology gains
+    g_evo = world.evolved_genome
+    sugar_mul = float(np.exp(np.clip(g_evo[0], -0.8, 0.8))) if g_evo is not None else 1.0
+    bitter_mul = float(np.exp(np.clip(g_evo[1], -0.8, 0.8))) if g_evo is not None else 1.0
+    touch_mul = float(np.exp(np.clip(g_evo[2], -0.8, 0.8))) if g_evo is not None else 1.0
+    fwd_mul = (
+        float(np.exp(np.clip(g_evo[3], -0.5, 0.5)) * np.exp(np.clip(g_evo[9], -0.45, 0.45)))
+        if g_evo is not None
+        else 1.0
+    )
+    steer_mul = float(np.exp(np.clip(g_evo[4], -0.5, 0.5))) if g_evo is not None else 1.0
+
     # 2. Compute sensory firing rates (manual user stim + closed-loop body sensory rates).
     stim = world.lif.stim_rate_hz
     u_idx = p.all_sensory_union
     stim[u_idx] = world.manual_stim_hz[u_idx]
 
     if sensors.sugar_contact > 0.0 and p.sugar_grn.size > 0:
-        stim[p.sugar_grn] = np.maximum(stim[p.sugar_grn], np.float32(190.0 * sensors.sugar_contact))
+        stim[p.sugar_grn] = np.maximum(
+            stim[p.sugar_grn], np.float32(190.0 * sugar_mul * sensors.sugar_contact)
+        )
     if sensors.bitter_contact > 0.0 and p.bitter_grn.size > 0:
         stim[p.bitter_grn] = np.maximum(
-            stim[p.bitter_grn], np.float32(200.0 * sensors.bitter_contact)
+            stim[p.bitter_grn], np.float32(200.0 * bitter_mul * sensors.bitter_contact)
         )
     if sensors.antennal_touch > 0.0 and p.groom_mech.size > 0:
         stim[p.groom_mech] = np.maximum(
-            stim[p.groom_mech], np.float32(210.0 * sensors.antennal_touch)
+            stim[p.groom_mech], np.float32(210.0 * touch_mul * sensors.antennal_touch)
         )
     # On small synthetic circuits, raw bilateral ORNs directly drive DNa01 steering.
     # On full FlyWire v783 (uniform-weight Shiu LIF without APL divisive inhibition), sustained
@@ -909,10 +950,11 @@ def step_embodied_tick(world: EmbodiedFlyWorld) -> MotorCommands:
     # Suppress baseline walking arousal when tasting sweet food (without bitter) so the fly slows
     # naturally as MN9 engages, instead of zipping past the droplet.
     if world.explore_drive_hz > 0.0 and p.forward_dn.size > 0:
+        base_drive = min(260.0, world.explore_drive_hz * fwd_mul)
         walk_drive = (
-            world.explore_drive_hz * 0.12
+            base_drive * 0.12
             if (sensors.sugar_contact > 0.2 and sensors.bitter_contact <= 0.05)
-            else world.explore_drive_hz
+            else base_drive
         )
         stim[p.forward_dn] = np.maximum(stim[p.forward_dn], np.float32(walk_drive))
 
@@ -923,10 +965,10 @@ def step_embodied_tick(world: EmbodiedFlyWorld) -> MotorCommands:
         # Bilateral Weber-contrast steering into DNa01/02 (like LAL PFL3 chemotaxis amplification)
         # so even a 0.5% left-right odor gradient steers cleanly straight into the honey droplet.
         if contrast > 0.0012 and p.turn_left_dn.size > 0:
-            gain = min(200.0, 22000.0 * contrast)
+            gain = min(220.0, 22000.0 * steer_mul * contrast)
             stim[p.turn_left_dn] = np.maximum(stim[p.turn_left_dn], np.float32(gain))
         elif contrast < -0.0012 and p.turn_right_dn.size > 0:
-            gain = min(200.0, 22000.0 * (-contrast))
+            gain = min(220.0, 22000.0 * steer_mul * (-contrast))
             stim[p.turn_right_dn] = np.maximum(stim[p.turn_right_dn], np.float32(gain))
 
     # Phase F8 Level 2: Closed-loop leg proprioception -> VNC sensory ports (LF..RH).

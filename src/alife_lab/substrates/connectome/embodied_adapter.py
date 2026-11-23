@@ -178,6 +178,10 @@ class FlyEmbodiedAdapter:
             vnc_femur_gain=dyn.vnc_femur_gain,
             vnc_tibia_gain=dyn.vnc_tibia_gain,
             datasets_dir=ds_dir,
+            evolved_genome=list(dyn.evolved_genome) if dyn.evolved_genome is not None else None,
+            evolved_fly_id=dyn.evolved_fly_id,
+            evolved_generation=dyn.evolved_generation,
+            evolved_fly_distance=dyn.evolved_fly_distance,
         )
         if dyn.vnc_profile:
             from alife_lab.connectome.vnc_learn import (
@@ -310,6 +314,33 @@ class FlyEmbodiedAdapter:
             "has_stl_meshes": bool(state.body.asset_info.get("installed", False)),
             "body_asset_source": state.body.asset_info.get("source", "procedural_fallback"),
             "level_note": state.framing_note,
+            "evolved_descendant": (
+                {
+                    "fly_id": state.evolved_fly_id,
+                    "generation": state.evolved_generation,
+                    "fly_distance": round(float(state.evolved_fly_distance or 0.0), 3),
+                    "sugar_scale": round(
+                        float(np.exp(np.clip(state.evolved_genome[0], -0.8, 0.8))), 2
+                    ),
+                    "bitter_scale": round(
+                        float(np.exp(np.clip(state.evolved_genome[1], -0.8, 0.8))), 2
+                    ),
+                    "touch_scale": round(
+                        float(np.exp(np.clip(state.evolved_genome[2], -0.8, 0.8))), 2
+                    ),
+                    "body_scale": round(
+                        float(np.exp(np.clip(state.evolved_genome[8], -0.45, 0.45))), 2
+                    ),
+                    "leg_length": round(
+                        float(np.exp(np.clip(state.evolved_genome[9], -0.45, 0.45))), 2
+                    ),
+                    "wing_span": round(
+                        float(np.exp(np.clip(state.evolved_genome[10], -0.45, 0.45))), 2
+                    ),
+                }
+                if state.evolved_genome is not None
+                else None
+            ),
             "pos_xy": [round(x, 3), round(y, 3)],
         }
         return header, geom_bytes + fired_bytes

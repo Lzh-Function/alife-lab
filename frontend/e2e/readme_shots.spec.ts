@@ -3,9 +3,10 @@
 // Uses a throwaway server and data directory like the other E2E tests.
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { BASE, openPreset, startServer, stopServer, tick, waitHealthy } from "./helpers";
 
-const OUT = path.resolve(process.cwd(), "..", "docs", "images");
+const OUT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "docs", "images");
 const enabled = process.env.ALIFE_README_SHOTS === "1";
 
 async function shot(target: Page | Locator, name: string) {
@@ -152,6 +153,49 @@ test.describe("README screenshots", () => {
       await expect(page.getByTestId("lineage-svg")).toBeVisible();
       await page.waitForTimeout(2000);
       await shot(page, "lineage");
+    } finally {
+      await stopServer(server);
+    }
+  });
+
+  test("capture connectome and fly worlds", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1080 });
+    const server = startServer();
+    await waitHealthy();
+    try {
+      // 1. FlyWire v783 full 138,639-cell 3D glowing brain (sugar feeding reflex).
+      await create(page, "connectome_fly_sugar", "60", 120, undefined, "local_gpu");
+      await view(page, "brain3d");
+      await page.waitForTimeout(4000);
+      await shot(page.getByTestId("world-canvas"), "connectome_brain3d");
+      await stop(page);
+
+      // 2. Phase F8 Level 1: Embodied FlyWire 2-pane (CT 3D MuJoCo fly + 138,639-cell glowing brain).
+      await create(page, "fly_embodied_flywire", "60", 250, undefined, "local_gpu");
+      await page.waitForTimeout(4000);
+      await shot(page.getByTestId("world-canvas"), "fly_embodied_2pane");
+      await stop(page);
+
+      // 3. Phase F8 Level 2: MaleCNS whole-CNS VNC direct motor drive + 6-leg x 6-muscle MN matrix.
+      await create(page, "fly_embodied_malecns_vnc_learned", "60", 200, undefined, "local_gpu");
+      await page.waitForTimeout(3500);
+      await shot(page.getByTestId("world-canvas"), "fly_embodied_vnc_l2");
+      await stop(page);
+
+      // 4. Phase F11 Finale: Dual-Sex Whole-CNS Ecosystem (8 MaleCNS + 8 BANC = 2.58M neurons).
+      await create(page, "fly_swarm_ecosystem_16", "60", 120, undefined, "local_gpu");
+      await page.waitForTimeout(3000);
+      await shot(page.getByTestId("fly-swarm-view"), "fly_swarm_ecosystem");
+      await stop(page);
+
+      // 5. Phase F12 + F12d: fly_world open-ended evolution + Signal Dictionary + F12d Replay panel.
+      await create(page, "fly_world_flywire_evo", "0", 400, undefined, "local_gpu");
+      await page.waitForTimeout(1500);
+      const predBtn = page.getByTestId("fly-world-view").locator("button", { hasText: /🦅/ });
+      if (await predBtn.isEnabled()) await predBtn.click();
+      await page.waitForTimeout(1500);
+      await shot(page.getByTestId("fly-world-view"), "fly_world_evolution");
+      await stop(page);
     } finally {
       await stopServer(server);
     }

@@ -187,6 +187,32 @@ class FlyWorldAdapter:
             buf[:, 11] = state.sig1_emit[idx]
         dist_info = decompose_fly_distance(state.genomes, state.alive)
         sig_dict = build_signal_dictionary(state)
+        top_descendants: list[dict[str, Any]] = []
+        if n_a > 0:
+            ranked = sorted(
+                idx.tolist(),
+                key=lambda s: (
+                    int(state.generation[s]),
+                    compute_fly_distance(state.genomes[s]),
+                    float(state.energy[s]),
+                ),
+                reverse=True,
+            )[:6]
+            for s in ranked:
+                gs = state.genomes[s]
+                top_descendants.append(
+                    {
+                        "slot_index": int(s),
+                        "fly_id": int(state.fly_id[s]),
+                        "generation": int(state.generation[s]),
+                        "sex": "M" if int(state.sex[s]) == 1 else "F",
+                        "fly_distance": round(compute_fly_distance(gs), 3),
+                        "energy": round(float(state.energy[s]), 2),
+                        "body_scale": round(float(np.exp(np.clip(gs[8], -0.45, 0.45))), 2),
+                        "leg_length": round(float(np.exp(np.clip(gs[9], -0.45, 0.45))), 2),
+                        "wing_span": round(float(np.exp(np.clip(gs[10], -0.45, 0.45))), 2),
+                    }
+                )
         header: dict[str, Any] = {
             "codec": "fly_world_v1",
             "tick": state.tick,
@@ -216,6 +242,7 @@ class FlyWorldAdapter:
             },
             "feeding": [round(float(v), 2) for v in state.feeding[idx].tolist()] if n_a > 0 else [],
             "recent_births": state.recent_births[-8:],
+            "top_descendants": top_descendants,
         }
         return header, buf.tobytes()
 

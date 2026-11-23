@@ -1726,6 +1726,7 @@ def cmd_connectome(args: argparse.Namespace) -> int:
                 evo_ticks=args.evo_ticks,
                 eval_ticks=args.eval_ticks,
                 backend=args.backend,
+                replay_fine=args.replay_fine,
             )
             if args.json:
                 _print_json(rep)
@@ -1751,6 +1752,29 @@ def cmd_connectome(args: argparse.Namespace) -> int:
                     f"recv={sm['best_receiver_response']} "
                     f"fork_food={sm['mean_fork_intact_food']} vs muted={sm['mean_fork_muted_food']}"
                 )
+                fr = rep.get("fine_replay")
+                if fr is not None:
+                    d = fr["descendant"]
+                    cr = fr["compressed_rates_hz"]
+                    sr = fr["full_spiking_rates_hz"]
+                    print(
+                        f"  F12d Full-Brain Replay (fly #{d['fly_id']} Gen {d['generation']} "
+                        f"dist={d['fly_distance']} · {fr['full_cells']:,} spiking cells, "
+                        f"backend={fr['backend']}, wall={fr['wall_seconds']}s, "
+                        f"agreement={fr['qualitative_agreement_count']}/4):"
+                    )
+                    print(
+                        f"    compressed ({fr['compressed_nodes']:,} nodes): "
+                        f"base={cr['baseline_mn9']}Hz sugar={cr['sugar_mn9']}Hz "
+                        f"bitter={cr['sugar_bitter_mn9']}Hz "
+                        f"poke_DNg84={cr['antennal_poke_dng84']}Hz"
+                    )
+                    print(
+                        f"    full LIF   ({fr['full_cells']:,} cells): "
+                        f"base={sr['baseline_mn9']}Hz sugar={sr['sugar_mn9']}Hz "
+                        f"bitter={sr['sugar_bitter_mn9']}Hz "
+                        f"poke_DNg84={sr['antennal_poke_dng84']}Hz"
+                    )
             return 0 if rep["all_checks_passed"] else 1
     except (DatasetError, ValueError, FileNotFoundError) as exc:
         print(f"connectome error: {exc}", file=sys.stderr)
@@ -2124,6 +2148,11 @@ def build_parser() -> argparse.ArgumentParser:
     cevo.add_argument("--evo-ticks", type=int, default=1200)
     cevo.add_argument("--eval-ticks", type=int, default=400)
     cevo.add_argument("--backend", choices=["auto", "numpy", "cupy"], default="auto")
+    cevo.add_argument(
+        "--replay-fine",
+        action="store_true",
+        help="replay the top evolved descendant inside the full-resolution spiking brain (F12d)",
+    )
     cevo.add_argument("--no-verify", action="store_true")
     cevo.add_argument("--json", action="store_true")
 

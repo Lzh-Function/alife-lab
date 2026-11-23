@@ -6,10 +6,10 @@
 
 **ALife Lab** は、人工生命（Artificial Life, ALife）のさまざまな「世界」を、手元のパソコンで作って・動かして・手を加えて・記録して・比べるための実験室です。操作はすべてブラウザから行い、計算は自分のマシン（CPU、対応環境では GPU）で実行します。
 
-- **多彩な人工生命を1か所で**：ライフゲーム、Lenia、Flow-Lenia、粘菌、自己複製プログラムのスープ（BFF）、ニューラルセルオートマトン、化学反応、プロトセル（原始細胞）、エージェント、群れ、身体を持つ生き物（MuJoCo）、ショウジョウバエ全脳コネクトームモデルなど 18 種類
-- **見て分かる表現**：値をそのまま色で示す 2D 表示に加えて、3D 地形・時間の積み重ね・光る表示・3D 光る脳・3D の生き物と歩容図（歩き方の記録）
-- **科学的に確かめられる**：チェックポイント、正確なリプレイ（巻き戻し再生）、分岐、比較、スイープ（条件 × seed の統計比較）、発見台帳と証拠レベル（E0〜E4）
-- **探せる・進化させられる**：CMA-ES、MAP-Elites、新規性探索（Novelty Search）、IMGEP、ASAL（CLIP を使った探索）
+- **多彩な人工生命を1か所で**：ライフゲーム、Lenia、Flow-Lenia、粘菌、自己複製プログラムのスープ（BFF）、ニューラルセルオートマトン、化学反応、プロトセル（原始細胞）、エージェント、群れ、身体を持つ生き物（MuJoCo）、そして**実データに基づくショウジョウバエの全脳・全中枢モデル、身体接続、258 万ニューロンの生態箱、ハエから始まる人工生命ワールド**まで 23 種類（128 プリセット）
+- **見て分かる表現**：値をそのまま色で示す 2D 表示に加えて、3D 地形・時間の積み重ね・光る表示・3D 光る脳・CT スキャン形状の 3D ハエと脳の 2 画面同時表示・3D の生き物と歩容図（歩き方の記録）
+- **科学的に確かめられる**：チェックポイント、正確なリプレイ（巻き戻し再生）、分岐、比較、スイープ（条件 × seed の統計比較）、発見台帳と証拠レベル（E0〜E4）、シャッフル配線などの比較用対照
+- **探せる・進化させられる**：CMA-ES、MAP-Elites、新規性探索（Novelty Search）、IMGEP、ASAL（CLIP を使った探索）、そして外部スコアなしの自律進化ワールド
 - **学べる**：やさしい日本語のガイドと用語集、各パラメータ・計測値の「?」ヘルプ
 
 > 研究用の道具として作っています。「見た目が面白いこと」と「科学的に確かめられたこと」は明確に分けて扱います（[証拠レベルと正直な記録](#証拠レベルと正直な記録)）。
@@ -19,6 +19,7 @@
 ## 目次
 
 - [何ができるか](#何ができるか)
+- [実データで動かすハエの脳・体・群れ・人工生命](#実データで動かすハエの脳体群れ人工生命)
 - [収録している人工生命の世界](#収録している人工生命の世界)
 - [これまでに確かめたこと](#これまでに確かめたこと)
 - [はじめかた](#はじめかた)
@@ -40,7 +41,7 @@
 
 - **世界カタログ**からプリセットを選び、パラメータを確認して実験を作成します。作成前に、設定に誤りがないか、このマシンで動かせるかを自動でチェックします。
 - **再生・一時停止・1ステップ（tick）ずつ進める・速度変更**ができ、実行中の様子は WebSocket でリアルタイムに画面へ届きます。
-- **介入（ブラシ・刺激など）**：マスを描く・消す、粒を足す、生き物を押す、神経細胞を刺激・停止するなどの操作ができます。介入はすべて「いつ操作し、どの時点で反映されたか」が記録され、あとから正確に再現できます。
+- **介入（ブラシ・刺激など）**：マスを描く・消す、粒を足す、生き物を押す、神経細胞を刺激・停止する、餌や捕食者の影を落とす、といった操作ができます。介入はすべて「いつ操作し、どの時点で反映されたか」が記録され、あとから正確に再現できます。
 - **インスペクタ（中身を調べる）**：クリックした場所の値や、エージェントの感覚・行動確率、生き物の関節の角度、神経細胞の膜電位などを、実験の状態を変えずに確認できます。
 - **チェックポイント（途中保存）**を残しておけば、サーバーを再起動しても続きから再開できます。
 
@@ -102,6 +103,44 @@ GPU（WebGL2 / Three.js）を使った立体表示などにボタン1つで切�
 
 ---
 
+## 実データで動かすハエの脳・体・群れ・人工生命
+
+公開されている実物のショウジョウバエの神経配線図（コネクトーム）を出発点に、**単体の脳 → 身体との接続 → 多匹の群れと生態箱 → ハエから始まる人工生命**までを一貫して体験・検証できます。すべての実験で CPU のみの小さな合成回路版も用意しているため、大容量データや GPU がない環境でも仕組みを試せます。
+
+### 1. 光る 138,639 細胞の全脳と、身体を持つハエ（F0〜F10）
+
+| 実 FlyWire v783 全脳（138,639 細胞・3D 光る脳） | 身体を持つハエ（左：CT 3D 物理ボディ / 右：実全脳） |
+|---|---|
+| <img src="docs/images/connectome_brain3d.jpg" alt="FlyWire v783 全脳 3D 光る脳" width="440"> | <img src="docs/images/fly_embodied_2pane.jpg" alt="身体を持つハエの 2 画面同時表示" width="440"> |
+
+- **全脳の反応と学習（`connectome`）**：FlyWire v783（138,639 細胞・約 1,509 万本の結合）のスパイキング LIF モデルを CPU / GPU（CUDA グラフ）でビット一致実行します。画面から甘味・苦味・触角刺激を与えたり、任意の細胞種を停止して反応が崩れるか確かめたりできます。キノコ体（KC→MBON）でのパブロフ匂い条件づけや、実測の全脳カルシウム画像（Aimon 2023）・視覚回路（flyvis 45,669 細胞）との突き合わせにも対応しています。
+- **脳と体のリアルタイム接続（`fly_embodied`）**：左の 3D アリーナで CT スキャン形状の 6 脚ハエ（MuJoCo）が匂いをたどって歩き、甘い餌で口（吻）を伸ばし、苦い餌で止め、触角をつつくと前脚で毛づくろいします。右ではその瞬間に光る 138,639 細胞の脳と、前進・旋回・摂食・毛づくろいの指令メーターが同期して動きます。
+
+<img src="docs/images/fly_embodied_vnc_l2.jpg" alt="全中枢（脳＋脊髄 VNC）による 6 脚 36 運動ニューロン直接駆動" width="900">
+
+- **脊髄（VNC）の配線図だけで脚を動かす挑戦（レベル 2）**：メスの全中枢（**BANC v888**：156,808 細胞）とオスの全中枢（**MaleCNS v1.0**：165,122 細胞）をそのまま 6 本脚・18 関節の 36 運動ニューロン群へ直結し、手書きの歩行リズム器を外した状態で「配線図から歩き方が生まれるか」を調べられます。下のパネルに 6 本脚 × 6 筋の運動ニューロン発火率と接地感覚がリアルタイム表示されます。
+- **たくさんの身体を GPU で一気に動かす（F9）**：MuJoCo Warp（`embodied-gpu`）と並列 LIF 脳を組み合わせ、32〜64 匹を同時に動かして回路の一斉停止スクリーニングや探索を行えます。
+
+### 2. 258 万ニューロンが同時に暮らす雌雄生態箱（F11）
+
+<img src="docs/images/fly_swarm_ecosystem.jpg" alt="オス 8 匹（MaleCNS）とメス 8 匹（BANC）の計 258 万ニューロンが同時に動く 3D 生態箱" width="900">
+
+- **1 つの 3D アリーナで多匹の全脳・全中枢ハエを同時稼働（`fly_swarm`）**：
+  - **集団での匂い忌避（Ramdya 2015）**：最大 24 匹の FlyWire 全脳（**計 333 万ニューロン**）を同時に走らせ、脚同士の接触が仲間に連鎖して嫌な匂いから集団で逃げ出す現象を再現します。
+  - **オス同士の縄張り闘争**：12 匹の MaleCNS 全中枢（**計 198 万ニューロン**）が餌場を巡り、オスフェロモン（cVA）と視覚を手がかりに翅の威嚇・突進（ランジ）・敗者の撤退を繰り広げます。
+  - **全部入り雌雄統合生態箱**：**MaleCNS オス 8 匹 ＋ BANC メス 8 匹（計 2,575,440 ニューロン）**が 1 つのアリーナで共存し、採餌（緑）・接触忌避（水色）・オスの求愛歌（金）・メスの聴覚応答（紫）・オス同士の闘争（赤/橙）がすべて同時に進行します。
+
+### 3. ハエから始まる人工生命と「フル脳＋MuJoCo」1 クリック再生（F12 / F12d）
+
+<img src="docs/images/fly_world_evolution.jpg" alt="ハエから始まる人工生命ワールド（3D 進化アリーナ・合図の辞書・F12d フル脳再生パネル）" width="900">
+
+- **外からの採点（適応度スコア）ゼロの自律進化（`fly_world`）**：実 FlyWire 全脳を細胞種ごとに圧縮したご先祖脳（`138,639 → 17,641` ノード、基礎 4 反射の忠実度を検証済み）をベースに、個体ごとの小さな差分遺伝子（配線ゲイン・体形や脚/翅の長さ・2 系統の合図チャネル）が、採餌・頭上の捕食者の影からの逃避・自律的な繁殖だけで世代を超えて変化していきます。
+- **ご先祖ハエからの距離と合図の辞書**：ご先祖に近いほど琥珀色、遺伝的に離れるほど水色〜赤紫へと体色が変化し、画面下に「どの状況で合図を出し、仲間の行動をどれだけ変えたか（相互情報量 MI bits・受け手応答）」がリアルタイムで集計されます。
+- **注目子孫を 1 クリックでフル脳＋MuJoCo 再生（F12d）**：進化した子孫の一覧から「🧠 フル脳＋MuJoCo で再生」ボタンを押すと、その個体の遺伝子を **138,639 細胞のフル解像度スパイキング脳＋CT 3D 物理ハエ** へそのまま載せ替えて新しいラボで観察できます（CLI の `--replay-fine` で圧縮脳とフル脳の発火率比較も可能です）。
+- *正直な位置づけ：* 進化で離れた子孫は、もはや生物のハエの模型ではなく **「ハエの配線から出発した人工生命」** として画面・記録の両方で明記しています。
+
+---
+
 ## 収録している人工生命の世界
 
 | | | |
@@ -129,7 +168,12 @@ GPU（WebGL2 / Three.js）を使った立体表示などにボタン1つで切�
 | | Particle Life `particle_life` | Ventrella、Mohr（コミュニティモデル） | 独自設定 |
 | | エージェントの世界 `agent_world` | 独自モデル（集団進化・寿命内学習） | 独自設定 |
 | 身体 | 身体を持つ生き物 `creature` | Sims 1994 に着想、MuJoCo | 自由落下が理論値と一致、チェックポイントからビット単位で正確に再開 |
-| 生き物の脳 | ショウジョウバエ全脳モデル `connectome` | Shiu ほか 2024、FlyWire v783 | CPU と GPU（CUDA グラフ含む）が**ビット一致**、甘味→MN9・苦味抑制・毛づくろいを再現 |
+| 生き物の脳・身体・群れ | ハエ全脳モデル `connectome` | Shiu ほか 2024、FlyWire v783 | CPU と GPU（CUDA グラフ含む）が**ビット一致**、甘味→MN9・苦味抑制・毛づくろい・パブロフ学習を再現 |
+| | 隠れ仕組み推定 `connectome_sysid` | 独自ベンチマーク（F5） | 観測ノイズ・部分観測下で隠れた時定数・符号反転・ギャップ結合の復元精度を検証 |
+| | 配線トポロジ学習 `connectome_task` | ハエ配線 vs シャッフル配線（F6） | 同一統計のシャッフル対照と多 seed 比較 |
+| | 身体を持つハエ `fly_embodied` | NeuroMechFly v2、BANC v888、MaleCNS v1.0 | 甘味摂食・苦味抑制・触角毛づくろい・MN9 停止・シャッフル崩壊（F8 レベル 1/2）を検証、チェックポイント完全一致 |
+| | 全脳ハエの群れ・生態箱 `fly_swarm` | Ramdya ほか 2015、BANC、MaleCNS | 24 匹集団忌避 4/4・12 匹オス闘争 4/4・雌雄統合生態箱 5/5 合格（シャッフル・感覚遮断対照つき） |
+| | ハエから始まる人工生命 `fly_world` | 独自モデル（F12 / F12d） | 圧縮ご先祖脳の 4/4 忠実度・3 基準合図検定・第 10 世代子孫のフル 138k 脳再生（4/4 定性一致）を検証 |
 | 探索 | 自動探索 `search` | CMA-ES（Hansen）、MAP-Elites、ASAL（Kumar ほか 2024） | CMA-ES の挙動が参照実装（`purecma`）と一致 |
 
 各世界の詳しい検証結果は [`docs/reference_fidelity/`](docs/reference_fidelity/) にまとめています。
@@ -138,19 +182,23 @@ GPU（WebGL2 / Three.js）を使った立体表示などにボタン1つで切�
 
 ## これまでに確かめたこと
 
-事前に条件を決めて行った比較実験（スイープ、各 5 seed、順列検定）の結果です。仮説どおりにならなかった結果も省かずに記録しています。
+事前に条件を決めて行った比較実験（スイープや対照実験）の結果です。仮説どおりにならなかった結果や限界も省かずに記録しています。
 
 | 問い | 結果 |
 |---|---|
 | Lenia の「動いて形を保つパターン」探し：CMA-ES はランダム探索より良いか | **裏付けあり**（0.871 対 0.833、p = 0.0079） |
-| MAP-Elites はランダム探索より多様な候補を集めるか | **裏付けあり**（区画の埋まり率 0.153 対 0.089、Holm 補正 p = 0.016） |
-| 新規性探索・IMGEP はランダム探索より多様か | **裏付けあり**（0.130 / 0.150 対 0.089、Holm 補正 p = 0.024） |
+| MAP-Elites / 新規性探索 / IMGEP はランダム探索より多様な候補を集めるか | **裏付けあり**（区画埋まり率 0.153 / 0.130 / 0.150 対 0.089、Holm 補正 p ≤ 0.024） |
 | 1色の Lenia で、CLIP は言葉ごとに違う見た目を選び分けるか | **裏付けなし**（どの言葉でも似た候補が選ばれた） |
 | 多色 Lenia で、CLIP の採点による CMA-ES はランダム探索より良いか | **裏付けあり**（0.2948 対 0.2869、p = 0.024） |
 | 生き物：体と歩き方を一緒に進化させると、ランダム探索より遠くまで歩くか | **裏付けあり**（20.4 m 対 11.1 m、p = 0.0079） |
-| 生き物：体も一緒に進化させると、歩き方だけの進化より遠くまで歩くか | **裏付けなし**（20.4 m 対 18.0 m、p = 0.29） |
 | 生き物：凸凹の地面では、反射も一緒に進化させると遠くまで歩くか | **裏付けなし**（25.5 m 対 22.0 m、p = 0.19）。ただし進化した反射を外すと 5 体とも悪化 |
 | BFF：小さなスープ（4096 プログラム）でも自己複製プログラムは現れるか | 2 seed・5000 エポックでは現れず（この規模では確認できず） |
+| 実 FlyWire 全脳でパブロフ匂い条件づけは成立するか（F4） | **裏付けあり**（対提示 `+6.9 Hz` 対 非対提示 `+0.2 Hz`・DAN なし `0.0 Hz`、5 seed 再現） |
+| 実測の全脳カルシウム画像（Aimon 2023）の未計測領域を FlyWire 配線で当てられるか（F7） | **5/5 seed で実配線が勝利**（`R² = +0.542` 対 シャッフル `+0.499`）。一方 DoOR 2.0 末梢匂い応答では差なし（`p = 0.944`、**陰性結果**） |
+| 全中枢（BANC / MaleCNS）の脊髄配線だけで手書き歩行器なしに歩けるか（F8 レベル 2） | 16 系統 ALIF 学習で純摩擦前進（`+1.41 cm / +0.90 cm`）と隔離 VNC での反位相 3 脚振動（`-0.435 / -0.936`）を創発。ただしラチェット封印下の全中枢持続前進は未達（**E3 陰性結果**も記録） |
+| 24 匹の FlyWire 全脳で Ramdya (2015) の集団匂い忌避は再現するか（F11） | **裏付けあり**（1 匹 `12.5%` → 24 匹 `45.8%`；脚接触遮断で `4.2%`・シャッフル配線で `12.5%` に崩壊） |
+| 雌雄全中枢（MaleCNS ♂ ＋ BANC ♀）で求愛歌・闘争・採餌が同時成立するか（F11） | **裏付けあり**（オスの歌がメスの聴覚神経を `41〜81 Hz` 駆動し、シャッフルで `0.0〜0.45 Hz` に崩壊；オス闘争も cVA 遮断・シャッフルで `0` 回に崩壊） |
+| 外発スコアなしの `fly_world` で意味のある合図が生まれ、フル脳再生でも一致するか（F12 / F12d） | **意味のある合図と 4/4 フル脳一致を確認**（`MI = 0.270 bits`＝シャッフルの 539 倍、Gen 10 子孫を 138k フル脳で再生し 4/4 定性一致）。ただし短期 1,200 tick の因果フォークではまだ正の採餌利得に達せず（**正直な陰性結果**として記録） |
 
 詳しくは [`docs/reference_fidelity/search.md`](docs/reference_fidelity/search.md)、[`docs/reference_fidelity/creature.md`](docs/reference_fidelity/creature.md)、[`docs/reference_fidelity/connectome_fly.md`](docs/reference_fidelity/connectome_fly.md) を参照してください。
 
@@ -161,7 +209,7 @@ GPU（WebGL2 / Three.js）を使った立体表示などにボタン1つで切�
 ### 必要なもの
 
 - Linux（WSL2 を含む）、Python 3.12〜3.13 と [uv](https://docs.astral.sh/uv/)、Node.js（Web 画面のビルド用）
-- GPU は必須ではありません（対応 GPU があれば一部の世界が高速に動きます）。CPU だけですべての基本機能が動作します。
+- GPU は必須ではありません（対応 GPU があればコネクトーム全脳や Lenia・BFF などが高速に動きます）。CPU だけですべての基本機能と合成回路版のコネクトーム実験が動作します。
 
 ### インストールと起動
 
@@ -177,13 +225,15 @@ uv run alife serve --host 127.0.0.1 --port 8000                # http://127.0.0.
 | extra | 中身 | 使う場面 |
 |---|---|---|
 | `fast` | Numba | BFF の CPU 計算を高速化（結果はビット一致） |
-| `gpu` | CuPy（CUDA 13） | BFF・Lenia・Flow-Lenia・コネクトームを GPU で高速実行（`local_gpu` プロファイル選択時） |
+| `gpu` | CuPy（CUDA 13） | BFF・Lenia・Flow-Lenia・コネクトーム全脳／生態箱／進化ワールドを GPU で高速実行（`local_gpu` プロファイル選択時） |
 | `nca` / `nca-gpu` | JAX（CPU / CUDA 13） | ニューラル CA の学習と実行、Petri Dish NCA |
-| `asal` | PyTorch、OpenCLIP | CLIP を使った探索（ASAL）。モデル重みは SHA-256 を確認してから読み込み |
-| `embodied` | MuJoCo | 身体を持つ生き物 |
+| `asal` | PyTorch、OpenCLIP | CLIP を使った探索（ASAL）、コネクトームの隠れ仕組み推定・実脳データ適合（F5〜F7） |
+| `embodied` | MuJoCo | 身体を持つ生き物（`creature`）、身体を持つハエ（`fly_embodied`） |
+| `embodied-gpu` | MuJoCo Warp | GPU での 32〜64 匹並列物理＋全脳バッチ実行（F9） |
+| `vision` | flyvis | ショウジョウバエ視覚系 45,669 細胞モデル（F10） |
 
 ```bash
-uv sync --extra embodied --extra nca     # 例：生き物と NCA を使う場合
+uv sync --extra embodied --extra gpu     # 例：身体を持つハエ・全脳モデルを GPU で動かす場合
 ```
 
 サーバーはローカル専用です（`127.0.0.1`）。画面から API を呼ぶためのセッション・トークンは、起動のたびに自動で発行されます。
@@ -193,12 +243,13 @@ uv sync --extra embodied --extra nca     # 例：生き物と NCA を使う場�
 ## 使い方の流れ
 
 1. **ガイド**で、気になる世界の解説を読む
-2. **世界カタログ**でプリセットを選ぶ（91 種類）。必要なら設定を調整し、検証結果を確認して「実験を作成」
-3. **ライブラボ**で観察する。表示を切り替え、ブラシや刺激で手を加え、インスペクタで中身を確認し、チェックポイントを保存する
-4. 気になった場面は**リプレイ**で巻き戻して見直し、その時点から**分岐**して条件を変えながら**比較**する
-5. 結果が偶然かどうかは**スイープ**（条件 × seed）で統計的に確かめる
-6. 見つけた候補を**発見台帳**に登録し、決められた検証試験で判定する。気に入った場面は**ギャラリー**へ保存する
-7. **自動探索**で新しい振る舞いを探し、**系統図**で変化の道筋をたどる
+2. **世界カタログ**でプリセットを選ぶ（128 種類）。必要なら設定を調整し、検証結果を確認して「実験を作成」
+3. **ライブラボ**で観察する。表示を切り替え、ブラシや刺激・餌・捕食者の影で手を加え、インスペクタで中身を確認し、チェックポイントを保存する
+4. `fly_world` で面白い子孫が育ったら、画面下の **「フル脳＋MuJoCo で再生」** ボタンで 138,639 細胞のフル脳＋3D 物理ハエとして別ラボでじっくり観察する
+5. 気になった場面は**リプレイ**で巻き戻して見直し、その時点から**分岐**して条件を変えながら**比較**する
+6. 結果が偶然かどうかは**スイープ**（条件 × seed）で統計的に確かめる
+7. 見つけた候補を**発見台帳**に登録し、決められた検証試験で判定する。気に入った場面は**ギャラリー**へ保存する
+8. **自動探索**で新しい振る舞いを探し、**系統図**で変化の道筋をたどる
 
 ---
 
@@ -207,17 +258,22 @@ uv sync --extra embodied --extra nca     # 例：生き物と NCA を使う場�
 Web 画面と同じ検証・保存の仕組みを、コマンドラインからも利用できます。
 
 ```bash
-uv run alife substrates                      # 世界の一覧
-uv run alife presets                         # プリセットの一覧
-uv run alife targets                         # 実行先の一覧と性能の確認
-uv run alife run configs/scenarios/conway_reference.yaml     # サーバーなしで最後まで実行
-uv run alife runs list                       # 保存された実験の一覧
-uv run alife runs verify <run_id>            # 保存データのハッシュ（改ざんの有無）を検証
-uv run alife runs replay-verify <run_id>     # リプレイ検証
-uv run alife sweep configs/sweeps/search_cma_vs_random.yaml  # スイープと統計比較
-uv run alife compare <run_a> <run_b>         # 共通のチェックポイントで状態の差を比較
-uv run alife connectome list                 # コネクトーム用データセットの確認
-uv run alife backup create|verify|restore    # バックアップの作成・検証・復元
+uv run alife substrates list                                   # 世界の一覧（23 種類）
+uv run alife presets list                                      # プリセットの一覧（128 種類）
+uv run alife targets list                                      # 実行先の一覧と性能の確認
+uv run alife run configs/scenarios/conway_reference.yaml       # サーバーなしで最後まで実行
+uv run alife runs list                                         # 保存された実験の一覧
+uv run alife runs verify <run_id>                              # 保存データのハッシュ（改ざんの有無）を検証
+uv run alife runs replay-verify <run_id>                       # リプレイ検証
+uv run alife sweep configs/sweeps/search_cma_vs_random.yaml    # スイープと統計比較
+uv run alife compare <run_a> <run_b>                           # 共通のチェックポイントで状態の差を比較
+uv run alife backup create|verify|restore                      # バックアップの作成・検証・復元
+
+# コネクトーム・身体・群れ・人工生命の検証コマンド（合成回路なら CPU のみで即実行可能）
+uv run alife connectome list                                   # 登録済みデータセットの確認
+uv run alife connectome embody synthetic_fly_embodied          # 身体を持つハエの反射・対照検証（F8）
+uv run alife connectome swarm synthetic_fly_embodied --mode ecosystem  # 雌雄統合生態箱の検証（F11）
+uv run alife connectome evolve synthetic_fly_embodied --replay-fine    # 自律進化＋フル脳再生検証（F12/F12d）
 ```
 
 ---
@@ -228,7 +284,7 @@ uv run alife backup create|verify|restore    # バックアップの作成・検
 - **世界のルール・探索・計測・画面表示を分ける**：世界のルールに外部報酬を足さない、探索は外から候補を試すだけ、計測は状態を変えない、という境界を守ります。画面プレビューは負荷に応じて間引くことがありますが、科学的な状態・介入履歴・チェックポイント・計測値は一切欠落させません。
 - **再現できる記録**：すべての実験に、ソースコードのコミット、実験条件のハッシュ、乱数の方針、使用バックエンド、保存ファイルのハッシュ、チェックポイントの互換情報を記録します。
 - **プロセスの分離**：API サーバー（FastAPI）と、計算を担うワーカー、リプレイ用プロセスは別プロセスで動かします。実験データベース（SQLite）への書き込みはコントローラーだけに限定しています。
-- **安全性**：ローカル専用、トークンと Host/Origin の確認、ブラウザから任意のコードを実行させない設計、安全性の確認できない pickle ファイルの拒否、チェックポイント読み込み時の SHA-256 検証を徹底しています。
+- **安全性**：ローカル専用、トークンと Host/Origin の確認、ブラウザから任意のコードを実行させない設計、安全性の確認できない pickle ファイルの拒否、チェックポイント・データセット読み込み時の SHA-256 検証を徹底しています。
 
 ### 証拠レベルと正直な記録
 
@@ -265,23 +321,24 @@ src/alife_lab/
   api/          FastAPI（REST + WebSocket）、ローカル実行向けの安全対策
   service/      コントローラー（実験の状態管理、リプレイ、スイープ、発見台帳、ギャラリー）
   execution/    ワーカー、LocalExecutor / FakeExecutor、正確なリプレイ
-  substrates/   各世界のアダプター（conway, lenia, flow_lenia, bff, creature, connectome, search など）
-  connectome/   実生物コネクトームのデータ読み込み・LIF 計算エンジン（CPU / CUDA）・細胞検索
+  substrates/   各世界のアダプター（conway, lenia, flow_lenia, bff, creature, connectome, fly_embodied, fly_swarm, fly_world など）
+  connectome/   実生物コネクトームのデータ読み込み・LIF/ALIF 計算（CPU / CUDA）・身体接続・群れ・生態箱・進化エンジン
   evolution/    探索アルゴリズム、評価関数、ASAL
   artifacts/    ArtifactStore（チェックポイント、ハッシュ検証、破損を防ぐ安全な保存）
   storage/      SQLite メタデータ、Parquet 計測ログ
 frontend/       React + TypeScript の Web 画面（Three.js は 3D 表示のときだけ読み込み）
-configs/        シナリオ、プリセット、スイープ、実行プロファイル
+configs/        シナリオ、プリセット（128 種）、スイープ、実行プロファイル、学習済み VNC プロファイル
 tests/          unit / reference / property / integration / api / end_to_end
-docs/           仕様、設計判断（ADR）、各世界の検証記録
+docs/           仕様、ロードマップ、設計判断（ADR）、各世界の検証記録
 ```
 
 | 文書 | 内容 |
 |---|---|
 | [`docs/ALIFE_LAB_SPEC.md`](docs/ALIFE_LAB_SPEC.md) | 全体の仕様（科学・計算・画面・API・ロードマップ） |
+| [`docs/plans/connectome_plan.md`](docs/plans/connectome_plan.md) | コネクトーム〜ハエの体・群れ・人工生命（F0〜F12d・S1〜S7）の全体計画と進捗 |
 | [`docs/architecture.md`](docs/architecture.md) | システム構成 |
 | [`docs/api.md`](docs/api.md) | API 仕様 |
-| [`docs/decisions/`](docs/decisions/) | 設計判断の記録（ADR 0001〜0037） |
+| [`docs/decisions/`](docs/decisions/) | 設計判断の記録（ADR 0001〜0049） |
 | [`docs/reference_fidelity/`](docs/reference_fidelity/) | 各世界の検証記録・モデルカード |
 | [`docs/substrates/`](docs/substrates/) | 各世界の状態・介入・指標・表示形式の取り決め |
 | [`docs/hardware_benchmarks.md`](docs/hardware_benchmarks.md) | ハードウェア実測ベンチマーク |
@@ -294,9 +351,9 @@ docs/           仕様、設計判断（ADR）、各世界の検証記録
 
 | 区分 | 内容 |
 |---|---|
-| 実装済み | 18 の世界（コネクトーム全脳モデルを含む）、ライブラボ、3D 表示（3D 地形・時間の積み重ね・光る表示・3D 光る脳）、リプレイ・分岐・比較・スイープ、発見台帳、ギャラリー、系統図、自動探索と進化（ASAL を含む）、身体を持つ生き物（凸凹の地面・反射）、CLI、バックアップ |
+| 実装済み | 23 の世界（128 プリセット）、ライブラボ、各種 3D 表示（3D 地形・時間の積み重ね・光る表示・3D 光る脳・CT 3D ハエ 2 画面・多匹生態アリーナ・進化ワールド）、ショウジョウバエ全脳・全中枢ロードマップ F0〜F12d（学習・実データ適合・身体接続・Warp 並列・視覚・雌雄比較・258 万ニューロン生態箱・自律進化とフル脳 1 クリック再生）、リプレイ・分岐・比較・スイープ、発見台帳、ギャラリー、系統図、自動探索と進化（ASAL 含む）、CLI、バックアップ |
 | 一部のみ | CLI の一部（`runs reproduce / report / export` は未実装） |
-| 今後の候補 | コネクトーム回路の一斉停止調査・学習・身体接続（F3 以降）、険しい地形（段差・坂）、脚の本数の進化、リモート計算機・複数 GPU・計算クラスタ対応（あとから追加できる設計済み・未実装） |
+| 今後の候補 | 他種コネクトーム展開（線虫 *C. elegans*・ハエ幼虫・ゼブラフィッシュ・マウス視覚野など S1〜S7）、長時間進化ランでの合図の因果利得検証（E3）、リモート計算機・複数 GPU・計算クラスタ対応（あとから追加できる設計済み・未実装） |
 
 ---
 
@@ -319,5 +376,9 @@ docs/           仕様、設計判断（ADR）、各世界の検証記録
 - C. W. Reynolds, "Flocks, Herds, and Schools", SIGGRAPH (1987)
 - K. Sims, "Evolving Virtual Creatures", SIGGRAPH (1994)
 - P. K. Shiu ほか, "A *Drosophila* computational brain model reveals sensorimotor processing", *Nature* 634, 210–219 (2024)；S. Dorkenwald ほか, *Nature* (2024) — FlyWire v783
+- A. S. Bates ほか（Lee Lab）— BANC v888（CC-BY 4.0）；HHMI Janelia / Google Research — MaleCNS v1.0（CC-BY 4.0）
+- S. Aimon ほか, *eLife* 85202 (2023)；D. Münch & C. G. Galizia, DoOR 2.0, *Sci. Rep.* (2016)
+- J. K. Lappalainen ほか, *Nature* (2024) — [`TuragaLab/flyvis`](https://github.com/TuragaLab/flyvis)；S. Wang-Chen ほか, *Nature Methods* (2024) — NeuroMechFly v2（Apache-2.0 形状データのみ利用）
+- P. Ramdya ほか, "Mechanosensory interactions drive collective behaviour in *Drosophila*", *Nature* (2015)
 - N. Hansen, CMA-ES；J.-B. Mouret & J. Clune, MAP-Elites (2015)
-- [MuJoCo](https://github.com/google-deepmind/mujoco)（Apache-2.0）、[Three.js](https://threejs.org/)（MIT）、[OpenCLIP](https://github.com/mlfoundations/open_clip)（MIT）
+- [MuJoCo](https://github.com/google-deepmind/mujoco) / [MuJoCo Warp](https://github.com/google-deepmind/mujoco_warp)（Apache-2.0）、[Three.js](https://threejs.org/)（MIT）、[OpenCLIP](https://github.com/mlfoundations/open_clip)（MIT）

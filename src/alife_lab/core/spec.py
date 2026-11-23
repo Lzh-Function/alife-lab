@@ -2055,6 +2055,24 @@ class FlyEmbodiedDynamics(_Frozen):
     vnc_tibia_gain: Annotated[float, Field(ge=0.0, le=2.0)] = 0.50
     # Optional learned per-hemilineage ALIF profile name inside configs/vnc_profiles/<name>.json.
     vnc_profile: Annotated[str | None, Field(pattern=r"^[a-z0-9][a-z0-9_-]{1,63}$")] = None
+    # F12d: optional 24-float evolved fly_world descendant genome for full-brain + MuJoCo replay
+    evolved_genome: Annotated[tuple[float, ...], Field(min_length=24, max_length=24)] | None = None
+    evolved_fly_id: int | None = None
+    evolved_generation: int | None = None
+    evolved_fly_distance: float | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_empty_evolved(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        out: dict[str, Any] = handler(self)
+        for key in (
+            "evolved_genome",
+            "evolved_fly_id",
+            "evolved_generation",
+            "evolved_fly_distance",
+        ):
+            if out.get(key) is None:
+                out.pop(key, None)
+        return out
 
 
 FlyEmbodiedMetric = Literal[

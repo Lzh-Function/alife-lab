@@ -786,13 +786,22 @@ To settle unambiguously whether point-neuron ALIF on fixed biological VNC wiring
 
 - **GPU CuPy SpMM throughput (conservative lower bound under concurrent desktop gaming):** `0.671 ms/step` (`1,491 steps/s` across 32 brains at 8.8k nodes; `32.67 s` total for 3 seeds × `1,200` evo ticks + `2 × 400` twin-fork eval ticks at `17,641` nodes).
 
-### 2. Multi-Seed Autonomous Evolution & 3-Part Emergent Signal Assay (`alife connectome evolve flywire_783 --seeds 1,2,3`)
+### 2. Multi-Seed Autonomous Evolution, 3-Part Emergent Signal Assay & F12d Full-Brain Replay (`alife connectome evolve flywire_783 --seeds 1,2,3 --replay-fine`)
 
-| Metric (`3 seeds`, ZERO external fitness score) | Measured Value | Control / Threshold | Verdict |
+| Metric (`3 seeds`, ZERO external fitness score, `25.80 s` wall) | Measured Value | Control / Threshold | Verdict |
 |---|---:|---:|---|
-| Autonomous births & drift (`fly_distance`) | `14.7 births`, `L2 = 0.3804` | `births >= 5`, `L2 > 0.05` | **PASS** |
-| Criterion #1: Signal Mutual Information `I(S; Context)` | **`0.1613 bits`** | Shuffled: **`0.0009 bits`** (**179×**) | **PASS** |
-| Criterion #2: Receiver behavioral response magnitude | **`0.128`** | Muted: `0.000` | **PASS** |
-| Criterion #3: Causal channel-blocking fork (`food eaten`) | `8.424` (intact) | `12.48` (muted) | **Not yet positive at 1,200 ticks (honest negative)** |
+| Autonomous births & drift (`fly_distance`) | `14.0 births`, `L2 = 0.3789` | `births >= 5`, `L2 > 0.05` | **PASS** |
+| Criterion #1: Signal Mutual Information `I(S; Context)` | **`0.2697 bits`** | Shuffled: **`0.0005 bits`** (**539×**) | **PASS** |
+| Criterion #2: Receiver behavioral response magnitude | **`0.507`** | Muted: `0.000` | **PASS** |
+| Criterion #3: Causal channel-blocking fork (`food eaten`) | `7.984` (intact) | `10.576` (muted) | **Not yet positive at 1,200 ticks (honest negative)** |
 
-- **Honest scientific boundary (`connectome_plan.md §F12`):** Over a short 1,200-tick (~3–5 generation) window, autonomous evolution from the FlyWire v783 ancestor reliably produces genetic/morphological drift, context-specific signal emission (`179×` MI above shuffled), and receiver responses, **but** causal channel-blocking shows signals are not yet net-beneficial for foraging at 1,200 ticks (metabolic signaling cost and unaligned early receiver steering outweigh recruitment). Longer multi-thousand-tick evolutionary runs are required before claiming E3 causal signal utility.
+### 3. Phase F12d: Evolved Descendant Replay in Full 138,639-Cell Spiking Brain + MuJoCo (`fly #84`, Gen 10, `fly_distance = 0.4697`, `1.79 s` wall)
+
+| Reflex Scene (`flywire_783` Gen 10 descendant `#84`) | Compressed (`17,641` nodes) | Full Spiking LIF (`138,639` cells, GPU `cupy`) | Discrepancy (`full - comp`) | Qualitative Agreement |
+|---|---:|---:|---:|---|
+| Baseline (`MN9`) | `0.0 Hz` | **`0.0 Hz`** | `0.0 Hz` | **AGREE** (quiescent) |
+| Sugar → `MN9` | `99.9 Hz` | **`86.0 Hz`** | `-13.9 Hz` | **AGREE** (strong recruitment) |
+| Sugar + Bitter → `MN9` | `0.3 Hz` | **`12.0 Hz`** (`86%` supp.) | `+11.7 Hz` | **AGREE** (bitter suppression) |
+| Antennal poke → `DNg84` | `126.5 Hz` | **`72.0 Hz`** | `-54.5 Hz` | **AGREE** (grooming recruitment) |
+
+- **Honest scientific boundary (`connectome_plan.md §F12`):** Over a short 1,200-tick horizon, autonomous evolution from the FlyWire v783 ancestor reliably produces genetic/morphological drift, context-specific signal emission (`539×` MI above shuffled), receiver responses, and **4/4 qualitative agreement** when replaying a Gen 10 descendant inside the full 138,639-cell spiking FlyWire brain (with transparent quantitative rate offsets `-13.9` to `-54.5 Hz` between analytical steady-state f-I and stochastic Poisson LIF). However, causal channel-blocking shows signals are not yet net-beneficial for foraging at 1,200 ticks (metabolic signaling cost and unaligned early receiver steering outweigh recruitment); longer multi-thousand-tick runs remain the right test for E3 causal signal utility. Browser users can replay any living descendant in the full 138k spiking brain + 3D MuJoCo body in 1 click via `POST /api/v1/experiments/{run_id}/fly-world/replay`.

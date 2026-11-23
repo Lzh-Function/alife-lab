@@ -28,11 +28,19 @@ Phase F12 transitions from biological fly connectome emulation (F0–F11) to **a
 4. **Rigorous 3-Part Emergent Signal Verification (`alife connectome evolve`):**
    - Evaluates (1) Mutual Information `I(Signal; Context)` vs individual-shuffled control, (2) receiver behavioral shift vs muted playback, and (3) causal survival/foraging impact via an identical twin fork with `signal_channel_enabled = False`.
 
+5. **Phase F12d: Full-Resolution Spiking Brain + MuJoCo 6-Legged Body Replay (`replay_evolved_genome_in_full_spiking_brain`, `POST /api/v1/experiments/{run_id}/fly-world/replay`):**
+   - Any evolved `fly_world` descendant's 24-float differential genome can be replayed both in CLI (`alife connectome evolve --replay-fine`, comparing compressed vs full spiking LIF side-by-side across all 4 reflex scenes) and from the browser 3D `FlyWorldView` via a 1-click **"Replay in full brain"** table that checkpoints the run and launches a live `fly_embodied` 3D MuJoCo + 138,639-cell glowing brain lab (`evolved_genome` on `FlyEmbodiedDynamics`, with an explicit F12d artificial-life framing banner).
+   - Removed top-level `scipy` hard dependency in `fly_world.py` (pure-NumPy `_NumpyCSR` fallback + optional `scipy.sparse` / `cupyx.scipy.sparse` via `importlib`) so SciPy-free minimal CPU CI stays 100% green.
+
 ## Measured Results (RTX 5070, Real FlyWire v783 Ancestor, 2026-11-23)
 
-- **Command:** `alife connectome evolve flywire_783 --seeds 1,2,3 --evo-ticks 1200 --eval-ticks 400 --no-verify` (`32.67 s` wall, GPU CuPy SpMM)
+- **Command:** `alife connectome evolve flywire_783 --seeds 1,2,3 --evo-ticks 1200 --eval-ticks 400 --replay-fine --no-verify` (`25.80 s` wall, GPU CuPy SpMM + CUDA graph full-brain replay)
 - **Compressed brain fidelity:** `138,639 -> 17,641` nodes (`7.86×`), `base=0.0 Hz`, `sugar=220.0 Hz`, `bitter=0.0 Hz`, `poke_DNg84=97.4 Hz` (**PASS**).
-- **Evolution & drift (3 seeds):** `mean_births = 14.7`, `mean_fly_distance = 0.3804` (**PASS**).
-- **Signal emergence Criterion #1 (Meaning vs Shuffled):** **`MI = 0.1613 bits`** vs shuffled **`0.0009 bits`** (**179×** above chance, **PASS**).
-- **Signal emergence Criterion #2 (Receiver Response):** **`0.128`** (**PASS**).
-- **Signal emergence Criterion #3 (Causal Channel-Blocking Fork — Honest Negative Result at 1,200 ticks):** `fork_intact_food = 8.424` vs `fork_muted_food = 12.48`. Over a short 1,200-tick (~3–5 generation) horizon, context-correlated signals and receiver responses emerge reliably, but muting the channel does not yet reduce group foraging (early unoptimized receiver steering and metabolic signaling costs outweigh recruitment benefits). Demonstrating positive causal group-level signal utility requires longer multi-thousand-tick runs and remains an explicit open experiment for E3 validation.
+- **Evolution & drift (3 seeds):** `mean_births = 14.0`, `mean_fly_distance = 0.3789` (**PASS**).
+- **Signal emergence Criterion #1 (Meaning vs Shuffled):** **`MI = 0.2697 bits`** vs shuffled **`0.0005 bits`** (**539×** above chance, **PASS**).
+- **Signal emergence Criterion #2 (Receiver Response):** **`0.507`** (**PASS**).
+- **Signal emergence Criterion #3 (Causal Channel-Blocking Fork — Honest Negative Result at 1,200 ticks):** `fork_intact_food = 7.984` vs `fork_muted_food = 10.576`. Over a short 1,200-tick horizon, context-correlated signals and receiver responses emerge reliably, but muting the channel does not yet reduce group foraging (early unoptimized receiver steering and metabolic signaling costs outweigh recruitment benefits). Demonstrating positive causal group-level signal utility requires longer multi-thousand-tick runs and remains an explicit open experiment for E3 validation.
+- **Phase F12d Full-Brain Spiking Replay (Gen 10 descendant `#84`, `fly_distance = 0.4697`, `138,639` spiking FlyWire cells on GPU `cupy`, `1.79 s` wall):**
+  - Compressed (`17,641` nodes): `base = 0.0 Hz`, `sugar = 99.9 Hz`, `sugar+bitter = 0.3 Hz`, `poke_DNg84 = 126.5 Hz`.
+  - Full spiking LIF (`138,639` cells): `base = 0.0 Hz`, `sugar = 86.0 Hz` (`Δ = -13.9 Hz`), `sugar+bitter = 12.0 Hz` (`Δ = +11.7 Hz`, `86%` suppression), `poke_DNg84 = 72.0 Hz` (`Δ = -54.5 Hz`).
+  - **Qualitative agreement: 4/4 PASS**, with quantitative rate differences (analytical steady-state f-I saturating higher than stochastic Poisson spiking LIF) transparently recorded.

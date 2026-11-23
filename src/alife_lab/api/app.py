@@ -668,6 +668,22 @@ def create_app(
         """Spec (with embedded weights) for running a trained NCA; the client creates the run."""
         return envelope(ctl().export_nca_spec(run_id, checkpoint_id))
 
+    @app.post(f"{API}/experiments/{{run_id}}/fly-world/replay")
+    async def export_fly_world_replay(
+        run_id: str, body: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """F12d: build a full-brain + MuJoCo replay spec for an evolved fly_world descendant."""
+        payload = body or {}
+        fly_id = payload.get("fly_id")
+        checkpoint_id = str(payload.get("checkpoint_id", "latest"))
+        return envelope(
+            ctl().export_fly_world_replay_spec(
+                run_id,
+                fly_id=int(fly_id) if fly_id is not None else None,
+                checkpoint_id=checkpoint_id,
+            )
+        )
+
     @app.post(f"{API}/tools/bff/assay")
     async def bff_assay(body: BFFAssayRequest) -> dict[str, Any]:
         """Replicator assay of a manual program or of program ``index`` of a BFF run."""
