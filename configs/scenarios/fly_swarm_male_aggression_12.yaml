@@ -1,0 +1,27 @@
+schema_version: 1
+experiment:
+  name: fly_swarm_male_aggression_12
+  mode: exploratory
+  substrate: fly_swarm
+  seed: 1
+  dataset_id: male_cns_v1
+  num_flies: 12
+  wiring: reference
+  dynamics:
+    clock_unit: tick
+    numeric_policy: float32_lif_float64_arena
+    social_mode: male_aggression_arena
+    enable_touch: true
+    odor_enabled: true
+    arena_half_size: 4.5
+    explore_drive_hz: 70.0
+  runner:
+    max_steps: 20000
+    checkpoint_interval: 10000
+  observations:
+    metrics:
+      - total_lunges
+      - active_threats
+      - mean_speed_cm_s
+      - encounter_rate
+      - realtime_factor

@@ -1,0 +1,8 @@
+preset:
+  id: fly_swarm_male_aggression_tiny
+  scenario: fly_swarm_male_aggression_tiny.yaml
+  title_key: preset.fly_swarm_male_aggression_tiny.title
+  description_key: preset.fly_swarm_male_aggression_tiny.description
+  overrides: {}
+  expected_observation: '8 offline 32-neuron synthetic male brains contest a central food territory via cVA (ORN_DA1 -> DA1_PN) + vision (LC10a -> aIPg -> DNg33 + hg3/hg4 MN) bilateral wing threats and lunges.'
+  negative_control: toggle cVA or vision off in toolbar, or switch wiring to shuffled_control

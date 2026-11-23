@@ -1,0 +1,8 @@
+preset:
+  id: fly_swarm_male_aggression_12
+  scenario: fly_swarm_male_aggression_12.yaml
+  title_key: preset.fly_swarm_male_aggression_12.title
+  description_key: preset.fly_swarm_male_aggression_12.description
+  overrides: {}
+  expected_observation: '12 full 165,122-neuron MaleCNS v1.0 male whole-CNS brains (1,981,464 concurrent neurons) contest a central food patch: cVA (ORN_DA1 -> DA1_PN) + vision (LC10a -> aIPg -> DNg33 + hg3/hg4 MN) drive bilateral wing-threat displays, high-speed lunges, and loser retreats.'
+  negative_control: toggle cVA pheromone or visual rival detection off in the toolbar, or switch wiring to shuffled_control

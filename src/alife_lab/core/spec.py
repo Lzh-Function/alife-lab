@@ -2020,6 +2020,7 @@ EmbodiedFlyDatasetId = Literal[
     "male_cns_v1",
     "synthetic_fly_embodied",
     "synthetic_cns_embodied",
+    "synthetic_male_aggression",
 ]
 EmbodiedControlMode = Literal["level1_cpg", "level2_vnc", "level2_vnc_tuned"]
 EmbodiedFoodKind = Literal["sugar", "bitter"]
@@ -2110,12 +2111,16 @@ class FlyEmbodiedExperiment(_Frozen):
 # Collective Whole-Brain Fly Swarm (F11 Stage 3: Ramdya 2015 & Social Swarm)
 # --------------------------------------------------------------------------- #
 
-FlySwarmSocialMode = Literal["ramdya_odor_avoidance", "mixed_courtship_swarm"]
+FlySwarmSocialMode = Literal[
+    "ramdya_odor_avoidance", "mixed_courtship_swarm", "male_aggression_arena"
+]
 FlySwarmMetric = Literal[
     "clean_zone_fraction",
     "encounter_rate",
     "mean_speed_cm_s",
     "active_singers",
+    "total_lunges",
+    "active_threats",
     "realtime_factor",
 ]
 

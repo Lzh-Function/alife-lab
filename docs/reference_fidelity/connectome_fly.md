@@ -750,3 +750,14 @@ To settle unambiguously whether point-neuron ALIF on fixed biological VNC wiring
 | `N = 24` `no_odor_control` (control) | `3,327,336` | **`45.8%`** (chance) | **`48.5%`** | `0.77` | — |
 
 - **Scientific fidelity & honest caveats:** All 4 pre-registered Ramdya et al. (2015) gates pass on both CPU offline `synthetic_fly_embodied` and real GPU `flywire_783` (`40.21 s` wall). Crucially, `shuffled_control` still experiences frequent physical encounters (`0.62 /fly·s`) yet collapses to `12.5%`, confirming that the collective avoidance surge requires intact biological mechanosensory → `DNg84` connectome signaling. Bodies in `fly_swarm` use planar kinematics with steric separation and animated 3D legs (not 24 coupled 18-DOF MuJoCo contact solvers), and spontaneous walk/rest bout transitions are modeled phenomenologically.
+
+### 5. Stage ③ (Aggression) — Male-Male Territorial Aggression (`alife connectome swarm male_cns_v1 --mode aggression`, 1,981,464 Concurrent Neurons, **4/4 PASS**)
+
+| Condition (`male_cns_v1`, `N = 12` males, `1,500 ms`, `18.88 s` wall) | Lunges | Bilateral Wing Threat | `DA1_PN` (cVA) | `DNg33` | `hg3/4 MN` (Wing) | Dom. Spread | Speed (`RTF`, lower bound) |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| **`intact_males` (territorial food patch)** | **`44`** | **`8,856 fly·ms`** | **`140.3 Hz`** | **`301.1 Hz`** | **`77.4 Hz`** | **`10.0`** | `0.44×` |
+| `cva_blocked` (`ORN_DA1` off) | **`0`** (-100%) | **`0 fly·ms`** (-100%) | **`0.1 Hz`** (1,403× drop) | `295.6 Hz` | `58.9 Hz` | `0.0` | `0.41×` |
+| `vision_blocked` (`LC10a` off) | **`16`** (-64%) | **`1,567 fly·ms`** (-82%) | `212.6 Hz` | `290.0 Hz` | **`19.3 Hz`** (4.0× drop) | `4.0` | `0.42×` |
+| `shuffled_control` (degree-preserving) | **`0`** (-100%) | **`0 fly·ms`** (-100%) | **`8.7 Hz`** (16× drop) | **`0.8 Hz`** (376× drop) | `32.4 Hz` | `0.0` | `0.46×` |
+
+- **Zero-shot biological pathway discovery in `male_cns_v1`:** Stimulating `LC10a` (275 visual rival cells) or `aIPg` (56 aggression command interneurons) in the frozen MaleCNS connectome directly recruits **`hg3 MN` / `hg4 MN` bilateral wing-elevation motor neurons** (`104–164 Hz` intact vs `0–12 Hz` shuffled) and `DNg33` (`262–301 Hz` intact vs `0–0.8 Hz` shuffled), while cVA (`ORN_DA1`) specifically drives `DA1_lPN/vPN` (`140–302 Hz` intact vs `0.1 Hz` blocked / `1.6–8.7 Hz` shuffled). Requiring coincidence of biological `DA1_PN` male identity and `hg3/4 MN + DNg33` wing-threat drive reproduces cVA-gated, vision-gated, and wiring-dependent territorial wing threats, oriented lunges, and loser retreats.

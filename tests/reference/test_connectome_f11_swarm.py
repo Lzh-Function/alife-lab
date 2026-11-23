@@ -8,7 +8,11 @@ import pytest
 
 from alife_lab.cli import main
 from alife_lab.connectome.embodied import make_synthetic_fly_embodied_pack
-from alife_lab.connectome.fly_swarm import run_ramdya_collective_assay
+from alife_lab.connectome.fly_swarm import (
+    make_synthetic_male_aggression_pack,
+    run_male_aggression_assay,
+    run_ramdya_collective_assay,
+)
 from alife_lab.core.spec import ExperimentSpec, FlySwarmExperiment
 from alife_lab.substrates.connectome.swarm_adapter import FlySwarmAdapter
 
@@ -146,3 +150,42 @@ def test_cli_connectome_swarm_json(capsys: pytest.CaptureFixture[str]) -> None:
     assert rc == 0, f"CLI swarm failed: {data}"
     assert data["all_checks_passed"] is True
     assert len(data["group_size_curve"]) == 2
+
+
+def test_male_aggression_assay_cpu_all_checks_pass() -> None:
+    pack = make_synthetic_male_aggression_pack()
+    rep = run_male_aggression_assay(
+        pack,
+        num_flies=8,
+        ticks=1200,
+        seed=1,
+        backend="numpy",
+    )
+    assert rep["mode"] == "male_aggression_arena"
+    assert rep["all_checks_passed"], f"Male aggression checks failed: {rep}"
+    assert rep["conditions"]["intact_males"]["total_lunges"] >= 4
+    assert rep["conditions"]["cva_blocked"]["mean_da1_pn_hz"] == 0.0
+
+
+def test_cli_connectome_swarm_aggression_json(capsys: pytest.CaptureFixture[str]) -> None:
+    rc = main(
+        [
+            "connectome",
+            "swarm",
+            "synthetic_male_aggression",
+            "--mode",
+            "aggression",
+            "--sizes",
+            "8",
+            "--ticks",
+            "1000",
+            "--backend",
+            "numpy",
+            "--json",
+        ]
+    )
+    out = capsys.readouterr().out
+    data = json.loads(out)
+    assert rc == 0, f"CLI aggression failed: {data}"
+    assert data["all_checks_passed"] is True
+    assert data["mode"] == "male_aggression_arena"

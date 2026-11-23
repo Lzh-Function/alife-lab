@@ -24,6 +24,7 @@ from alife_lab.connectome.embodied import (
 from alife_lab.connectome.fly_swarm import (
     FlySwarmWorld,
     make_fly_swarm_world,
+    make_synthetic_male_aggression_pack,
     step_fly_swarm_tick,
 )
 from alife_lab.core.spec import ExperimentSpec, FlySwarmExperiment
@@ -51,6 +52,8 @@ def _get_pack(dataset_id: str) -> ConnectomePack:
         pack = make_synthetic_fly_embodied_pack()
     elif dataset_id == "synthetic_cns_embodied":
         pack = make_synthetic_cns_embodied_pack()
+    elif dataset_id == "synthetic_male_aggression":
+        pack = make_synthetic_male_aggression_pack()
     else:
         pack = load_connectome_pack(dataset_id, ds_dir, verify_hashes=True)
     _PACK_CACHE[key] = pack
@@ -70,6 +73,12 @@ _METRICS = (
        "every tick", 1, "never null"),
     _M("active_singers", "metric.active_singers", "count", "tick",
        "Number of courting flies actively emitting wing song.", "mean",
+       "every tick", 1, "never null"),
+    _M("total_lunges", "metric.total_lunges", "count", "tick",
+       "Cumulative male-male aggressive lunge clashes.", "last",
+       "every tick", 1, "never null"),
+    _M("active_threats", "metric.active_threats", "count", "tick",
+       "Number of males displaying bilateral wing threat (hg3/hg4 MN).", "mean",
        "every tick", 1, "never null"),
     _M("realtime_factor", "metric.realtime_factor", "x", "tick",
        "Measured simulation speed relative to 1 ms wall time (1.0x = real time).", "mean",
@@ -155,12 +164,14 @@ class FlySwarmAdapter:
             "encounter_rate": float(state.total_encounters) / (state.num_flies * sim_s),
             "mean_speed_cm_s": float(state.last_mean_speed),
             "active_singers": float(state.last_active_singers),
+            "total_lunges": float(state.total_lunges),
+            "active_threats": float(state.last_active_threats),
             "realtime_factor": float(state.realtime_factor),
         }
         return {k: v for k, v in out.items() if k in wanted}
 
     def render(self, state: FlySwarmWorld) -> tuple[dict[str, Any], bytes]:
-        """``fly_swarm_v1`` binary frame: ``[N x 8 float32]`` per-fly pose/touch/song/activity."""
+        """``fly_swarm_v1`` binary frame: ``[N x 8 float32]`` per-fly pose/touch/song/threat."""
         n_f = state.num_flies
         buf = np.empty((n_f, 8), dtype=np.float32)
         buf[:, 0] = state.x.astype(np.float32)
@@ -168,9 +179,14 @@ class FlySwarmAdapter:
         buf[:, 2] = state.yaw.astype(np.float32)
         buf[:, 3] = state.speed.astype(np.float32)
         buf[:, 4] = state.sex.astype(np.float32)
-        buf[:, 5] = (state.touch_timer_ms > 0).astype(np.float32)
-        buf[:, 6] = state.song_intensity
-        buf[:, 7] = state.brain_activity
+        if state.social_mode == "male_aggression_arena":
+            buf[:, 5] = (state.lunge_timer_ms > 0).astype(np.float32)
+            buf[:, 6] = state.song_intensity
+            buf[:, 7] = state.threat_intensity
+        else:
+            buf[:, 5] = (state.touch_timer_ms > 0).astype(np.float32)
+            buf[:, 6] = state.song_intensity
+            buf[:, 7] = state.brain_activity
         sim_s = max(1e-3, state.tick * 1e-3)
         header: dict[str, Any] = {
             "codec": "fly_swarm_v1",
@@ -189,8 +205,13 @@ class FlySwarmAdapter:
             "total_encounters": int(state.total_encounters),
             "mean_speed": round(state.last_mean_speed, 2),
             "active_singers": int(state.last_active_singers),
+            "total_lunges": int(state.total_lunges),
+            "active_threats": int(state.last_active_threats),
+            "mean_da1_pn_hz": round(float(state.agg_rates[:, 0].mean()), 1),
+            "mean_hg34_hz": round(float(state.agg_rates[:, 3].mean()), 1),
             "realtime_factor": state.realtime_factor,
             "contacts": state.active_contacts,
+            "clashes": state.active_clashes,
         }
         return header, buf.tobytes()
 
@@ -210,9 +231,20 @@ class FlySwarmAdapter:
         if kind == "scatter":
             rng = state.rng_state_bitgen
             lim = state.arena_half_size * 0.78
-            state.x[...] = rng.uniform(-lim, -0.35 if state.odor_enabled else lim, state.num_flies)
-            state.y[...] = rng.uniform(-lim, lim, state.num_flies)
-            state.yaw[...] = rng.uniform(-math.pi, math.pi, state.num_flies)
+            if state.social_mode == "male_aggression_arena":
+                angs = np.linspace(0.0, 2.0 * math.pi, state.num_flies, endpoint=False)
+                rads = rng.uniform(0.9, min(2.4, lim * 0.72), state.num_flies)
+                state.x[...] = rads * np.cos(angs)
+                state.y[...] = rads * np.sin(angs)
+                state.yaw[...] = np.arctan2(-state.y, -state.x)
+                state.retreat_timer_ms[...] = 0
+                state.lunge_timer_ms[...] = 0
+            else:
+                state.x[...] = rng.uniform(
+                    -lim, -0.35 if state.odor_enabled else lim, state.num_flies
+                )
+                state.y[...] = rng.uniform(-lim, lim, state.num_flies)
+                state.yaw[...] = rng.uniform(-math.pi, math.pi, state.num_flies)
             return state, {"scattered": state.num_flies}
         if kind == "wake_all":
             state.active_state[...] = 1.0
@@ -255,8 +287,13 @@ class FlySwarmAdapter:
                 "active_state": state.active_state.copy(),
                 "touch_timer_ms": state.touch_timer_ms.copy(),
                 "song_intensity": state.song_intensity.copy(),
+                "threat_intensity": state.threat_intensity.copy(),
+                "lunge_timer_ms": state.lunge_timer_ms.copy(),
+                "retreat_timer_ms": state.retreat_timer_ms.copy(),
+                "dominance_score": state.dominance_score.copy(),
                 "brain_activity": state.brain_activity.copy(),
                 "rates": state.rates.copy(),
+                "agg_rates": state.agg_rates.copy(),
                 "prev_cmd_spikes": state.prev_cmd_spikes.copy(),
                 "b_v": np.stack([b.v for b in brains], axis=0),
                 "b_g": np.stack([b.g for b in brains], axis=0),
@@ -273,6 +310,8 @@ class FlySwarmAdapter:
                 "enable_touch": bool(state.enable_touch),
                 "odor_enabled": bool(state.odor_enabled),
                 "total_encounters": int(state.total_encounters),
+                "total_lunges": int(state.total_lunges),
+                "total_wing_threat_ms": int(state.total_wing_threat_ms),
                 "clean_zone_samples": int(state.clean_zone_samples),
                 "total_fly_samples": int(state.total_fly_samples),
                 "rng_state_json": json.dumps(state.rng_state_bitgen.bit_generator.state),
@@ -291,6 +330,12 @@ class FlySwarmAdapter:
         world.active_state[...] = arrs["active_state"]
         world.touch_timer_ms[...] = arrs["touch_timer_ms"]
         world.song_intensity[...] = arrs["song_intensity"]
+        if "threat_intensity" in arrs:
+            world.threat_intensity[...] = arrs["threat_intensity"]
+            world.lunge_timer_ms[...] = arrs["lunge_timer_ms"]
+            world.retreat_timer_ms[...] = arrs["retreat_timer_ms"]
+            world.dominance_score[...] = arrs["dominance_score"]
+            world.agg_rates[...] = arrs["agg_rates"]
         world.brain_activity[...] = arrs["brain_activity"]
         world.rates[...] = arrs["rates"]
         world.prev_cmd_spikes[...] = arrs["prev_cmd_spikes"]
@@ -298,6 +343,8 @@ class FlySwarmAdapter:
         world.enable_touch = bool(meta["enable_touch"])
         world.odor_enabled = bool(meta["odor_enabled"])
         world.total_encounters = int(meta["total_encounters"])
+        world.total_lunges = int(meta.get("total_lunges", 0))
+        world.total_wing_threat_ms = int(meta.get("total_wing_threat_ms", 0))
         world.clean_zone_samples = int(meta["clean_zone_samples"])
         world.total_fly_samples = int(meta["total_fly_samples"])
         world.last_clean_fraction = float(np.sum(world.x > 0.0)) / world.num_flies

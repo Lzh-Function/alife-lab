@@ -1175,6 +1175,17 @@ const ja = {
   "metric.encounter_rate": "脚の接触頻度（回/匹・秒）",
   "metric.mean_speed_cm_s": "平均歩行速度（cm/s）",
   "metric.active_singers": "求愛歌を発声中のオス数",
+  "metric.total_lunges": "闘争突進（Lunge）累計回数",
+  "metric.active_threats": "両翅威嚇中（Wing Threat）のオス数",
+  "swarm.aggression_title": "3D オス闘争アリーナ（中央＝縄張り餌場 · 赤輪＝両翅威嚇／橙線＝突進衝突）",
+  "swarm.act.cva_off": "cVA フェロモン遮断（陰性対照）",
+  "swarm.act.cva_on": "cVA フェロモン有効化",
+  "swarm.act.vision_off": "視覚ライバル検知を遮断（陰性対照）",
+  "swarm.act.vision_on": "視覚ライバル検知を有効化",
+  "preset.fly_swarm_male_aggression_12.title": "ハエの群れ（F11 Stage 3）：MaleCNS オス 12 匹闘争アリーナ（計198万細胞）",
+  "preset.fly_swarm_male_aggression_12.description": "実生物 MaleCNS v1.0（165,122 細胞）のオス 12 匹が中央の餌場をめぐって cVA（ORN_DA1→DA1_PN）と視覚（LC10a→aIPg→hg3/hg4 MN）で両翅威嚇・突進（lunge）・敗者退却を繰り広げる。",
+  "preset.fly_swarm_male_aggression_tiny.title": "ハエの群れ（F11 Stage 3）：合成オス 8 匹闘争アリーナ（CPU軽量検証）",
+  "preset.fly_swarm_male_aggression_tiny.description": "オフライン CPU ですぐ動く 32 細胞オス闘争回路×8 匹。cVA 遮断・視覚遮断・シャッフル配線で威嚇と突進が消えることを確かめられる。",
 } as const;
 
 export type MessageKey = keyof typeof ja;
@@ -2352,6 +2363,17 @@ const en: Record<MessageKey, string> = {
   "metric.encounter_rate": "Leg-touch rate (enc/fly·s)",
   "metric.mean_speed_cm_s": "Mean walking speed (cm/s)",
   "metric.active_singers": "Active singing males",
+  "metric.total_lunges": "Cumulative lunge clashes",
+  "metric.active_threats": "Active bilateral wing-threat males",
+  "swarm.aggression_title": "3D Male Aggression Arena (Center = Food Territory · Crimson = Wing Threat · Orange = Lunge)",
+  "swarm.act.cva_off": "Block cVA pheromone (control)",
+  "swarm.act.cva_on": "Enable cVA pheromone",
+  "swarm.act.vision_off": "Block visual rival cue (control)",
+  "swarm.act.vision_on": "Enable visual rival cue",
+  "preset.fly_swarm_male_aggression_12.title": "Fly swarm (F11 Stage 3): 12 MaleCNS male aggression arena (1.98M neurons)",
+  "preset.fly_swarm_male_aggression_12.description": "12 real 165,122-cell MaleCNS v1.0 whole-CNS males contesting a central food patch via cVA (ORN_DA1->DA1_PN) + vision (LC10a->aIPg->hg3/hg4 MN) bilateral wing threats, lunges, and loser retreats.",
+  "preset.fly_swarm_male_aggression_tiny.title": "Fly swarm (F11 Stage 3): 8 synthetic males aggression arena (CPU)",
+  "preset.fly_swarm_male_aggression_tiny.description": "Offline CPU-ready 32-cell male aggression circuit x 8 males. Toggle cVA or vision off in the toolbar to watch wing threats and lunges collapse.",
 };
 
 const dictionaries: Record<Lang, Record<MessageKey, string>> = { ja, en };
