@@ -148,6 +148,7 @@ class ActiveJob:
     process: psutil.Process | None = None
     done: asyncio.Event = field(default_factory=asyncio.Event)
     latest_preview: dict[str, Any] | None = None
+    last_tick_db_sync: float = 0.0
 
 
 class Controller:
@@ -1778,8 +1779,20 @@ class Controller:
         run_id = job.run_id
         now = time.time()
         job.last_heartbeat = now
-        if "tick" in message and kind != "preview":
-            self.db.execute("UPDATE runs SET tick=? WHERE id=?", (int(message["tick"]), run_id))
+        if "tick" in message:
+            if kind != "preview" or (now - job.last_tick_db_sync) >= 0.25:
+                self.db.execute("UPDATE runs SET tick=? WHERE id=?", (int(message["tick"]), run_id))
+                job.last_tick_db_sync = now
+        elif kind == "ack" and message.get("applied_clock") is not None:
+            self.db.execute(
+                "UPDATE runs SET tick=? WHERE id=?", (int(message["applied_clock"]), run_id)
+            )
+            job.last_tick_db_sync = now
+        elif kind == "metrics" and message.get("rows"):
+            self.db.execute(
+                "UPDATE runs SET tick=? WHERE id=?", (int(message["rows"][-1]["tick"]), run_id)
+            )
+            job.last_tick_db_sync = now
         if kind == "ready":
             self.db.execute(
                 "UPDATE jobs SET status='running', heartbeat_at=? WHERE id=?", (now, job.job_id)
