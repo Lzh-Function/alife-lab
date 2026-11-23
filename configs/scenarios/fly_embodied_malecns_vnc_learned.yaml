@@ -1,0 +1,32 @@
+schema_version: 1
+experiment:
+  name: fly_embodied_malecns_vnc_learned
+  mode: exploratory
+  substrate: fly_embodied
+  seed: 1
+  dataset_id: male_cns_v1
+  wiring: reference
+  arena:
+    half_size: 6.0
+    foods:
+      - x: 1.35
+        y: 0.30
+        radius: 0.36
+        kind: sugar
+  dynamics:
+    clock_unit: tick
+    numeric_policy: float32_lif_float64_mujoco
+    control_mode: level2_vnc_tuned
+    vnc_profile: male_cns_v1_alif_v1
+  runner:
+    max_steps: 30000
+    checkpoint_interval: 15000
+  observations:
+    metrics:
+      - cmd_forward
+      - cmd_proboscis
+      - cmd_grooming
+      - distance_cm
+      - vnc_mn_mean_hz
+      - vnc_tripod_alternation
+      - realtime_factor

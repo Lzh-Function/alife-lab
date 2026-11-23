@@ -2050,6 +2050,8 @@ class FlyEmbodiedDynamics(_Frozen):
     vnc_coxa_gain: Annotated[float, Field(ge=0.0, le=2.0)] = 0.45
     vnc_femur_gain: Annotated[float, Field(ge=0.0, le=2.0)] = 0.55
     vnc_tibia_gain: Annotated[float, Field(ge=0.0, le=2.0)] = 0.50
+    # Optional learned per-hemilineage ALIF profile name inside configs/vnc_profiles/<name>.json.
+    vnc_profile: Annotated[str | None, Field(pattern=r"^[a-z0-9][a-z0-9_-]{1,63}$")] = None
 
 
 FlyEmbodiedMetric = Literal[

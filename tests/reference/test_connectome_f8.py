@@ -261,3 +261,155 @@ def test_level2_rejects_brain_only_pack_and_cli_works(capsys: pytest.CaptureFixt
     assert rc == 0
     out = json.loads(capsys.readouterr().out)
     assert out["all_checks_passed"] is True
+
+
+def test_alif_and_vnc_profile_validation_cpu_only() -> None:
+    """CPU-only verification of ALIF ODE, Dale's-law preservation, and path-traversal guard."""
+    import numpy as np
+
+    # Path traversal must be rejected both by Pydantic spec and resolver.
+    from pydantic import ValidationError
+
+    from alife_lab.connectome.embodied import make_synthetic_cns_embodied_pack
+    from alife_lab.connectome.lif import LIFParams, make_initial_state, step_tick_cpu
+    from alife_lab.connectome.vnc_learn import (
+        VNCBiophysicalProfile,
+        assign_vnc_groups,
+        extract_vnc_subcircuit,
+        materialize_alif_arrays,
+        resolve_vnc_profile_path,
+    )
+
+    with pytest.raises(ValidationError):
+        ExperimentSpec.model_validate(
+            {
+                "experiment": {
+                    "name": "bad_profile",
+                    "mode": "exploratory",
+                    "substrate": "fly_embodied",
+                    "seed": 1,
+                    "dataset_id": "synthetic_cns_embodied",
+                    "dynamics": {"control_mode": "level2_vnc_tuned", "vnc_profile": "../secret"},
+                }
+            }
+        )
+    with pytest.raises(ValueError, match="invalid vnc_profile"):
+        resolve_vnc_profile_path("../secret")
+
+    pack = make_synthetic_cns_embodied_pack()
+    sub, _sub_groups = extract_vnc_subcircuit(pack)
+    assert len([k for k in sub.io_ports if k.startswith("mn_")]) == 36
+    assert len([k for k in sub.io_ports if k.startswith("proprio_")]) == 6
+
+    csr = pack.edges.to_csr(pack.cells.num_cells)
+    groups = assign_vnc_groups(pack)
+    prof = VNCBiophysicalProfile(adapt_exc_mv=3.0, adapt_inh_mv=2.0, adapt_mn_mv=1.5)
+    w_q, bias_mv, adapt_inc_mv = materialize_alif_arrays(csr, groups, prof)
+    # Strictly preserves Dale's-law signs and nonzero edge mask.
+    assert np.array_equal(w_q > 0, csr.signed_weight > 0)
+    assert np.array_equal(w_q < 0, csr.signed_weight < 0)
+
+    # Spike-frequency adaptation reduces firing rate under identical tonic drive.
+    p_base = LIFParams(tau_adapt_ms=80.0, weight_quant_div=1.0)
+    s_no_adapt = make_initial_state(pack.cells.num_cells, p_base)
+    s_no_adapt.enable_alif(
+        bias_mv=np.full(pack.cells.num_cells, 8.0, dtype=np.float32),
+        adapt_inc_mv=np.zeros(pack.cells.num_cells, dtype=np.float32),
+    )
+    s_adapt = make_initial_state(pack.cells.num_cells, p_base)
+    s_adapt.enable_alif(
+        bias_mv=np.full(pack.cells.num_cells, 8.0, dtype=np.float32),
+        adapt_inc_mv=np.full(pack.cells.num_cells, 4.0, dtype=np.float32),
+    )
+    for _ in range(120):
+        step_tick_cpu(s_no_adapt, csr, p_base, seed=1)
+        step_tick_cpu(s_adapt, csr, p_base, seed=1)
+    assert int(s_no_adapt.total_spikes.sum()) > int(s_adapt.total_spikes.sum()) > 0
+    assert s_adapt.adapt is not None and float(s_adapt.adapt.max()) > 0.0
+    assert bias_mv.shape == (pack.cells.num_cells,)
+    assert adapt_inc_mv.shape == (pack.cells.num_cells,)
+
+
+@needs_mujoco
+def test_level2_alif_learn_and_bitwise_checkpoint(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Level 2 ALIF CMA-ES smoke test + bitwise ALIF checkpoint determinism + CLI."""
+    from alife_lab.connectome.embodied import make_synthetic_cns_embodied_pack
+    from alife_lab.connectome.vnc_learn import (
+        apply_vnc_profile_to_world,
+        learn_vnc_locomotion,
+        load_vnc_profile,
+    )
+
+    pack = make_synthetic_cns_embodied_pack()
+    prof_path = tmp_path / "synth_alif.json"
+    rep = learn_vnc_locomotion(
+        pack,
+        backend="numpy",
+        seed=3,
+        generations=2,
+        pop_size=4,
+        ticks_per_eval=100,
+        verify_ticks=150,
+        include_shuffled_cmaes=True,
+        save_profile_path=prof_path,
+    )
+    assert prof_path.is_file()
+    loaded = load_vnc_profile(prof_path)
+    assert len(loaded.group_syn_scale) == 16
+    assert rep["full_cns_verification"]["learned_intact"]["ticks"] == 150
+    assert rep["full_cns_verification"]["shuffled_trained_from_scratch"]["ticks"] == 150
+
+    # Bitwise ALIF checkpoint round-trip (adapt array preserved identically!).
+    spec = load_experiment_spec(ROOT / "configs/scenarios/fly_embodied_vnc_tiny.yaml")
+    ad = FlyEmbodiedAdapter()
+    s1 = ad.initialize(spec)
+    apply_vnc_profile_to_world(s1, loaded)
+    assert s1.lif.has_alif is True
+    for _ in range(35):
+        s1 = ad.step(s1, spec)
+    payload = ad.serialize_state(s1)
+    assert "adapt" in payload["arrays"]
+    s2 = ad.initialize(spec)
+    apply_vnc_profile_to_world(s2, loaded)
+    # Restore via adapter deserialize_state with ALIF enabled
+    s2 = ad.deserialize_state(payload, spec)
+    apply_vnc_profile_to_world(s2, loaded)
+    s2.lif.v[...] = payload["arrays"]["v"]
+    s2.lif.g[...] = payload["arrays"]["g"]
+    assert s2.lif.adapt is not None
+    s2.lif.adapt[...] = payload["arrays"]["adapt"]
+    s2.lif.refrac[...] = payload["arrays"]["refrac"]
+    s2.lif.delay_ring[...] = payload["arrays"]["delay_ring"]
+    s2.lif.stim_rate_hz[...] = payload["arrays"]["stim_rate_hz"]
+    s2.lif.silenced[...] = payload["arrays"]["silenced"]
+    s2.lif.last_tick_spikes[...] = payload["arrays"]["last_tick_spikes"]
+    s2.lif.total_spikes[...] = payload["arrays"]["total_spikes"]
+    s2.lif.tick = int(payload["meta"]["tick"])
+    s2.lif.substep = int(payload["meta"]["substep"])
+    for _ in range(25):
+        s1 = ad.step(s1, spec)
+        s2 = ad.step(s2, spec)
+    assert ad.state_distance(s1, s2)["exact_equal"] is True
+
+    rc = cli_main(
+        [
+            "connectome",
+            "learn-vnc",
+            "synthetic_cns_embodied",
+            "--generations",
+            "1",
+            "--pop",
+            "2",
+            "--ticks",
+            "80",
+            "--verify-ticks",
+            "100",
+            "--no-shuffled-cmaes",
+            "--json",
+        ]
+    )
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["dataset_id"] == "synthetic_cns_embodied"

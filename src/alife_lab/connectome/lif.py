@@ -74,6 +74,16 @@ class LIFParams:
     dt_ms: float = 0.1
     substeps_per_tick: int = 10
     stim_no_refrac: bool = True
+    tau_adapt_ms: float = 80.0
+    weight_quant_div: float = 1.0
+
+    @property
+    def effective_w_syn_mv(self) -> float:
+        return float(np.float32(self.w_syn_mv) / np.float32(self.weight_quant_div))
+
+    @property
+    def alpha_adapt_f32(self) -> np.float32:
+        return np.float32(math.exp(-self.dt_ms / max(self.tau_adapt_ms, 1e-3)))
 
     @property
     def delay_steps(self) -> int:
@@ -120,10 +130,36 @@ class LIFState:
     silenced: U8  # (N,) 1 = outgoing synapses zeroed (silencing intervention)
     last_tick_spikes: I32  # (N,) spikes emitted during the most recent tick
     total_spikes: I32  # (N,) cumulative spikes since tick 0
+    # Optional neuron-local ALIF biophysics (None = exact Shiu et al. 2024 uniform LIF):
+    adapt: F32 | None = None  # (N,) spike-frequency adaptation current (mV)
+    bias_mv: F32 | None = None  # (N,) per-neuron tonic resting-potential shift (mV)
+    adapt_inc_mv: F32 | None = None  # (N,) adaptation jump added on each spike (mV)
 
     @property
     def num_cells(self) -> int:
         return int(self.v.shape[0])
+
+    @property
+    def has_alif(self) -> bool:
+        return self.adapt is not None and self.bias_mv is not None and self.adapt_inc_mv is not None
+
+    def enable_alif(
+        self,
+        bias_mv: F32 | None = None,
+        adapt_inc_mv: F32 | None = None,
+    ) -> None:
+        n = self.num_cells
+        self.adapt = np.zeros(n, dtype=np.float32)
+        self.bias_mv = (
+            np.ascontiguousarray(bias_mv, dtype=np.float32)
+            if bias_mv is not None
+            else np.zeros(n, dtype=np.float32)
+        )
+        self.adapt_inc_mv = (
+            np.ascontiguousarray(adapt_inc_mv, dtype=np.float32)
+            if adapt_inc_mv is not None
+            else np.zeros(n, dtype=np.float32)
+        )
 
     def copy(self) -> LIFState:
         return LIFState(
@@ -137,6 +173,9 @@ class LIFState:
             silenced=self.silenced.copy(),
             last_tick_spikes=self.last_tick_spikes.copy(),
             total_spikes=self.total_spikes.copy(),
+            adapt=self.adapt.copy() if self.adapt is not None else None,
+            bias_mv=self.bias_mv.copy() if self.bias_mv is not None else None,
+            adapt_inc_mv=self.adapt_inc_mv.copy() if self.adapt_inc_mv is not None else None,
         )
 
 
@@ -184,13 +223,15 @@ def step_substep_cpu(
     v_0 = np.float32(params.v_0)
     v_rst = np.float32(params.v_rst)
     v_th = np.float32(params.v_th)
-    w_syn = np.float32(params.w_syn_mv)
+    w_syn = np.float32(params.effective_w_syn_mv)
     stim_w = np.float32(params.stim_weight_mv)
     dt_s_f32 = np.float32(params.dt_s)
     alpha_v, alpha_g, beta_vg = params.exact_coeffs_f32()
+    alpha_a = params.alpha_adapt_f32
     refrac_steps = np.int16(params.refrac_steps)
     delay_steps = params.delay_steps
     ring_len = params.ring_len
+    use_alif = state.has_alif
 
     s = state.substep
     slot = s % ring_len
@@ -224,10 +265,20 @@ def step_substep_cpu(
     # Non-spiking, non-refractory neurons integrate v; refractory neurons decrement counter.
     integrate_v = can_spike & (~spiked_mask)
     if integrate_v.any():
-        dv = state.v[integrate_v] - v_0
-        v_decay = alpha_v * dv
-        g_drive = beta_vg * state.g[integrate_v]
-        state.v[integrate_v] = (v_0 + v_decay) + g_drive
+        if use_alif:
+            assert state.bias_mv is not None and state.adapt is not None
+            v_eq = ((v_0 + state.bias_mv[integrate_v]) - state.adapt[integrate_v]).astype(
+                np.float32, copy=False
+            )
+            dv = (state.v[integrate_v] - v_eq).astype(np.float32, copy=False)
+            v_decay = (alpha_v * dv).astype(np.float32, copy=False)
+            g_drive = (beta_vg * state.g[integrate_v]).astype(np.float32, copy=False)
+            state.v[integrate_v] = ((v_eq + v_decay) + g_drive).astype(np.float32, copy=False)
+        else:
+            dv = state.v[integrate_v] - v_0
+            v_decay = alpha_v * dv
+            g_drive = beta_vg * state.g[integrate_v]
+            state.v[integrate_v] = (v_0 + v_decay) + g_drive
 
     in_refrac = ~can_spike
     if in_refrac.any():
@@ -235,15 +286,24 @@ def step_substep_cpu(
             np.int16, copy=False
         )
 
-    # g decays for all non-spiking neurons (spiking neurons reset g = 0 below).
+    # g and adapt decay for all non-spiking neurons (spiking neurons reset g=0 & bump adapt below).
     not_spiked = ~spiked_mask
     if not_spiked.any():
         state.g[not_spiked] = (alpha_g * state.g[not_spiked]).astype(np.float32, copy=False)
+        if use_alif and state.adapt is not None:
+            state.adapt[not_spiked] = (alpha_a * state.adapt[not_spiked]).astype(
+                np.float32, copy=False
+            )
 
     # Reset spiking neurons and accumulate tick/total spike counts.
     if fired.size:
         state.v[fired] = v_rst
         state.g[fired] = np.float32(0.0)
+        if use_alif and state.adapt is not None and state.adapt_inc_mv is not None:
+            state.adapt[fired] = (
+                (alpha_a * state.adapt[fired]).astype(np.float32, copy=False)
+                + state.adapt_inc_mv[fired]
+            ).astype(np.float32, copy=False)
         if params.stim_no_refrac:
             refrac_vals = np.where(
                 state.stim_rate_hz[fired] > np.float32(0.0), np.int16(0), refrac_steps

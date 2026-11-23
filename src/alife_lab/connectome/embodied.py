@@ -738,6 +738,7 @@ class EmbodiedFlyWorld:
     vnc_coxa_gain: float = 0.45
     vnc_femur_gain: float = 0.55
     vnc_tibia_gain: float = 0.50
+    vnc_profile_name: str | None = None
     gpu_runner: Any = None
     gpu_synced_to_host: bool = True
     # Separate user manual stimulus rates so sensor updates never overwrite user interventions!
@@ -1017,8 +1018,8 @@ def step_embodied_tick(world: EmbodiedFlyWorld) -> MotorCommands:
     else:
         # Decode 18 joint actuator targets directly from 36 antagonist VNC motor neuron pools:
         #   coxa_yaw    = -side * coxa_gain  * tanh((coxa_pro - coxa_ret) / norm)
-        #   femur_pitch = -0.16 + femur_gain * tanh((fem_flex - fem_ext) / norm)
-        #   tibia_pitch =  0.08 + tibia_gain * tanh((tib_ext  - tib_flex) / norm)
+        #   femur_pitch =  0.16 - femur_gain * tanh((fem_flex - fem_ext) / norm)  (- lifts UP!)
+        #   tibia_pitch = -0.08 + tibia_gain * tanh((tib_ext  - tib_flex) / norm)
         norm_hz = max(1.0, float(world.vnc_mn_norm_hz))
         leg_ctrl = np.zeros(18, dtype=np.float64)
         for li, leg in enumerate(LEG_NAMES):
@@ -1029,8 +1030,8 @@ def step_embodied_tick(world: EmbodiedFlyWorld) -> MotorCommands:
             tib_net = math.tanh((float(r[4]) - float(r[5])) / norm_hz)
             base = li * 3
             leg_ctrl[base + 0] = -side_sign * world.vnc_coxa_gain * coxa_net
-            leg_ctrl[base + 1] = -0.16 + world.vnc_femur_gain * fem_net
-            leg_ctrl[base + 2] = 0.08 + world.vnc_tibia_gain * tib_net
+            leg_ctrl[base + 1] = 0.16 - world.vnc_femur_gain * fem_net
+            leg_ctrl[base + 2] = -0.08 + world.vnc_tibia_gain * tib_net
         head_pitch = 0.14 * cmd.proboscis if cmd.proboscis >= 0.30 else (0.30 * cmd.grooming)
         step_body_level2_vnc_1ms(world.body, world.arena, leg_ctrl, cmd.proboscis, head_pitch)
     t_end = time.perf_counter()

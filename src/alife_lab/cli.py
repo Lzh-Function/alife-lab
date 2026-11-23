@@ -1290,6 +1290,53 @@ def cmd_connectome(args: argparse.Namespace) -> int:
                     f"alt={bs['vnc_tripod_alternation']:.3f}"
                 )
             return 0
+
+        if args.connectome_cmd == "learn-vnc":
+            from alife_lab.connectome.embodied import make_synthetic_cns_embodied_pack
+            from alife_lab.connectome.vnc_learn import learn_vnc_locomotion
+
+            if args.dataset_id == "synthetic_cns_embodied":
+                pack = make_synthetic_cns_embodied_pack()
+            else:
+                pack = load_connectome_pack(
+                    args.dataset_id, ds_dir, verify_hashes=not args.no_verify
+                )
+            backend = args.backend
+            if backend == "auto":
+                from alife_lab.connectome.lif_cupy import available as cupy_ok
+
+                backend = "cupy" if (pack.cells.num_cells > 5000 and cupy_ok()) else "numpy"
+            save_path = Path(args.save_profile) if args.save_profile else None
+            rep = learn_vnc_locomotion(
+                pack,
+                backend=backend,
+                seed=args.seed,
+                generations=args.generations,
+                pop_size=args.pop,
+                ticks_per_eval=args.ticks,
+                verify_ticks=args.verify_ticks,
+                include_shuffled_cmaes=not args.no_shuffled_cmaes,
+                datasets_dir=ds_dir,
+                save_profile_path=save_path,
+            )
+            if args.json:
+                _print_json(rep)
+            else:
+                print(
+                    f"learn-vnc {rep['dataset_id']} full={rep['full_cells']:,} "
+                    f"sub={rep['vnc_subcircuit_cells']:,} backend={rep['backend']} "
+                    f"gens={rep['generations']}x{rep['pop_size']} wall={rep['wall_seconds']:.1f}s"
+                )
+                for k, v in rep["full_cns_verification"].items():
+                    if v is None:
+                        continue
+                    print(
+                        f"  {k:32s}: net_x={v['net_x_cm']:+.3f}cm "
+                        f"disp={v['net_disp_cm']:.3f}cm path={v['path_cm']:.3f}cm "
+                        f"mn={v['vnc_mn_mean_hz']:5.1f}Hz osc={v['tripod_osc_std_hz']:4.1f} "
+                        f"corr={v['tripod_corr']:+.2f} steps={v['tarsus_transitions']:3d}"
+                    )
+            return 0
     except (DatasetError, ValueError, FileNotFoundError) as exc:
         print(f"connectome error: {exc}", file=sys.stderr)
         return 1
@@ -1566,6 +1613,22 @@ def build_parser() -> argparse.ArgumentParser:
     ctune.add_argument("--ticks", type=int, default=500)
     ctune.add_argument("--no-verify", action="store_true")
     ctune.add_argument("--json", action="store_true")
+
+    clearn = csub.add_parser(
+        "learn-vnc",
+        help="fixed-topology per-hemilineage ALIF CMA-ES on real VNC connectome + shuffled control",
+    )
+    clearn.add_argument("dataset_id", choices=["banc_888", "male_cns_v1", "synthetic_cns_embodied"])
+    clearn.add_argument("--backend", choices=["auto", "numpy", "cupy"], default="auto")
+    clearn.add_argument("--seed", type=int, default=1)
+    clearn.add_argument("--generations", type=int, default=25)
+    clearn.add_argument("--pop", type=int, default=12)
+    clearn.add_argument("--ticks", type=int, default=600)
+    clearn.add_argument("--verify-ticks", type=int, default=1500)
+    clearn.add_argument("--save-profile", default="")
+    clearn.add_argument("--no-shuffled-cmaes", action="store_true")
+    clearn.add_argument("--no-verify", action="store_true")
+    clearn.add_argument("--json", action="store_true")
 
     p.set_defaults(func=cmd_connectome)
     return parser

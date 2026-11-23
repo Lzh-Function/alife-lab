@@ -107,38 +107,38 @@ def build_fly_mjcf() -> str:
         leg_bodies.append(f"""
         <body name="leg_{name}_coxa" pos="{ax:.4f} {ay:.4f} {az:.4f}">
           <joint name="{name}_coxa_yaw" type="hinge" axis="0 0 1" range="-0.75 0.75"
-                 damping="0.04" stiffness="0.08"/>
+                 damping="0.12" stiffness="0.08"/>
           <geom name="g_{name}_coxa" type="capsule" fromto="0 0 0 0 {s * 0.045:.4f} -0.01"
                 size="0.016" rgba="0.32 0.20 0.11 1" contype="0" conaffinity="0"/>
           <body name="leg_{name}_femur" pos="0 {s * 0.045:.4f} -0.01">
-            <joint name="{name}_femur_pitch" type="hinge" axis="{-s:.1f} 0 0" range="-0.75 0.95"
-                   damping="0.28" stiffness="0.15"/>
+            <joint name="{name}_femur_pitch" type="hinge" axis="{-s:.1f} 0 0" range="-0.95 0.75"
+                   damping="0.32" stiffness="0.15"/>
             <geom name="g_{name}_femur" type="capsule"
                   fromto="0 0 0 {math.sin(yaw0) * 0.05:.4f} {s * fem_len:.4f} 0.025"
                   size="0.014" rgba="0.44 0.28 0.14 1" contype="0" conaffinity="0"/>
             <body name="leg_{name}_tibia" pos="{math.sin(yaw0) * 0.05:.4f} {s * fem_len:.4f} 0.025">
               <joint name="{name}_tibia_pitch" type="hinge" axis="{-s:.1f} 0 0" range="-1.0 1.0"
-                     damping="0.22" stiffness="0.12"/>
+                     damping="0.25" stiffness="0.12"/>
               <geom name="g_{name}_tibia" type="capsule"
                     fromto="0 0 0 0 {s * 0.055:.4f} {-tib_len:.4f}"
                     size="0.010" rgba="0.56 0.37 0.19 1" contype="0" conaffinity="0"/>
               <geom name="g_{name}_tarsus" type="sphere"
                     pos="0 {s * 0.055:.4f} {-tib_len:.4f}" size="0.020"
-                    rgba="0.88 0.65 0.28 1" friction="1.4 0.02 0.01"
+                    rgba="0.88 0.65 0.28 1" friction="2.0 0.02 0.01"
                     contype="1" conaffinity="1"/>
             </body>
           </body>
         </body>""")
         actuators.append(
-            f'    <position name="act_{name}_yaw" joint="{name}_coxa_yaw" kp="2.5" '
+            f'    <position name="act_{name}_yaw" joint="{name}_coxa_yaw" kp="6.5" '
             f'ctrlrange="-0.75 0.75"/>'
         )
         actuators.append(
-            f'    <position name="act_{name}_femur" joint="{name}_femur_pitch" kp="4.5" '
-            f'ctrlrange="-0.75 0.95"/>'
+            f'    <position name="act_{name}_femur" joint="{name}_femur_pitch" kp="9.0" '
+            f'ctrlrange="-0.95 0.75"/>'
         )
         actuators.append(
-            f'    <position name="act_{name}_tibia" joint="{name}_tibia_pitch" kp="4.0" '
+            f'    <position name="act_{name}_tibia" joint="{name}_tibia_pitch" kp="8.0" '
             f'ctrlrange="-1.0 1.0"/>'
         )
 
@@ -153,7 +153,7 @@ def build_fly_mjcf() -> str:
   <compiler angle="radian" inertiafromgeom="true"/>
   <option timestep="0.0005" gravity="0 0 -9.81" integrator="Euler" iterations="25"/>
   <default>
-    <geom density="350" friction="1.1 0.02 0.01" solref="0.008 1" solimp="0.9 0.95 0.002"/>
+    <geom density="14" friction="1.6 0.02 0.01" solref="0.008 1" solimp="0.9 0.95 0.002"/>
     <joint armature="0.0004" limited="true"/>
   </default>
   <worldbody>
@@ -448,28 +448,28 @@ def step_body_1ms(
         base = idx * 3
         if grooming_active and leg in ("LF", "RF"):
             # Expressive Drosophila antennal grooming choreography:
-            # Both front legs lift high forward & sweep inward in front of the ducked head,
-            # rapidly scrubbing the antennae with alternating left-right rub cycles (~7.5 Hz).
+            # Both front legs lift high forward (-femur_pitch lifts UP on axis=-s) & sweep inward
+            # in front of the ducked head, rapidly scrubbing the antennae (~7.5 Hz).
             phase = body.groom_phase + (0.0 if leg == "LF" else 1.15)
             rub = math.sin(phase)
             sweep = math.cos(phase)
             ctrl[base + 0] = -s * (0.68 + 0.12 * sweep)
-            ctrl[base + 1] = 0.78 + 0.14 * rub
-            ctrl[base + 2] = -0.58 + 0.36 * rub
+            ctrl[base + 1] = -0.72 - 0.14 * rub
+            ctrl[base + 2] = 0.52 - 0.32 * rub
             continue
 
         if grooming_active:
             # Middle and hind legs brace firmly and slightly wider during front-leg grooming.
             ctrl[base + 0] = 0.0
-            ctrl[base + 1] = -0.22
-            ctrl[base + 2] = 0.14
+            ctrl[base + 1] = 0.18
+            ctrl[base + 2] = -0.10
             continue
 
         if drive_mag < 0.05:
-            # Stable standing posture (slight downward femur brace keeps thorax off floor).
+            # Stable standing posture (gentle downward femur brace keeps thorax cleanly off floor).
             ctrl[base + 0] = 0.0
-            ctrl[base + 1] = -0.18
-            ctrl[base + 2] = 0.10
+            ctrl[base + 1] = 0.14
+            ctrl[base + 2] = -0.08
             continue
 
         phi = body.cpg_phase + TRIPOD_PHASE_OFFSET[leg]
@@ -481,13 +481,13 @@ def step_body_1ms(
         # Differential left/right stride for turning (+turn = turn left -> right legs stride more).
         side_gain = net_fwd - s * 0.75 * turn
         side_gain = max(-1.0, min(1.0, side_gain))
-        yaw_amp = 0.34 * side_gain
-        lift = (0.30 + float(body.stumble_lift[idx])) * swing * drive_mag
+        yaw_amp = 0.38 * side_gain
+        lift = (0.45 + float(body.stumble_lift[idx])) * swing * drive_mag
 
-        # Coxa yaw sweeps forward during swing, backward during stance.
-        ctrl[base + 0] = -s * yaw_amp * math.cos(phi)
-        ctrl[base + 1] = -0.16 + lift
-        ctrl[base + 2] = 0.08 - 0.30 * lift
+        # Coxa sweeps rearward during stance (+s) pushing forward; -femur lifts UP during swing.
+        ctrl[base + 0] = s * yaw_amp * math.cos(phi)
+        ctrl[base + 1] = 0.16 - lift
+        ctrl[base + 2] = -0.08 + 0.30 * lift
 
     # Proboscis extension actuator (index 18) & head pitch actuator (index 19).
     ctrl[18] = max(0.0, min(0.95, 0.92 * cmd.proboscis))

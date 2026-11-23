@@ -1,0 +1,8 @@
+preset:
+  id: fly_embodied_malecns_vnc_learned
+  scenario: fly_embodied_malecns_vnc_learned.yaml
+  title_key: preset.fly_embodied_malecns_vnc_learned.title
+  description_key: preset.fly_embodied_malecns_vnc_learned.description
+  overrides: {}
+  expected_observation: 'MaleCNS v1.0 male whole CNS (165,122 cells) with frozen biological topology & Dale-law signs and 16 hemilineage ALIF biophysical parameters driving pure-MuJoCo contact locomotion (ZERO hand-crafted CPG, ZERO velocity injection).'
+  negative_control: 'matched-budget CMA-ES on degree-preserving shuffled MaleCNS VNC + cross-sex zero-shot transfer test (see docs/reference_fidelity/connectome_fly.md)'

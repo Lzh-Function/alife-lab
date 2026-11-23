@@ -132,6 +132,93 @@ extern "C" __global__ void lif_step_neurons(
     }
 }
 
+extern "C" __global__ void lif_step_neurons_alif(
+    float* __restrict__ v,
+    float* __restrict__ g,
+    float* __restrict__ adapt,
+    const float* __restrict__ bias_mv,
+    const float* __restrict__ adapt_inc_mv,
+    short* __restrict__ refrac,
+    int* __restrict__ delay_ring,
+    const float* __restrict__ stim_rate_hz,
+    const unsigned char* __restrict__ silenced,
+    int* __restrict__ last_tick_spikes,
+    int* __restrict__ total_spikes,
+    int* __restrict__ fired_ids,
+    int* __restrict__ n_fired,
+    const long long* __restrict__ d_substep,
+    const int n,
+    const int ring_len,
+    const unsigned long long seed,
+    const float v_0,
+    const float v_rst,
+    const float v_th,
+    const float alpha_v,
+    const float alpha_g,
+    const float alpha_a,
+    const float beta_vg,
+    const float w_syn,
+    const float stim_w,
+    const float dt_s,
+    const short refrac_steps,
+    const int stim_no_refrac
+) {
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+
+    const long long s = d_substep[0];
+    const int slot = (int)(s % (long long)ring_len);
+    const long long ring_off = (long long)slot * (long long)n + (long long)i;
+
+    float vi = v[i];
+    float gi = g[i];
+    float ai = adapt[i];
+    short ri = refrac[i];
+
+    const int acc = delay_ring[ring_off];
+    if (acc != 0) {
+        delay_ring[ring_off] = 0;
+        gi = __fadd_rn(gi, __fmul_rn((float)acc, w_syn));
+    }
+
+    const float rate = stim_rate_hz[i];
+    if (rate > 0.0f) {
+        const float u = splitmix64_u01_f32(seed, (unsigned long long)s, (unsigned int)i);
+        const float p = __fmul_rn(rate, dt_s);
+        if (u < p) {
+            vi = __fadd_rn(vi, stim_w);
+            if (stim_no_refrac != 0) {
+                ri = 0;
+            }
+        }
+    }
+
+    if (ri == 0 && vi > v_th) {
+        v[i] = v_rst;
+        g[i] = 0.0f;
+        adapt[i] = __fadd_rn(__fmul_rn(alpha_a, ai), adapt_inc_mv[i]);
+        refrac[i] = (stim_no_refrac != 0 && rate > 0.0f) ? (short)0 : refrac_steps;
+        last_tick_spikes[i] += 1;
+        total_spikes[i] += 1;
+        if (silenced[i] == 0) {
+            const int pos = atomicAdd(n_fired, 1);
+            fired_ids[pos] = i;
+        }
+    } else {
+        if (ri == 0) {
+            const float v_eq = __fsub_rn(__fadd_rn(v_0, bias_mv[i]), ai);
+            const float dv = __fsub_rn(vi, v_eq);
+            const float v_decay = __fmul_rn(alpha_v, dv);
+            const float g_drive = __fmul_rn(beta_vg, gi);
+            v[i] = __fadd_rn(__fadd_rn(v_eq, v_decay), g_drive);
+        } else {
+            refrac[i] = (short)(ri - 1);
+        }
+        g[i] = __fmul_rn(alpha_g, gi);
+        adapt[i] = __fmul_rn(alpha_a, ai);
+    }
+}
+
 extern "C" __global__ void lif_scatter_spikes(
     const int* __restrict__ indptr,
     const int* __restrict__ post,
@@ -358,17 +445,20 @@ class CupyLIFRunner:
         self.delay_steps = params.delay_steps
         self.refrac_steps = np.int16(params.refrac_steps)
         self.alpha_v, self.alpha_g, self.beta_vg = params.exact_coeffs_f32()
+        self.alpha_a = params.alpha_adapt_f32
         self.v_0 = np.float32(params.v_0)
         self.v_rst = np.float32(params.v_rst)
         self.v_th = np.float32(params.v_th)
-        self.w_syn = np.float32(params.w_syn_mv)
+        self.w_syn = np.float32(params.effective_w_syn_mv)
         self.stim_w = np.float32(params.stim_weight_mv)
         self.dt_s = np.float32(params.dt_s)
         self.stim_no_refrac = np.int32(1 if params.stim_no_refrac else 0)
+        self.use_alif = False
 
         mod = _get_module()
         self._k_zero_tick = mod.get_function("lif_zero_tick_spikes")
         self._k_step = mod.get_function("lif_step_neurons")
+        self._k_step_alif = mod.get_function("lif_step_neurons_alif")
         self._k_scatter = mod.get_function("lif_scatter_spikes")
         self._k_finish = mod.get_function("lif_finish_substep")
 
@@ -381,6 +471,9 @@ class CupyLIFRunner:
         n = self.num_cells
         self.d_v = cp.full(n, self.v_0, dtype=cp.float32)
         self.d_g = cp.zeros(n, dtype=cp.float32)
+        self.d_adapt: Any = None
+        self.d_bias_mv: Any = None
+        self.d_adapt_inc_mv: Any = None
         self.d_refrac = cp.zeros(n, dtype=cp.int16)
         self.d_delay_ring = cp.zeros((self.ring_len, n), dtype=cp.int32)
         self.d_stim_rate_hz = cp.zeros(n, dtype=cp.float32)
@@ -396,10 +489,44 @@ class CupyLIFRunner:
         self._cached_idx: dict[tuple[int, int], Any] = {}
         cp.cuda.get_current_stream().synchronize()
 
+    def _ensure_alif_buffers(self) -> None:
+        if self.d_adapt is None:
+            n = self.num_cells
+            self.d_adapt = self.cp.zeros(n, dtype=self.cp.float32)
+            self.d_bias_mv = self.cp.zeros(n, dtype=self.cp.float32)
+            self.d_adapt_inc_mv = self.cp.zeros(n, dtype=self.cp.float32)
+        if not self.use_alif:
+            self.use_alif = True
+            self._graphs.clear()
+
+    def upload_alif_weights_and_params(
+        self,
+        signed_weights: np.ndarray[Any, np.dtype[np.int32]],
+        bias_mv: np.ndarray[Any, np.dtype[np.float32]],
+        adapt_inc_mv: np.ndarray[Any, np.dtype[np.float32]],
+    ) -> None:
+        """In-place GPU update of fixed-point CSR weights + ALIF bias/adaptation (graph-safe!)."""
+        self._stream.synchronize()
+        self._ensure_alif_buffers()
+        self.d_weight.set(np.ascontiguousarray(signed_weights, dtype=np.int32))
+        self.d_bias_mv.set(np.ascontiguousarray(bias_mv, dtype=np.float32))
+        self.d_adapt_inc_mv.set(np.ascontiguousarray(adapt_inc_mv, dtype=np.float32))
+        self.cp.cuda.get_current_stream().synchronize()
+
     def upload_state(self, state: LIFState) -> None:
         """Copy host LIFState into resident GPU buffers (exact bitwise copy)."""
         self.d_v.set(np.ascontiguousarray(state.v, dtype=np.float32))
         self.d_g.set(np.ascontiguousarray(state.g, dtype=np.float32))
+        if state.has_alif:
+            assert (
+                state.adapt is not None
+                and state.bias_mv is not None
+                and state.adapt_inc_mv is not None
+            )
+            self._ensure_alif_buffers()
+            self.d_adapt.set(np.ascontiguousarray(state.adapt, dtype=np.float32))
+            self.d_bias_mv.set(np.ascontiguousarray(state.bias_mv, dtype=np.float32))
+            self.d_adapt_inc_mv.set(np.ascontiguousarray(state.adapt_inc_mv, dtype=np.float32))
         self.d_refrac.set(np.ascontiguousarray(state.refrac, dtype=np.int16))
         self.d_delay_ring.set(np.ascontiguousarray(state.delay_ring, dtype=np.int32))
         self.d_stim_rate_hz.set(np.ascontiguousarray(state.stim_rate_hz, dtype=np.float32))
@@ -415,6 +542,8 @@ class CupyLIFRunner:
         self._stream.synchronize()
         state.v[...] = self.cp.asnumpy(self.d_v)
         state.g[...] = self.cp.asnumpy(self.d_g)
+        if self.use_alif and state.adapt is not None:
+            state.adapt[...] = self.cp.asnumpy(self.d_adapt)
         state.refrac[...] = self.cp.asnumpy(self.d_refrac)
         state.delay_ring[...] = self.cp.asnumpy(self.d_delay_ring)
         state.stim_rate_hz[...] = self.cp.asnumpy(self.d_stim_rate_hz)
@@ -475,37 +604,74 @@ class CupyLIFRunner:
     def _launch_substep(self) -> None:
         n = self.num_cells
         grid_n = ((n + NEURON_BLOCK - 1) // NEURON_BLOCK,)
-        self._k_step(
-            grid_n,
-            (NEURON_BLOCK,),
-            (
-                self.d_v,
-                self.d_g,
-                self.d_refrac,
-                self.d_delay_ring,
-                self.d_stim_rate_hz,
-                self.d_silenced,
-                self.d_last_tick_spikes,
-                self.d_total_spikes,
-                self.d_fired_ids,
-                self.d_n_fired,
-                self.d_substep,
-                np.int32(n),
-                np.int32(self.ring_len),
-                np.uint64(self.seed & 0xFFFFFFFFFFFFFFFF),
-                self.v_0,
-                self.v_rst,
-                self.v_th,
-                self.alpha_v,
-                self.alpha_g,
-                self.beta_vg,
-                self.w_syn,
-                self.stim_w,
-                self.dt_s,
-                self.refrac_steps,
-                self.stim_no_refrac,
-            ),
-        )
+        if self.use_alif:
+            self._k_step_alif(
+                grid_n,
+                (NEURON_BLOCK,),
+                (
+                    self.d_v,
+                    self.d_g,
+                    self.d_adapt,
+                    self.d_bias_mv,
+                    self.d_adapt_inc_mv,
+                    self.d_refrac,
+                    self.d_delay_ring,
+                    self.d_stim_rate_hz,
+                    self.d_silenced,
+                    self.d_last_tick_spikes,
+                    self.d_total_spikes,
+                    self.d_fired_ids,
+                    self.d_n_fired,
+                    self.d_substep,
+                    np.int32(n),
+                    np.int32(self.ring_len),
+                    np.uint64(self.seed & 0xFFFFFFFFFFFFFFFF),
+                    self.v_0,
+                    self.v_rst,
+                    self.v_th,
+                    self.alpha_v,
+                    self.alpha_g,
+                    self.alpha_a,
+                    self.beta_vg,
+                    self.w_syn,
+                    self.stim_w,
+                    self.dt_s,
+                    self.refrac_steps,
+                    self.stim_no_refrac,
+                ),
+            )
+        else:
+            self._k_step(
+                grid_n,
+                (NEURON_BLOCK,),
+                (
+                    self.d_v,
+                    self.d_g,
+                    self.d_refrac,
+                    self.d_delay_ring,
+                    self.d_stim_rate_hz,
+                    self.d_silenced,
+                    self.d_last_tick_spikes,
+                    self.d_total_spikes,
+                    self.d_fired_ids,
+                    self.d_n_fired,
+                    self.d_substep,
+                    np.int32(n),
+                    np.int32(self.ring_len),
+                    np.uint64(self.seed & 0xFFFFFFFFFFFFFFFF),
+                    self.v_0,
+                    self.v_rst,
+                    self.v_th,
+                    self.alpha_v,
+                    self.alpha_g,
+                    self.beta_vg,
+                    self.w_syn,
+                    self.stim_w,
+                    self.dt_s,
+                    self.refrac_steps,
+                    self.stim_no_refrac,
+                ),
+            )
         self._k_scatter(
             (SCATTER_BLOCKS,),
             (SCATTER_THREADS,),

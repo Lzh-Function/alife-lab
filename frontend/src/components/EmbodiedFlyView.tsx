@@ -278,6 +278,8 @@ interface EmbodiedHeader {
   };
   mn9_silenced: boolean;
   control_mode?: "level1_cpg" | "level2_vnc" | "level2_vnc_tuned";
+  vnc_profile?: string | null;
+  alif_enabled?: boolean;
   has_vnc_ports?: boolean;
   vnc_mn_mean_hz?: number;
   vnc_tripod_alternation?: number;
@@ -909,11 +911,13 @@ export const EmbodiedFlyView = forwardRef<EmbodiedFlyViewHandle, Props>(function
         }}
       >
         <span>
-          {hud?.control_mode === "level2_vnc_tuned"
-            ? t("fly.level2_tuned_banner")
-            : hud?.control_mode === "level2_vnc"
-              ? t("fly.level2_banner")
-              : t("fly.level1_banner")}
+          {hud?.vnc_profile
+            ? t("fly.level2_alif_banner").replace("{profile}", hud.vnc_profile)
+            : hud?.control_mode === "level2_vnc_tuned"
+              ? t("fly.level2_tuned_banner")
+              : hud?.control_mode === "level2_vnc"
+                ? t("fly.level2_banner")
+                : t("fly.level1_banner")}
         </span>
         {tm && (
           <span className="mono" data-testid="fly-realtime-badge">

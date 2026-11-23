@@ -179,6 +179,16 @@ class FlyEmbodiedAdapter:
             vnc_tibia_gain=dyn.vnc_tibia_gain,
             datasets_dir=ds_dir,
         )
+        if dyn.vnc_profile:
+            from alife_lab.connectome.vnc_learn import (
+                apply_vnc_profile_to_world,
+                load_vnc_profile,
+                resolve_vnc_profile_path,
+            )
+
+            prof = load_vnc_profile(resolve_vnc_profile_path(dyn.vnc_profile))
+            apply_vnc_profile_to_world(world, prof, datasets_dir=ds_dir)
+            world.vnc_profile_name = dyn.vnc_profile
         for port_id in exp.silenced_ports:
             if port_id in pack.io_ports:
                 world.lif.silenced[pack.io_ports[port_id].cell_indices] = np.uint8(1)
@@ -280,6 +290,8 @@ class FlyEmbodiedAdapter:
             },
             "mn9_silenced": mn9_silenced,
             "control_mode": state.control_mode,
+            "vnc_profile": state.vnc_profile_name,
+            "alif_enabled": state.lif.has_alif,
             "has_vnc_ports": state.ports.has_vnc_ports,
             "vnc_mn_mean_hz": round(state.vnc_mn_mean_hz, 2),
             "vnc_tripod_alternation": round(state.last_vnc_tripod_alt, 3),
@@ -430,23 +442,26 @@ class FlyEmbodiedAdapter:
         return out
 
     def serialize_state(self, state: EmbodiedFlyWorld) -> dict[str, Any]:
-        """Exact deterministic checkpoint of BOTH spiking LIF brain AND MuJoCo body + arena."""
+        """Exact deterministic checkpoint of BOTH spiking LIF/ALIF brain AND MuJoCo body + arena."""
         lif = state.ensure_host()
+        arrays: dict[str, Any] = {
+            "v": lif.v.copy(),
+            "g": lif.g.copy(),
+            "refrac": lif.refrac.copy(),
+            "delay_ring": lif.delay_ring.copy(),
+            "stim_rate_hz": lif.stim_rate_hz.copy(),
+            "manual_stim_hz": state.manual_stim_hz.copy(),
+            "silenced": lif.silenced.copy(),
+            "last_tick_spikes": lif.last_tick_spikes.copy(),
+            "total_spikes": lif.total_spikes.copy(),
+            "mj_state": self._mj_state_vec(state),
+            "stumble_lift": state.body.stumble_lift.copy(),
+            "leg_mn_rates": state.leg_mn_rates.copy(),
+        }
+        if lif.adapt is not None:
+            arrays["adapt"] = lif.adapt.copy()
         return {
-            "arrays": {
-                "v": lif.v.copy(),
-                "g": lif.g.copy(),
-                "refrac": lif.refrac.copy(),
-                "delay_ring": lif.delay_ring.copy(),
-                "stim_rate_hz": lif.stim_rate_hz.copy(),
-                "manual_stim_hz": state.manual_stim_hz.copy(),
-                "silenced": lif.silenced.copy(),
-                "last_tick_spikes": lif.last_tick_spikes.copy(),
-                "total_spikes": lif.total_spikes.copy(),
-                "mj_state": self._mj_state_vec(state),
-                "stumble_lift": state.body.stumble_lift.copy(),
-                "leg_mn_rates": state.leg_mn_rates.copy(),
-            },
+            "arrays": arrays,
             "meta": {
                 "serialize_version": SERIALIZE_VERSION,
                 "tick": int(lif.tick),
@@ -482,6 +497,8 @@ class FlyEmbodiedAdapter:
         lif = world.lif
         lif.v[...] = arrs["v"]
         lif.g[...] = arrs["g"]
+        if "adapt" in arrs and lif.adapt is not None:
+            lif.adapt[...] = arrs["adapt"]
         lif.refrac[...] = arrs["refrac"]
         lif.delay_ring[...] = arrs["delay_ring"]
         lif.stim_rate_hz[...] = arrs["stim_rate_hz"]
@@ -539,11 +556,17 @@ class FlyEmbodiedAdapter:
     def state_distance(self, a: EmbodiedFlyWorld, b: EmbodiedFlyWorld) -> dict[str, Any]:
         la = a.ensure_host()
         lb = b.ensure_host()
+        adapt_eq = (la.adapt is None and lb.adapt is None) or (
+            la.adapt is not None
+            and lb.adapt is not None
+            and bool(np.array_equal(la.adapt, lb.adapt))
+        )
         brain_eq = bool(
             la.tick == lb.tick
             and la.substep == lb.substep
             and np.array_equal(la.v, lb.v)
             and np.array_equal(la.g, lb.g)
+            and adapt_eq
             and np.array_equal(la.delay_ring, lb.delay_ring)
             and np.array_equal(la.total_spikes, lb.total_spikes)
         )
