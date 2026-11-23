@@ -2172,6 +2172,71 @@ class FlySwarmExperiment(_Frozen):
         return self
 
 
+# --------------------------------------------------------------------------- #
+# Phase F12: fly_world — Artificial Life Starting From Fly Connectome
+# --------------------------------------------------------------------------- #
+
+FlyWorldMetric = Literal[
+    "population",
+    "mean_generation",
+    "fly_distance",
+    "signal_mi_bits",
+    "total_births",
+    "total_deaths",
+]
+
+
+class FlyWorldDynamics(_Frozen):
+    clock_unit: Literal["tick"] = "tick"
+    numeric_policy: Literal["float32_compressed_brain"] = "float32_compressed_brain"
+    brain_resolution: Literal["cell_type_compressed"] = "cell_type_compressed"
+    arena_half_size: Annotated[float, Field(ge=2.5, le=12.0)] = 5.0
+    signal_channel_enabled: bool = True
+    predator_enabled: bool = True
+    predator_interval: Annotated[int, Field(ge=40, le=2000)] = 220
+    signal_cost: Annotated[float, Field(ge=0.0, le=0.05)] = 0.0018
+    mutation_rate: Annotated[float, Field(ge=0.0, le=1.0)] = 0.14
+    mutation_sigma: Annotated[float, Field(ge=0.0, le=1.0)] = 0.22
+    food_patch_count: Annotated[int, Field(ge=1, le=8)] = 3
+    kin_cluster_init: bool = True
+
+
+class FlyWorldObservationSpec(_Frozen):
+    metrics: tuple[FlyWorldMetric, ...] = (
+        "population",
+        "mean_generation",
+        "fly_distance",
+        "signal_mi_bits",
+        "total_births",
+        "total_deaths",
+    )
+
+
+class FlyWorldExperiment(_Frozen):
+    """Autonomous open-ended ALife from ancestral fly connectome (NO external fitness score)."""
+
+    name: _NAME
+    mode: Literal["reference", "exploratory"] = "exploratory"
+    substrate: Literal["fly_world"]
+    seed: _SEED
+    dataset_id: EmbodiedFlyDatasetId = "synthetic_fly_embodied"
+    initial_population: Annotated[int, Field(ge=4, le=64)] = 24
+    max_population: Annotated[int, Field(ge=8, le=64)] = 48
+    dynamics: FlyWorldDynamics = FlyWorldDynamics()
+    runner: RunnerSpec = RunnerSpec(max_steps=30000, checkpoint_interval=5000)
+    observations: FlyWorldObservationSpec = FlyWorldObservationSpec()
+
+    @model_validator(mode="after")
+    def _check_mode(self) -> FlyWorldExperiment:
+        if self.mode == "reference":
+            raise ValueError(
+                "fly_world is artificial life (exploratory only); use mode='exploratory'"
+            )
+        if self.initial_population > self.max_population:
+            raise ValueError("initial_population must be <= max_population")
+        return self
+
+
 SearchExperiment.model_rebuild()
 
 
@@ -2197,7 +2262,8 @@ AnyExperiment = Annotated[
     | ConnectomeSysIDExperiment
     | ConnectomeTaskExperiment
     | FlyEmbodiedExperiment
-    | FlySwarmExperiment,
+    | FlySwarmExperiment
+    | FlyWorldExperiment,
     Field(discriminator="substrate"),
 ]
 

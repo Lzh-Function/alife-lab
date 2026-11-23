@@ -1,0 +1,8 @@
+preset:
+  id: fly_world_no_signals_control
+  scenario: fly_world_no_signals_control.yaml
+  title_key: preset.fly_world_no_signals_control.title
+  description_key: preset.fly_world_no_signals_control.description
+  overrides: {}
+  expected_observation: 'Negative control on the exact same FlyWire v783 ancestral world with signal channels disabled: signal MI stays at 0.0 bits for direct comparison against fly_world_flywire_evo.'
+  negative_control: compare against preset fly_world_flywire_evo

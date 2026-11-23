@@ -4,7 +4,7 @@
 import type { Frame } from "./api";
 import { popcount } from "./api";
 
-export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network" | "nca_train" | "nca" | "pd_nca" | "protocell" | "agent_world" | "lenia_mc" | "creature" | "search" | "connectome" | "connectome_sysid" | "connectome_task" | "fly_embodied" | "fly_swarm";
+export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network" | "nca_train" | "nca" | "pd_nca" | "protocell" | "agent_world" | "lenia_mc" | "creature" | "search" | "connectome" | "connectome_sysid" | "connectome_task" | "fly_embodied" | "fly_swarm" | "fly_world";
 
 /** Substrates rendered as continuous particles (vs. grids). */
 export const PARTICLE_SUBSTRATES = new Set(["boids", "particle_life"]);
@@ -183,6 +183,11 @@ export const TOOLS: Record<SubstrateId, ToolDescriptor> = {
     modes: ["off", "inspect"],
     radius: { min: 0, max: 0, step: 1, initial: 0 },
     noteKey: "lab.tool.fly_swarm_note",
+  },
+  fly_world: {
+    modes: ["off", "inspect"],
+    radius: { min: 0, max: 0, step: 1, initial: 0 },
+    noteKey: "lab.tool.fly_world_note",
   },
 };
 
@@ -602,6 +607,14 @@ export const FORM_FIELDS: Record<SubstrateId, FormField[]> = {
       ],
     },
     { path: "dynamics.arena_half_size", labelKey: "form.fly.arena_half_size", kind: "float", min: 2, max: 12, step: 0.5 },
+    ...RUNNER,
+  ],
+  fly_world: [
+    { path: "seed", labelKey: "form.seed", kind: "int", min: 0 },
+    { path: "initial_population", labelKey: "form.flyworld.initial_pop", kind: "int", min: 4, max: 64 },
+    { path: "max_population", labelKey: "form.flyworld.max_pop", kind: "int", min: 8, max: 64 },
+    { path: "dynamics.mutation_rate", labelKey: "form.flyworld.mutation_rate", kind: "float", min: 0, max: 1, step: 0.02 },
+    { path: "dynamics.signal_cost", labelKey: "form.flyworld.signal_cost", kind: "float", min: 0, max: 0.05, step: 0.001 },
     ...RUNNER,
   ],
 };

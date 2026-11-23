@@ -1,0 +1,8 @@
+preset:
+  id: fly_world_ancestral_cpu
+  scenario: fly_world_ancestral_cpu.yaml
+  title_key: preset.fly_world_ancestral_cpu.title
+  description_key: preset.fly_world_ancestral_cpu.description
+  overrides: {}
+  expected_observation: 'Offline CPU open-ended artificial life world (ZERO external fitness score): descendants drift away from the ancestral fly in brain pathway weights, morphology, and context-coupled food/predator signals.'
+  negative_control: toggle signal channels or mutations off live in toolbar

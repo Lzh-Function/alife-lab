@@ -1,0 +1,33 @@
+schema_version: 1
+experiment:
+  name: fly_world_predator_alarm
+  mode: exploratory
+  substrate: fly_world
+  seed: 1
+  dataset_id: flywire_783
+  initial_population: 28
+  max_population: 48
+  dynamics:
+    clock_unit: tick
+    numeric_policy: float32_compressed_brain
+    brain_resolution: cell_type_compressed
+    arena_half_size: 5.0
+    signal_channel_enabled: true
+    predator_enabled: true
+    predator_interval: 100
+    signal_cost: 0.0022
+    mutation_rate: 0.18
+    mutation_sigma: 0.25
+    food_patch_count: 3
+    kin_cluster_init: true
+  runner:
+    max_steps: 30000
+    checkpoint_interval: 5000
+  observations:
+    metrics:
+      - population
+      - mean_generation
+      - fly_distance
+      - signal_mi_bits
+      - total_births
+      - total_deaths

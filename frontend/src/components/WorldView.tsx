@@ -12,6 +12,7 @@ import type { Field3DHandle } from "./Field3D";
 import type { Brain3DHandle } from "./Brain3D";
 import type { EmbodiedFlyViewHandle } from "./EmbodiedFlyView";
 import type { FlySwarmViewHandle } from "./FlySwarmView";
+import type { FlyWorldViewHandle } from "./FlyWorldView";
 
 // three.js is loaded only when an embodied creature, 3D field, or 3D brain view is shown.
 const Scene3D = lazy(() => import("./Scene3D").then((m) => ({ default: m.Scene3D })));
@@ -19,6 +20,7 @@ const Field3D = lazy(() => import("./Field3D").then((m) => ({ default: m.Field3D
 const Brain3D = lazy(() => import("./Brain3D").then((m) => ({ default: m.Brain3D })));
 const EmbodiedFlyView = lazy(() => import("./EmbodiedFlyView").then((m) => ({ default: m.EmbodiedFlyView })));
 const FlySwarmView = lazy(() => import("./FlySwarmView").then((m) => ({ default: m.FlySwarmView })));
+const FlyWorldView = lazy(() => import("./FlyWorldView").then((m) => ({ default: m.FlyWorldView })));
 
 /** Presentation views. "2d" is the measurement view (and the only one taking pointer tools). */
 export type ViewMode = "2d" | "terrain" | "spacetime" | "glow" | "brain3d";
@@ -68,6 +70,7 @@ export const WorldView = memo(forwardRef<WorldViewHandle, Props>(function WorldV
   const brain3d = useRef<Brain3DHandle | null>(null);
   const embodiedFly = useRef<EmbodiedFlyViewHandle | null>(null);
   const flySwarm = useRef<FlySwarmViewHandle | null>(null);
+  const flyWorld = useRef<FlyWorldViewHandle | null>(null);
   const lastFrame = useRef<Frame | null>(null);
   const use3d = (viewMode === "terrain" || viewMode === "spacetime") && VIEW3D_SUBSTRATES.has(substrate);
   const useBrain3d = substrate === "connectome" && viewMode === "brain3d";
@@ -100,10 +103,16 @@ export const WorldView = memo(forwardRef<WorldViewHandle, Props>(function WorldV
     flySwarm.current = h;
     if (h && lastFrame.current) h.draw(lastFrame.current);
   }, []);
+  const attachFlyWorld = useCallback((h: FlyWorldViewHandle | null) => {
+    flyWorld.current = h;
+    if (h && lastFrame.current) h.draw(lastFrame.current);
+  }, []);
   useImperativeHandle(ref, () => ({
     draw: (frame: Frame) => {
       lastFrame.current = frame;
-      return substrate === "fly_swarm"
+      return substrate === "fly_world"
+        ? flyWorld.current?.draw(frame)
+        : substrate === "fly_swarm"
         ? flySwarm.current?.draw(frame)
         : substrate === "fly_embodied"
         ? embodiedFly.current?.draw(frame)
@@ -149,6 +158,20 @@ export const WorldView = memo(forwardRef<WorldViewHandle, Props>(function WorldV
     [tool, onIntervene, onInspect, substrate],
   );
 
+  if (substrate === "fly_world") {
+    return (
+      <Suspense fallback={<div className="field3d muted">3D…</div>}>
+        <FlyWorldView
+          ref={attachFlyWorld}
+          live={live && frameSource === "live"}
+          onIntervene={onIntervene}
+          onDisplayFps={onDisplayFps}
+          maxPixels={maxPixels ?? 1040}
+          testId={testId}
+        />
+      </Suspense>
+    );
+  }
   if (substrate === "fly_swarm") {
     return (
       <Suspense fallback={<div className="field3d muted">3D…</div>}>

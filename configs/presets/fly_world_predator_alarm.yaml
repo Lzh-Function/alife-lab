@@ -1,0 +1,8 @@
+preset:
+  id: fly_world_predator_alarm
+  scenario: fly_world_predator_alarm.yaml
+  title_key: preset.fly_world_predator_alarm.title
+  description_key: preset.fly_world_predator_alarm.description
+  overrides: {}
+  expected_observation: 'High-predator-pressure evolutionary regime on real FlyWire v783 ancestral brains: tests emergence of costly predator alarm signals (sig1_alarm) and evasive leg/wing morphology.'
+  negative_control: toggle signal channels off live in toolbar

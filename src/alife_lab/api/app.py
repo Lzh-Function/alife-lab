@@ -197,6 +197,9 @@ _ALLOWED_OVERRIDE_KEYS = {
     "observation",
     "arena",
     "num_flies",
+    "initial_population",
+    "max_population",
+    "female_dataset_id",
 }
 
 

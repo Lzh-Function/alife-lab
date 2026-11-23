@@ -12,6 +12,10 @@ from alife_lab.substrates.connectome.embodied_adapter import (
     FLY_EMBODIED_MANIFEST,
     FlyEmbodiedAdapter,
 )
+from alife_lab.substrates.connectome.fly_world_adapter import (
+    FLY_WORLD_MANIFEST,
+    FlyWorldAdapter,
+)
 from alife_lab.substrates.connectome.swarm_adapter import (
     FLY_SWARM_MANIFEST,
     FlySwarmAdapter,
@@ -67,6 +71,7 @@ _REGISTRY: dict[str, tuple[PluginManifest, type[SubstrateAdapter]]] = {
     "connectome_task": (CONNECTOME_TASK_MANIFEST, ConnectomeTaskAdapter),
     "fly_embodied": (FLY_EMBODIED_MANIFEST, FlyEmbodiedAdapter),
     "fly_swarm": (FLY_SWARM_MANIFEST, FlySwarmAdapter),
+    "fly_world": (FLY_WORLD_MANIFEST, FlyWorldAdapter),
 }
 
 

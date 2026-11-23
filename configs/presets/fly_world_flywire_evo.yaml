@@ -1,0 +1,8 @@
+preset:
+  id: fly_world_flywire_evo
+  scenario: fly_world_flywire_evo.yaml
+  title_key: preset.fly_world_flywire_evo.title
+  description_key: preset.fly_world_flywire_evo.description
+  overrides: {}
+  expected_observation: 'Uses real FlyWire v783 (138,639 cells compressed explicitly into 17,644 biological cell-type clusters) as the ancestral brain; autonomous survival & sexual reproduction evolve brain deltas, morphology, and novel foraging/alarm signals.'
+  negative_control: preset fly_world_no_signals_control (signal channels disabled)

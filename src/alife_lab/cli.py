@@ -1710,6 +1710,48 @@ def cmd_connectome(args: argparse.Namespace) -> int:
                         f"encounters={row['encounters_per_fly_s']:5.2f}/fly·s"
                     )
             return 0 if rep["all_checks_passed"] else 1
+        if args.connectome_cmd == "evolve":
+            from alife_lab.connectome.embodied import make_synthetic_fly_embodied_pack
+            from alife_lab.connectome.fly_world import run_f12_signal_emergence_assay
+
+            pack = (
+                make_synthetic_fly_embodied_pack()
+                if args.dataset_id == "synthetic_fly_embodied"
+                else load_connectome_pack(args.dataset_id, ds_dir, verify_hashes=not args.no_verify)
+            )
+            seeds = tuple(int(s.strip()) for s in args.seeds.split(",") if s.strip())
+            rep = run_f12_signal_emergence_assay(
+                pack,
+                seeds=seeds,
+                evo_ticks=args.evo_ticks,
+                eval_ticks=args.eval_ticks,
+                backend=args.backend,
+            )
+            if args.json:
+                _print_json(rep)
+            else:
+                fid = rep["fidelity"]
+                sm = rep["summary"]
+                print(
+                    f"F12 fly_world dataset={rep['dataset_id']} "
+                    f"cells={fid['source_cells']:,}->{fid['compressed_nodes']:,} "
+                    f"({fid['compression_ratio']}x) wall={rep['wall_seconds']:.2f}s "
+                    f"all_checks_passed={rep['all_checks_passed']}"
+                )
+                print(
+                    f"  Fidelity: base={fid['baseline_mn9_hz']}Hz "
+                    f"sugar={fid['sugar_mn9_hz']}Hz bitter={fid['sugar_bitter_mn9_hz']}Hz "
+                    f"poke_DNg84={fid['antennal_poke_dng84_hz']}Hz"
+                )
+                for ck, ok in rep["checks"].items():
+                    print(f"  [{'PASS' if ok else 'FAIL'}] {ck}")
+                print(
+                    f"  Summary: births={sm['mean_births']} fly_dist={sm['mean_fly_distance']} "
+                    f"MI={sm['best_mi_bits']:.4f}b (shuf={sm['best_shuffled_mi_bits']:.4f}b) "
+                    f"recv={sm['best_receiver_response']} "
+                    f"fork_food={sm['mean_fork_intact_food']} vs muted={sm['mean_fork_muted_food']}"
+                )
+            return 0 if rep["all_checks_passed"] else 1
     except (DatasetError, ValueError, FileNotFoundError) as exc:
         print(f"connectome error: {exc}", file=sys.stderr)
         return 1
@@ -2072,6 +2114,18 @@ def build_parser() -> argparse.ArgumentParser:
     cswm.add_argument("--ticks", type=int, default=2000)
     cswm.add_argument("--no-verify", action="store_true")
     cswm.add_argument("--json", action="store_true")
+
+    cevo = csub.add_parser(
+        "evolve",
+        help="run Phase F12 fly_world open-ended evolution & 3-part emergent signal assay",
+    )
+    cevo.add_argument("dataset_id", nargs="?", default="synthetic_fly_embodied")
+    cevo.add_argument("--seeds", default="1,2,3")
+    cevo.add_argument("--evo-ticks", type=int, default=1200)
+    cevo.add_argument("--eval-ticks", type=int, default=400)
+    cevo.add_argument("--backend", choices=["auto", "numpy", "cupy"], default="auto")
+    cevo.add_argument("--no-verify", action="store_true")
+    cevo.add_argument("--json", action="store_true")
 
     p.set_defaults(func=cmd_connectome)
     return parser

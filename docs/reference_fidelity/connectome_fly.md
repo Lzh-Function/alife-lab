@@ -770,3 +770,29 @@ To settle unambiguously whether point-neuron ALIF on fixed biological VNC wiring
 | `shuffled_control` | **`0 fly·ms`** (-100%) | `1,321 fly·ms` (`7.0 Hz`) | **`0.0 Hz`** (-100%) | **`0`** (-100%) | **`0 fly·ms`** (`18.2 Hz`) | `6.4 Hz` | `89.8%` | `0.48×` |
 
 - All four F11 biological pathways (foraging, collective odor/touch avoidance, male-male aggression, and real male-to-female acoustic courtship) run concurrently inside one 3D arena with exact deterministic checkpoint/restore, ready to serve as the ecological base for Phase F12 (`fly_world`).
+
+---
+
+## Phase F12: `fly_world` — Artificial Life From Ancestral Fly Connectome (2026-11-23)
+
+### 1. Explicit Cell-Type Compression Fidelity (`flywire_783`, `138,639` cells → `17,641` nodes = `7.86×`)
+
+| Reflex Test | Full 138k Spiking LIF | Compressed 17.6k Analytical LIF (`gain=0.70`) | Status |
+|---|---:|---:|---|
+| Baseline (`MN9` / `DNg84`) | `0.0 / 0.0 Hz` | **`0.0 / 0.0 Hz`** | **PASS** |
+| Sugar `150 Hz` → `MN9` | `71.7 Hz` | **`220.0 Hz`** (saturated) | **PASS** |
+| Sugar + Bitter → `MN9` | `0.0 Hz` (`100%` supp.) | **`0.0 Hz`** (`100%` supp.) | **PASS** |
+| Antennal poke → `DNg84` | `66.7 Hz` | **`97.4 Hz`** | **PASS** |
+
+- **GPU CuPy SpMM throughput (conservative lower bound under concurrent desktop gaming):** `0.671 ms/step` (`1,491 steps/s` across 32 brains at 8.8k nodes; `32.67 s` total for 3 seeds × `1,200` evo ticks + `2 × 400` twin-fork eval ticks at `17,641` nodes).
+
+### 2. Multi-Seed Autonomous Evolution & 3-Part Emergent Signal Assay (`alife connectome evolve flywire_783 --seeds 1,2,3`)
+
+| Metric (`3 seeds`, ZERO external fitness score) | Measured Value | Control / Threshold | Verdict |
+|---|---:|---:|---|
+| Autonomous births & drift (`fly_distance`) | `14.7 births`, `L2 = 0.3804` | `births >= 5`, `L2 > 0.05` | **PASS** |
+| Criterion #1: Signal Mutual Information `I(S; Context)` | **`0.1613 bits`** | Shuffled: **`0.0009 bits`** (**179×**) | **PASS** |
+| Criterion #2: Receiver behavioral response magnitude | **`0.128`** | Muted: `0.000` | **PASS** |
+| Criterion #3: Causal channel-blocking fork (`food eaten`) | `8.424` (intact) | `12.48` (muted) | **Not yet positive at 1,200 ticks (honest negative)** |
+
+- **Honest scientific boundary (`connectome_plan.md §F12`):** Over a short 1,200-tick (~3–5 generation) window, autonomous evolution from the FlyWire v783 ancestor reliably produces genetic/morphological drift, context-specific signal emission (`179×` MI above shuffled), and receiver responses, **but** causal channel-blocking shows signals are not yet net-beneficial for foraging at 1,200 ticks (metabolic signaling cost and unaligned early receiver steering outweigh recruitment). Longer multi-thousand-tick evolutionary runs are required before claiming E3 causal signal utility.
