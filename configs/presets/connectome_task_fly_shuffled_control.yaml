@@ -1,0 +1,11 @@
+preset:
+  id: connectome_task_fly_shuffled_control
+  scenario: connectome_task_fly_odor.yaml
+  title_key: preset.connectome_task_fly_shuffled_control.title
+  description_key: preset.connectome_task_fly_shuffled_control.description
+  overrides:
+    experiment:
+      name: connectome_task_fly_shuffled_control
+      wiring: shuffled_control
+  expected_observation: 'Negative control: same task, readout neurons, and optimizer applied to a degree- and weight-preserving shuffled connectome graph.'
+  negative_control: preset connectome_task_fly_odor (biological FlyWire wiring)

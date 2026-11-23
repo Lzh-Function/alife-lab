@@ -1,0 +1,12 @@
+preset:
+  id: connectome_task_fly_memory
+  scenario: connectome_task_fly_odor.yaml
+  title_key: preset.connectome_task_fly_memory.title
+  description_key: preset.connectome_task_fly_memory.description
+  overrides:
+    experiment:
+      name: connectome_task_fly_memory
+      dynamics:
+        task: short_memory
+  expected_observation: 'Learning machine borrowing the fixed FlyWire v783 olfactory-MB-LH topology on delayed cue recall (short_memory): readout occurs only after external odor input turns off.'
+  negative_control: preset connectome_task_fly_shuffled_control (degree-preserving shuffled wiring)

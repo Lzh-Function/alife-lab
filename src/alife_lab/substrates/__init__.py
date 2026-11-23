@@ -12,6 +12,10 @@ from alife_lab.substrates.connectome.sysid_adapter import (
     CONNECTOME_SYSID_MANIFEST,
     ConnectomeSysIDAdapter,
 )
+from alife_lab.substrates.connectome.task_adapter import (
+    CONNECTOME_TASK_MANIFEST,
+    ConnectomeTaskAdapter,
+)
 from alife_lab.substrates.creature.adapter import CREATURE_MANIFEST, CreatureAdapter
 from alife_lab.substrates.flow_lenia.flow_lenia import FLOW_LENIA_MANIFEST, FlowLeniaAdapter
 from alife_lab.substrates.gray_scott.gray_scott import GRAY_SCOTT_MANIFEST, GrayScottAdapter
@@ -52,6 +56,7 @@ _REGISTRY: dict[str, tuple[PluginManifest, type[SubstrateAdapter]]] = {
     "search": (SEARCH_MANIFEST, SearchAdapter),
     "connectome": (CONNECTOME_MANIFEST, ConnectomeAdapter),
     "connectome_sysid": (CONNECTOME_SYSID_MANIFEST, ConnectomeSysIDAdapter),
+    "connectome_task": (CONNECTOME_TASK_MANIFEST, ConnectomeTaskAdapter),
 }
 
 

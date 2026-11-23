@@ -1944,6 +1944,72 @@ class ConnectomeSysIDExperiment(_Frozen):
         return self
 
 
+# --------------------------------------------------------------------------- #
+# Connectome Topology Task Learning (Phase F6: biological vs shuffled wiring)
+# --------------------------------------------------------------------------- #
+
+
+ConnectomeTaskName = Literal["odor_classification", "short_memory", "nonlinear_xor"]
+ConnectomeTrainScope = Literal["readout_only", "io_only", "partial_weights"]
+
+
+class ConnectomeTaskDynamics(_Frozen):
+    clock_unit: Literal["epoch"] = "epoch"
+    numeric_policy: Literal["float32_torch"] = "float32_torch"
+    task: ConnectomeTaskName = "odor_classification"
+    scope: ConnectomeTrainScope = "readout_only"
+    dt_ms: Annotated[float, Field(ge=0.5, le=10.0)] = 2.0
+    n_train: Annotated[int, Field(ge=16, le=512)] = 64
+    n_test: Annotated[int, Field(ge=16, le=512)] = 64
+    lr: Annotated[float, Field(gt=0.0, le=1.0)] = 0.08
+    weight_decay: Annotated[float, Field(ge=0.0, le=1.0)] = 1e-3
+    max_readout: Annotated[int, Field(ge=4, le=1024)] = 256
+
+
+ConnectomeTaskMetric = Literal[
+    "train_loss",
+    "test_loss",
+    "train_acc",
+    "test_acc",
+    "chance_acc",
+    "test_margin",
+    "readout_norm",
+]
+
+
+class ConnectomeTaskObservationSpec(_Frozen):
+    metrics: tuple[ConnectomeTaskMetric, ...] = (
+        "train_loss",
+        "test_loss",
+        "train_acc",
+        "test_acc",
+        "chance_acc",
+        "test_margin",
+    )
+
+
+class ConnectomeTaskExperiment(_Frozen):
+    name: _NAME
+    mode: Literal["reference", "exploratory"] = "exploratory"
+    substrate: Literal["connectome_task"]
+    seed: _SEED
+    dataset_id: ConnectomeSysIDDatasetId = "synthetic_olfactory"
+    subcircuit_id: ConnectomeSubcircuitId = "olfactory_mb_lh"
+    wiring: ConnectomeWiring = "reference"
+    dynamics: ConnectomeTaskDynamics = ConnectomeTaskDynamics()
+    runner: RunnerSpec = RunnerSpec(max_steps=80, checkpoint_interval=20)
+    observations: ConnectomeTaskObservationSpec = ConnectomeTaskObservationSpec()
+
+    @model_validator(mode="after")
+    def _check_mode(self) -> ConnectomeTaskExperiment:
+        if self.mode == "reference":
+            raise ValueError(
+                "connectome_task is an external topology-learning machine without a biological "
+                "reference mode; use mode='exploratory'"
+            )
+        return self
+
+
 SearchExperiment.model_rebuild()
 
 
@@ -1966,7 +2032,8 @@ AnyExperiment = Annotated[
     | CreatureExperiment
     | SearchExperiment
     | ConnectomeExperiment
-    | ConnectomeSysIDExperiment,
+    | ConnectomeSysIDExperiment
+    | ConnectomeTaskExperiment,
     Field(discriminator="substrate"),
 ]
 

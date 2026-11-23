@@ -1,0 +1,8 @@
+preset:
+  id: connectome_task_fly_odor
+  scenario: connectome_task_fly_odor.yaml
+  title_key: preset.connectome_task_fly_odor.title
+  description_key: preset.connectome_task_fly_odor.description
+  overrides: {}
+  expected_observation: 'Learning machine borrowing the fixed FlyWire v783 olfactory-MB-LH topology (11,276 cells, 1,105,291 edges): compares unseen noisy odor classification accuracy against shuffled wiring.'
+  negative_control: preset connectome_task_fly_shuffled_control (degree-preserving shuffled wiring)

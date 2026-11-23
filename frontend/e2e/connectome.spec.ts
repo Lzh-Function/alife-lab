@@ -192,3 +192,30 @@ test("connectome F5: hidden-truth system ID runs in browser, renders RGB diagnos
     await stopServer(server);
   }
 });
+
+test("connectome F6: fixed-topology task learning runs in browser and beats chance accuracy", async ({ page }) => {
+  const server = startServer();
+  await waitHealthy();
+  try {
+    await page.goto(`${BASE}/#/catalog`);
+    await openPreset(page, "connectome_task_olfactory_tiny");
+    await page.getByTestId("input-name").fill("e2e_connectome_f6");
+    await page.getByTestId("field-runner.max_steps").fill("40");
+    await page.getByTestId("field-runner.checkpoint_interval").fill("20");
+    await page.getByTestId("input-profile").selectOption("local_cpu");
+    await page.getByTestId("input-tps").fill("0");
+    await expect(page.getByTestId("validation")).toContainText("OK");
+    await page.getByTestId("btn-create").click();
+    await expect(page).toHaveURL(/#\/lab\/run_[0-9a-f]{16}/);
+
+    await expect(page.getByTestId("world-canvas")).toBeVisible({ timeout: 25_000 });
+    await expectState(page, "completed");
+    await expect
+      .poll(async () => Number(await page.getByTestId("metric-test_acc").textContent()), {
+        timeout: 20_000,
+      })
+      .toBeGreaterThan(0.5);
+  } finally {
+    await stopServer(server);
+  }
+});

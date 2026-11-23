@@ -1,0 +1,8 @@
+preset:
+  id: connectome_task_olfactory_tiny
+  scenario: connectome_task_olfactory_tiny.yaml
+  title_key: preset.connectome_task_olfactory_tiny.title
+  description_key: preset.connectome_task_olfactory_tiny.description
+  overrides: {}
+  expected_observation: 'Learning machine borrowing the 40-neuron synthetic olfactory wiring (fixed topology, readout_only): unseen 4-class odor classification accuracy climbs well above 25% chance.'
+  negative_control: preset connectome_task_fly_shuffled_control (degree-preserving shuffled wiring)

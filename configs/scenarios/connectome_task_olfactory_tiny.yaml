@@ -1,0 +1,31 @@
+schema_version: 1
+experiment:
+  name: connectome_task_olfactory_tiny
+  mode: exploratory
+  substrate: connectome_task
+  seed: 1
+  dataset_id: synthetic_olfactory
+  subcircuit_id: full
+  wiring: reference
+  dynamics:
+    clock_unit: epoch
+    numeric_policy: float32_torch
+    task: odor_classification
+    scope: readout_only
+    dt_ms: 2.0
+    n_train: 64
+    n_test: 64
+    lr: 0.08
+    weight_decay: 0.001
+    max_readout: 256
+  runner:
+    max_steps: 80
+    checkpoint_interval: 20
+  observations:
+    metrics:
+      - train_loss
+      - test_loss
+      - train_acc
+      - test_acc
+      - chance_acc
+      - test_margin

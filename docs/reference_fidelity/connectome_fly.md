@@ -1,6 +1,6 @@
-# Reference fidelity — Adult *Drosophila* connectome (`flywire_783`, F0–F5)
+# Reference fidelity — Adult *Drosophila* connectome (`flywire_783`, F0–F6)
 
-Status: **F0–F5 complete** (2026-11-21); F6+ not yet implemented.
+Status: **F0–F6 complete** (2026-11-23); F7+ not yet implemented.
 
 > **Honest framing:** This dataset and the upcoming model are a hypothesis-testing
 > simplification derived from one adult female *Drosophila melanogaster* wiring diagram, not a
@@ -367,6 +367,60 @@ Hidden teacher mechanisms: heterogeneous per-type `tau_m` (1,094 types), 15% hid
 3. **Browser & offline CPU verification:** `tests/reference/test_connectome_f5.py` (4/4 passed on
    CPU) and Playwright E2E `e2e/connectome.spec.ts` (4/4 passed) verify `connectome_sysid`
    end-to-end without loading PyTorch in the FastAPI process.
+
+---
+
+## Phase F6: Fixed-Topology Task Learning — Biological Wiring vs Shuffled Wiring (2026-11-23)
+
+> **Honest framing (mandatory):** Every model below is a **learning machine borrowing the fly
+> connectome topology** (fixed graph structure with external PyTorch training), **NOT**
+> biological learning by a fly.
+
+### 1. Pre-registered protocol & decision rule
+
+Before execution, `make_preregistration()` locks the hypothesis and evaluation rule
+(hashed via SHA-256 into each report):
+
+- **Subcircuit:** FlyWire v783 `olfactory_mb_lh` (**11,276 cells, 1,105,291 internal edges**),
+  12 glomerular ORN input groups, 256 deterministic anatomical readout cells (`MBON`/`LHLN`/`LHCENT`).
+- **Control:** Independent degree- and weight-preserving `shuffled_control` graphs generated per
+  seed (`seeds = 1..5`), evaluated on identical unseen holdout test trials (`n_train = 64`,
+  `n_test = 64`, leak-free training-set z-score readout standardization).
+- **Pre-registered verdict thresholds:** `validated` if `mean_diff >= +0.05`,
+  `cliffs_delta >= +0.50`, and exact permutation `p < 0.05`; `rejected` for the symmetric negative
+  effect; otherwise `inconclusive`.
+
+### 2. Full 3 tasks × 3 scopes × 5-seed benchmark on real FlyWire v783 (RTX 5070 CUDA)
+
+| Task | Trainable scope | Biological `reference` test acc (mean ± SD) | `shuffled_control` test acc (mean ± SD) | Δ (`ref − shuf`) | Cliff's δ | Exact perm p | Pre-registered verdict | Wall time / Peak VRAM |
+|---|---|---:|---:|---:|---:|---:|---|---:|
+| `odor_classification` (4-class, 25% chance) | `readout_only` | 0.950 ± 0.028 | **0.991 ± 0.009** | -0.041 | -1.00 | 0.0079 | `inconclusive` | 4.41 s / 110.6 MiB |
+| `odor_classification` | `io_only` | **0.975 ± 0.018** | 0.969 ± 0.016 | +0.006 | +0.20 | 0.6905 | `inconclusive` | 39.96 s / 188.9 MiB |
+| `odor_classification` | `partial_weights` | 0.953 ± 0.022 | **0.991 ± 0.009** | -0.037 | -1.00 | 0.0079 | `inconclusive` | 33.93 s / 258.4 MiB |
+| `short_memory` (4-class, 48 ms delay) | `readout_only` | 1.000 ± 0.000 | 1.000 ± 0.000 | +0.000 | +0.00 | 1.0000 | `inconclusive` | 1.99 s / 110.2 MiB |
+| `short_memory` | `io_only` | 1.000 ± 0.000 | 1.000 ± 0.000 | +0.000 | +0.00 | 1.0000 | `inconclusive` | 63.04 s / 230.7 MiB |
+| `short_memory` | `partial_weights` | 1.000 ± 0.000 | 1.000 ± 0.000 | +0.000 | +0.00 | 1.0000 | `inconclusive` | 51.70 s / 341.9 MiB |
+| `nonlinear_xor` (2-class, 50% chance) | `readout_only` | 0.731 ± 0.107 | **0.812 ± 0.044** | -0.081 | -0.60 | 0.1508 | `inconclusive` | 1.71 s / 110.0 MiB |
+| `nonlinear_xor` | `io_only` | 1.000 ± 0.000 | 1.000 ± 0.000 | +0.000 | +0.00 | 1.0000 | `inconclusive` | 38.41 s / 187.3 MiB |
+| `nonlinear_xor` | `partial_weights` | 0.609 ± 0.064 | 0.609 ± 0.142 | -0.000 | +0.20 | 1.0000 | `inconclusive` | 33.16 s / 257.6 MiB |
+
+### 3. Honest interpretation of the null/negative F6 result
+
+1. **No generic topology advantage over degree-matched shuffled reservoirs:** Under the
+   pre-registered criteria, **0 of 9 conditions were validated** (all 9 were `inconclusive`).
+   We record this negative result without modifying thresholds post-hoc.
+2. **Shortcut mechanism in shuffled wiring:** In biological FlyWire v783, sensory ORNs pass
+   through 3–4 specialized stages (`ORN -> ALPN/ALLN -> KC -> MBON/LHLN`) before reaching the
+   readout neurons, whereas whole-subcircuit degree-preserving shuffling introduces direct 1-hop
+   random edges from ORNs onto `MBON`/`LHLN` readout cells—creating a high-SNR random Echo State
+   projection that slightly outperforms biological routing on `odor_classification` (`0.991` vs
+   `0.950`, `p = 0.0079`). Adding learnable input projections (`io_only`) closes this gap
+   (`0.975` vs `0.969` on odor classification; `1.000` vs `1.000` on XOR).
+3. **Memory ceiling caveat:** With 256 standardized readout cells and `tau = 20 ms`, a `48 ms`
+   delay saturates at `1.000` for both wirings; distinguishing biological vs shuffled recurrent
+   memory persistence would require much longer delays (`> 200 ms`) or spiking noise.
+4. **Offline & browser verification:** `tests/reference/test_connectome_f6.py` (5/5 passed on CPU)
+   and Playwright E2E `e2e/connectome.spec.ts` (5/5 passed) verify `connectome_task` end-to-end.
 
 
 

@@ -973,6 +973,78 @@ def cmd_connectome(args: argparse.Namespace) -> int:
                         f"sign_auroc={rb['sign_flip_auroc']} [{r['identifiability']['verdict']}]"
                     )
             return 0
+
+        if args.connectome_cmd == "task":
+            from alife_lab.connectome.subcircuit import (
+                extract_subcircuit,
+                make_synthetic_olfactory_pack,
+            )
+            from alife_lab.connectome.tasks import F6TaskConfig, run_topology_benchmark
+
+            seeds = tuple(int(s.strip()) for s in args.seeds.split(",") if s.strip())
+            if args.dataset_id == "synthetic_olfactory":
+                pack = make_synthetic_olfactory_pack()
+                sc_id = "full"
+            else:
+                pack = load_connectome_pack(
+                    args.dataset_id, ds_dir, verify_hashes=not args.no_verify
+                )
+                sc_id = args.subcircuit
+            sub_ref = extract_subcircuit(pack, subcircuit_id=sc_id, wiring="reference")
+            tcfg = F6TaskConfig(
+                task=args.task,
+                scope=args.scope,
+                n_train=args.n_train,
+                n_test=args.n_test,
+                epochs=args.epochs,
+                lr=args.lr,
+                max_readout=args.max_readout,
+                device=args.device,
+            )
+            rep = run_topology_benchmark(
+                sub_ref,
+                lambda s: extract_subcircuit(
+                    pack,
+                    subcircuit_id=sc_id,
+                    wiring="shuffled_control",
+                    shuffle_seed=int(s),
+                ),
+                tcfg,
+                seeds=seeds,
+            )
+            if args.json:
+                _print_json(rep)
+            else:
+                ev = rep["evaluation"]
+                rs = ev["reference_stats"]
+                ss = ev["shuffled_stats"]
+                cm = ev["comparison"]
+                c = rep["circuit"]
+                print(
+                    f"task {rep['dataset_id']} ({rep['subcircuit_id']}) "
+                    f"task={rep['task']} scope={rep['scope']} "
+                    f"cells={c['num_cells']:,} readout={c['num_readout_cells']} "
+                    f"params={c['num_learnable_params']:,} "
+                    f"device={rep['device']} wall={rep['wall_seconds']:.2f}s "
+                    f"vram={rep['peak_vram_mb']:.1f}MiB"
+                )
+                print(f"  framing   : {rep['framing_note']}")
+                print(f"  plan_hash : {rep['preregistration']['plan_digest'][:16]}…")
+                print(
+                    f"  reference : test_acc={rs['mean']:.3f} +/- {rs['sd']:.3f} "
+                    f"(median={rs['median']:.3f})"
+                )
+                print(
+                    f"  shuffled  : test_acc={ss['mean']:.3f} +/- {ss['sd']:.3f} "
+                    f"(median={ss['median']:.3f})"
+                )
+                print(
+                    f"  verdict   : {ev['verdict']} "
+                    f"(diff={cm['mean_difference']:+.3f}, "
+                    f"cliffs_d={cm['cliffs_delta']:+.2f}, "
+                    f"p={cm['permutation']['p_value']:.4f})"
+                )
+            return 0
     except (DatasetError, ValueError) as exc:
         print(f"connectome error: {exc}", file=sys.stderr)
         return 1
@@ -1171,6 +1243,34 @@ def build_parser() -> argparse.ArgumentParser:
     cmap.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
     cmap.add_argument("--no-verify", action="store_true")
     cmap.add_argument("--json", action="store_true")
+
+    ctsk = csub.add_parser(
+        "task",
+        help="run F6 fixed-topology task learning (biological wiring vs shuffled wiring)",
+    )
+    ctsk.add_argument("dataset_id")
+    ctsk.add_argument(
+        "--subcircuit", choices=["olfactory_mb_lh", "full"], default="olfactory_mb_lh"
+    )
+    ctsk.add_argument(
+        "--task",
+        choices=["odor_classification", "short_memory", "nonlinear_xor"],
+        default="odor_classification",
+    )
+    ctsk.add_argument(
+        "--scope",
+        choices=["readout_only", "io_only", "partial_weights"],
+        default="readout_only",
+    )
+    ctsk.add_argument("--seeds", default="1,2,3,4,5")
+    ctsk.add_argument("--n-train", type=int, default=64)
+    ctsk.add_argument("--n-test", type=int, default=64)
+    ctsk.add_argument("--epochs", type=int, default=80)
+    ctsk.add_argument("--lr", type=float, default=0.08)
+    ctsk.add_argument("--max-readout", type=int, default=256)
+    ctsk.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
+    ctsk.add_argument("--no-verify", action="store_true")
+    ctsk.add_argument("--json", action="store_true")
 
     p.set_defaults(func=cmd_connectome)
     return parser

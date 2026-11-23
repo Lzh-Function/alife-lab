@@ -4,12 +4,12 @@
 import type { Frame } from "./api";
 import { popcount } from "./api";
 
-export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network" | "nca_train" | "nca" | "pd_nca" | "protocell" | "agent_world" | "lenia_mc" | "creature" | "search" | "connectome" | "connectome_sysid";
+export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network" | "nca_train" | "nca" | "pd_nca" | "protocell" | "agent_world" | "lenia_mc" | "creature" | "search" | "connectome" | "connectome_sysid" | "connectome_task";
 
 /** Substrates rendered as continuous particles (vs. grids). */
 export const PARTICLE_SUBSTRATES = new Set(["boids", "particle_life"]);
 /** Substrates rendered as a continuous scalar field (codec field_u8). */
-export const FIELD_SUBSTRATES = new Set(["lenia", "flow_lenia", "gray_scott", "physarum", "reaction_network", "nca_train", "nca", "pd_nca", "protocell", "agent_world", "lenia_mc", "search", "connectome_sysid"]);
+export const FIELD_SUBSTRATES = new Set(["lenia", "flow_lenia", "gray_scott", "physarum", "reaction_network", "nca_train", "nca", "pd_nca", "protocell", "agent_world", "lenia_mc", "search", "connectome_sysid", "connectome_task"]);
 /** Non-spatial substrates whose display is a species x time image (rows = species). */
 export const ROW_DISPLAY_SUBSTRATES = new Set(["reaction_network"]);
 
@@ -37,7 +37,7 @@ export function displayWorld(substrate: string, experiment: Record<string, unkno
     const species = ((experiment.dynamics as { species?: unknown[] } | undefined)?.species ?? []).length;
     return { width: 256, height: Math.max(1, species) };
   }
-  if (substrate === "connectome_sysid") {
+  if (substrate === "connectome_sysid" || substrate === "connectome_task") {
     return { width: 160, height: 120 };
   }
   return { width: 64, height: 64 };
@@ -168,6 +168,11 @@ export const TOOLS: Record<SubstrateId, ToolDescriptor> = {
     modes: ["off", "inspect"],
     radius: { min: 0, max: 0, step: 1, initial: 0 },
     noteKey: "lab.tool.connectome_sysid_note",
+  },
+  connectome_task: {
+    modes: ["off", "inspect"],
+    radius: { min: 0, max: 0, step: 1, initial: 0 },
+    noteKey: "lab.tool.connectome_task_note",
   },
 };
 
@@ -522,6 +527,40 @@ export const FORM_FIELDS: Record<SubstrateId, FormField[]> = {
     { path: "observation.obs_fraction", labelKey: "form.sysid.obs_fraction", kind: "float", min: 0.01, max: 1, step: 0.05 },
     { path: "observation.bin_ms", labelKey: "form.sysid.bin_ms", kind: "float", min: 2, max: 50, step: 2 },
     { path: "observation.noise_sd", labelKey: "form.sysid.noise_sd", kind: "float", min: 0, max: 0.2, step: 0.005 },
+    { path: "dynamics.lr", labelKey: "form.nca.lr", kind: "float", min: 0.001, max: 0.5, step: 0.01 },
+    ...RUNNER,
+  ],
+  connectome_task: [
+    { path: "seed", labelKey: "form.seed", kind: "int", min: 0 },
+    {
+      path: "wiring",
+      labelKey: "form.connectome.wiring",
+      kind: "select",
+      options: [
+        { value: "reference", labelKey: "form.connectome.wiring.reference" },
+        { value: "shuffled_control", labelKey: "form.connectome.wiring.shuffled_control" },
+      ],
+    },
+    {
+      path: "dynamics.task",
+      labelKey: "form.task.kind",
+      kind: "select",
+      options: [
+        { value: "odor_classification", labelKey: "form.task.kind.odor_classification" },
+        { value: "short_memory", labelKey: "form.task.kind.short_memory" },
+        { value: "nonlinear_xor", labelKey: "form.task.kind.nonlinear_xor" },
+      ],
+    },
+    {
+      path: "dynamics.scope",
+      labelKey: "form.task.scope",
+      kind: "select",
+      options: [
+        { value: "readout_only", labelKey: "form.task.scope.readout_only" },
+        { value: "io_only", labelKey: "form.task.scope.io_only" },
+        { value: "partial_weights", labelKey: "form.task.scope.partial_weights" },
+      ],
+    },
     { path: "dynamics.lr", labelKey: "form.nca.lr", kind: "float", min: 0.001, max: 0.5, step: 0.01 },
     ...RUNNER,
   ],
