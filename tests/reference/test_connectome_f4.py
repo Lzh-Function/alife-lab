@@ -129,12 +129,13 @@ def test_synthetic_mb_pavlovian_specificity_dose_extinction_and_controls() -> No
             wiring="reference",
             backend="cupy",
         )
-        assert rep_gpu["per_seed"][0]["post_odor_a_mbon11_hz"] == rep["per_seed"][0][
-            "post_odor_a_mbon11_hz"
-        ]
-        assert rep_gpu["per_seed"][0]["changed_edges_post"] == rep["per_seed"][0][
-            "changed_edges_post"
-        ]
+        assert (
+            rep_gpu["per_seed"][0]["post_odor_a_mbon11_hz"]
+            == rep["per_seed"][0]["post_odor_a_mbon11_hz"]
+        )
+        assert (
+            rep_gpu["per_seed"][0]["changed_edges_post"] == rep["per_seed"][0]["changed_edges_post"]
+        )
 
 
 def test_plastic_adapter_checkpoint_roundtrip_and_gpu_bitwise() -> None:
@@ -199,7 +200,8 @@ def test_cli_connectome_pavlov_synthetic_mb(capsys: pytest.CaptureFixture[str]) 
     assert rc == 0
     data = json.loads(capsys.readouterr().out)
     assert data["dataset_id"] == "synthetic_mb"
-    assert data["summary"]["post_odor_a_mbon11_hz"]["mean"] < data["summary"][
-        "pre_odor_a_mbon11_hz"
-    ]["mean"]
+    assert (
+        data["summary"]["post_odor_a_mbon11_hz"]["mean"]
+        < data["summary"]["pre_odor_a_mbon11_hz"]["mean"]
+    )
     assert data["summary"]["changed_edges_no_dan"]["mean"] == 0.0

@@ -172,9 +172,7 @@ def test_connectome_preset_create_intervene_inspect_and_replay_frame(tmp_path: P
         # Checkpoint frame uses connectome_v1 codec.
         ckpts = client.get(f"/api/v1/experiments/{run_id}/checkpoints").json()["data"]
         assert len(ckpts) >= 1
-        frame_resp = client.get(
-            f"/api/v1/experiments/{run_id}/checkpoints/{ckpts[-1]['id']}/frame"
-        )
+        frame_resp = client.get(f"/api/v1/experiments/{run_id}/checkpoints/{ckpts[-1]['id']}/frame")
         assert frame_resp.status_code == 200
         fheader, fbody = _unpack_frame(frame_resp.content)
         assert fheader["codec"] == "connectome_v1"

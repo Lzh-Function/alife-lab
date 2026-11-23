@@ -241,9 +241,7 @@ def run_silencing_screen(
     base_desc = describe(base_vals)
     base_mean = base_desc["mean"] or 0.0
 
-    raw_comps = [
-        compare(rates_by_cond[ci], base_vals, seed=10_000 + ci) for ci in range(1, n_cond)
-    ]
+    raw_comps = [compare(rates_by_cond[ci], base_vals, seed=10_000 + ci) for ci in range(1, n_cond)]
     raw_p = [c["permutation"]["p_value"] for c in raw_comps]
     adj_p = holm(raw_p)
 
@@ -254,9 +252,7 @@ def run_silencing_screen(
         mean_hz = desc["mean"] or 0.0
         comp = raw_comps[k]
         delta_hz = mean_hz - base_mean
-        suppression_pct = (
-            ((base_mean - mean_hz) / base_mean * 100.0) if base_mean > 1e-9 else 0.0
-        )
+        suppression_pct = ((base_mean - mean_hz) / base_mean * 100.0) if base_mean > 1e-9 else 0.0
         results.append(
             {
                 "cell_type": ct,

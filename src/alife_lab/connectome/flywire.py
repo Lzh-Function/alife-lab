@@ -264,11 +264,11 @@ def _load_primary_regions(path: Path) -> dict[int, str]:
 
     totals = np.empty((nrows, len(regions)), dtype=np.int32)
     for j, region in enumerate(regions):
-        in_col = tbl[f"{in_prefix}{region}"].to_numpy(zero_copy_only=False).astype(
-            np.int32, copy=False
+        in_col = (
+            tbl[f"{in_prefix}{region}"].to_numpy(zero_copy_only=False).astype(np.int32, copy=False)
         )
-        out_col = tbl[f"{out_prefix}{region}"].to_numpy(zero_copy_only=False).astype(
-            np.int32, copy=False
+        out_col = (
+            tbl[f"{out_prefix}{region}"].to_numpy(zero_copy_only=False).astype(np.int32, copy=False)
         )
         totals[:, j] = in_col + out_col
 
@@ -304,8 +304,10 @@ def _build_io_ports(cells: CellTable) -> dict[str, IOPort]:
             label="Sugar & sugar/low-salt GRNs",
             description="Gustatory receptor neurons labelled sugar or sugar/low_salt.",
             cell_indices=_select(
-                lambda i: cells.cell_class[i] == "gustatory"
-                and cells.cell_sub_class[i] in ("sugar", "sugar/low_salt")
+                lambda i: (
+                    cells.cell_class[i] == "gustatory"
+                    and cells.cell_sub_class[i] in ("sugar", "sugar/low_salt")
+                )
             ),
             selection_rule=(
                 "cell_class == 'gustatory' and cell_sub_class in ('sugar', 'sugar/low_salt')"
@@ -337,8 +339,10 @@ def _build_io_ports(cells: CellTable) -> dict[str, IOPort]:
             label="Antennal grooming mechanosensory",
             description="Mechanosensory neurons labelled cell_sub_class == 'grooming'.",
             cell_indices=_select(
-                lambda i: cells.cell_class[i] == "mechanosensory"
-                and cells.cell_sub_class[i] == "grooming"
+                lambda i: (
+                    cells.cell_class[i] == "mechanosensory"
+                    and cells.cell_sub_class[i] == "grooming"
+                )
             ),
             selection_rule="cell_class == 'mechanosensory' and cell_sub_class == 'grooming'",
         ),
@@ -375,8 +379,10 @@ def _build_io_ports(cells: CellTable) -> dict[str, IOPort]:
             label="Proboscis motor neurons",
             description="Motor neurons labelled cell_sub_class == 'proboscis_motor_neuron'.",
             cell_indices=_select(
-                lambda i: cells.super_class[i] == "motor"
-                and cells.cell_sub_class[i] == "proboscis_motor_neuron"
+                lambda i: (
+                    cells.super_class[i] == "motor"
+                    and cells.cell_sub_class[i] == "proboscis_motor_neuron"
+                )
             ),
             selection_rule="super_class == 'motor' and cell_sub_class == 'proboscis_motor_neuron'",
         ),

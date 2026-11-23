@@ -25,8 +25,7 @@ def _datasets_dir():
 @pytest.mark.skipif(
     not verify_dataset("flywire_783", _datasets_dir())["ok"],
     reason=(
-        "local flywire_783 dataset not present/verified "
-        "(run `alife connectome fetch flywire_783`)"
+        "local flywire_783 dataset not present/verified (run `alife connectome fetch flywire_783`)"
     ),
 )
 def test_flywire_783_f0_reference_and_repeatability() -> None:

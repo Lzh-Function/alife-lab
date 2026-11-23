@@ -1844,9 +1844,7 @@ class ConnectomeExperiment(_Frozen):
         return self
 
     @model_serializer(mode="wrap")
-    def _omit_empty_optional_fields(
-        self, handler: SerializerFunctionWrapHandler
-    ) -> dict[str, Any]:
+    def _omit_empty_optional_fields(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
         out: dict[str, Any] = handler(self)
         if not out.get("silenced_cell_types"):
             out.pop("silenced_cell_types", None)

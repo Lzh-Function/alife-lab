@@ -328,9 +328,7 @@ class ConnectomeAdapter:
                 kind=base_csr.kind,
             )
             pstate = (
-                plastic_state
-                if plastic_state is not None
-                else make_initial_plasticity_state(pmap)
+                plastic_state if plastic_state is not None else make_initial_plasticity_state(pmap)
             )
             if pmap.num_edges > 0:
                 eff_w = effective_weights(pmap, pstate.scale)

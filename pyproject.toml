@@ -103,5 +103,6 @@ module = [
     "alife_lab.substrates.bff.vm_numba",
     "alife_lab.substrates.nca.model",
     "alife_lab.substrates.pd_nca.model",
+    "alife_lab.connectome.sysid",
 ]
 disable_error_code = ["untyped-decorator", "unused-ignore"]

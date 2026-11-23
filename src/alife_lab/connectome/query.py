@@ -172,9 +172,7 @@ def get_connectome_index(dataset_id: str, datasets_dir: Path) -> ConnectomeIndex
 
 def get_connectome_meta(dataset_id: str, datasets_dir: Path) -> dict[str, Any]:
     idx = get_connectome_index(dataset_id, datasets_dir)
-    role_counts = {
-        name: int((idx.cells.role == i).sum()) for i, name in enumerate(CELL_ROLE_NAMES)
-    }
+    role_counts = {name: int((idx.cells.role == i).sum()) for i, name in enumerate(CELL_ROLE_NAMES)}
     return {
         "dataset_id": idx.dataset_id,
         "species": idx.species,

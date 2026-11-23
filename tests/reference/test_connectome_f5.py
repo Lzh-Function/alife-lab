@@ -14,6 +14,7 @@ Verifies on offline CPU-only ``synthetic_olfactory`` (40 neurons, 18 cell types,
 
 from __future__ import annotations
 
+import importlib.util
 import json
 from pathlib import Path
 
@@ -32,6 +33,10 @@ from alife_lab.core.spec import ExperimentSpec, load_experiment_spec
 from alife_lab.substrates.connectome.sysid_adapter import ConnectomeSysIDAdapter
 
 ROOT = Path(__file__).resolve().parents[2]
+HAS_TORCH = importlib.util.find_spec("torch") is not None
+needs_torch = pytest.mark.skipif(
+    not HAS_TORCH, reason="PyTorch not installed (uv sync --extra asal)"
+)
 
 
 def test_sysid_spec_rejects_reference_mode() -> None:
@@ -49,6 +54,22 @@ def test_sysid_spec_rejects_reference_mode() -> None:
         ExperimentSpec.model_validate(raw)
 
 
+def test_synthetic_olfactory_subcircuit_extraction_cpu_only() -> None:
+    pack = make_synthetic_olfactory_pack()
+    sub_ref = extract_subcircuit(pack, subcircuit_id="full", wiring="reference")
+    sub_shuf = extract_subcircuit(
+        pack, subcircuit_id="full", wiring="shuffled_control", shuffle_seed=1
+    )
+    assert sub_ref.num_cells == 40
+    assert sub_ref.num_edges == 236
+    # Degree-preserving shuffle drops self-loops / merges duplicates on a dense 40-node graph.
+    assert 180 < sub_shuf.num_edges <= sub_ref.num_edges
+    assert sub_ref.num_types == 18
+    assert sub_ref.num_classes == 6
+    assert len(sub_ref.input_groups) == 4
+
+
+@needs_torch
 def test_hidden_truth_recovery_generalization_and_shuffled_control() -> None:
     pack = make_synthetic_olfactory_pack()
     sub_ref = extract_subcircuit(pack, subcircuit_id="full", wiring="reference")
@@ -91,6 +112,7 @@ def test_hidden_truth_recovery_generalization_and_shuffled_control() -> None:
     assert ident["verdict"] in ("well_identified", "partially_identifiable", "non_unique_sloppy")
 
 
+@needs_torch
 def test_observability_curve_and_cell_class_map() -> None:
     pack = make_synthetic_olfactory_pack()
     sub_ref = extract_subcircuit(pack, subcircuit_id="full", wiring="reference")
@@ -114,6 +136,7 @@ def test_observability_curve_and_cell_class_map() -> None:
     assert vals == sorted(vals, reverse=True)
 
 
+@needs_torch
 def test_sysid_adapter_render_checkpoint_and_cli(capsys: pytest.CaptureFixture[str]) -> None:
     spec = load_experiment_spec(ROOT / "configs/scenarios/connectome_sysid_olfactory_tiny.yaml")
     ad = ConnectomeSysIDAdapter()

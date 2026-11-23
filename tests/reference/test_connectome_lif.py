@@ -251,9 +251,10 @@ def test_gpu_matches_cpu_bitwise_on_synthetic_and_batched() -> None:
 
 
 def _has_flywire_and_gpu() -> bool:
-    return cupy_available() and verify_dataset(
-        "flywire_783", load_settings().resolved_datasets_dir
-    )["ok"]
+    return (
+        cupy_available()
+        and verify_dataset("flywire_783", load_settings().resolved_datasets_dir)["ok"]
+    )
 
 
 @pytest.mark.skipif(

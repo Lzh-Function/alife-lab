@@ -678,9 +678,7 @@ class CupyBatchedLIFRunner:
                 np.int32(self.ring_len),
             ),
         )
-        self._k_finish(
-            ((b + 63) // 64,), (64,), (self.d_substep, self.d_n_fired, np.int32(b))
-        )
+        self._k_finish(((b + 63) // 64,), (64,), (self.d_substep, self.d_n_fired, np.int32(b)))
 
     def step_substeps(self, n_substeps: int, *, use_graph: bool = True) -> None:
         if use_graph:

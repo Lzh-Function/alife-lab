@@ -370,15 +370,12 @@ def summarize_pack(
         exc_pre_neurons = 0
         inh_pre_neurons = 0
 
-    role_counts = {
-        name: int((cells.role == idx).sum()) for idx, name in enumerate(CELL_ROLE_NAMES)
-    }
+    role_counts = {name: int((cells.role == idx).sum()) for idx, name in enumerate(CELL_ROLE_NAMES)}
     model_counts = {
         name: int((cells.cell_model == idx).sum()) for idx, name in enumerate(CELL_MODEL_NAMES)
     }
     pos_source_counts = {
-        name: int((cells.position_source == idx).sum())
-        for idx, name in enumerate(POS_SOURCE_NAMES)
+        name: int((cells.position_source == idx).sum()) for idx, name in enumerate(POS_SOURCE_NAMES)
     }
     syn_kind_counts = {
         name: int((edges.kind == idx).sum()) for idx, name in enumerate(SYNAPSE_KIND_NAMES)

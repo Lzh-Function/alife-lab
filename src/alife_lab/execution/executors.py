@@ -121,19 +121,22 @@ def _validate(
     else:
         manifest = get_manifest(substrate)
         if selector.backend in ("auto", "gpu"):
-            # "auto" never picks a GPU backend; "gpu" picks the substrate's first GPU backend.
-            # "auto" also skips backends that do not accept the spec's numeric policy.
+            # "auto" never picks a GPU backend; "gpu" picks the first GPU backend that accepts
+            # the spec's numeric policy (falling back to any GPU backend so policy errors below
+            # still report the mismatch clearly when no GPU backend supports the declared policy).
             policy_now = getattr(spec.experiment.dynamics, "numeric_policy", None)
-            candidates = [
+            avail = [
                 b
                 for b in manifest.backends
                 if b in target.capabilities.backends
                 and (b in GPU_BACKENDS) == (selector.backend == "gpu")
-                and (
-                    selector.backend == "gpu"
-                    or policy_now in manifest.backend_numeric_policies.get(b, (policy_now,))
-                )
             ]
+            policy_ok = [
+                b
+                for b in avail
+                if policy_now in manifest.backend_numeric_policies.get(b, (policy_now,))
+            ]
+            candidates = (policy_ok or avail) if selector.backend == "gpu" else policy_ok
             resolved_backend = candidates[0] if candidates else None
         elif selector.backend in manifest.backends:
             resolved_backend = selector.backend

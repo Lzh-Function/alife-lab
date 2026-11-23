@@ -68,8 +68,9 @@ def test_connectome_worker_interventions_restore_and_replay_verify(settings: Set
             # Manual checkpoint, then verify deterministic replay across checkpoints.
             await ctrl.control(rid, "checkpoint", {})
             await wait_for(
-                lambda: (cp := ctrl.latest_checkpoint(rid)) is not None
-                and cp["simulation_clock"] == 70,
+                lambda: (
+                    (cp := ctrl.latest_checkpoint(rid)) is not None and cp["simulation_clock"] == 70
+                ),
                 20,
             )
             ver = await ctrl.verify_replay(rid)
