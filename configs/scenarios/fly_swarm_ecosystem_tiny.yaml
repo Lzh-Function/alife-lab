@@ -1,0 +1,30 @@
+schema_version: 1
+experiment:
+  name: fly_swarm_ecosystem_tiny
+  mode: exploratory
+  substrate: fly_swarm
+  seed: 1
+  dataset_id: synthetic_ecosystem_male
+  female_dataset_id: synthetic_ecosystem_female
+  num_flies: 12
+  wiring: reference
+  dynamics:
+    clock_unit: tick
+    numeric_policy: float32_lif_float64_arena
+    social_mode: dual_sex_ecosystem
+    enable_touch: true
+    odor_enabled: true
+    arena_half_size: 4.5
+    explore_drive_hz: 65.0
+  runner:
+    max_steps: 15000
+    checkpoint_interval: 5000
+  observations:
+    metrics:
+      - active_feeders
+      - total_lunges
+      - active_threats
+      - active_singers
+      - female_auditory_hz
+      - clean_zone_fraction
+      - realtime_factor

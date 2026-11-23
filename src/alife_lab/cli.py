@@ -1578,23 +1578,73 @@ def cmd_connectome(args: argparse.Namespace) -> int:
             return 0 if rep["all_checks_passed"] else 1
         if args.connectome_cmd == "swarm":
             from alife_lab.connectome.embodied import make_synthetic_fly_embodied_pack
+            from alife_lab.connectome.fly_ecosystem import (
+                make_synthetic_ecosystem_female_pack,
+                make_synthetic_ecosystem_male_pack,
+                run_dual_sex_ecosystem_assay,
+            )
             from alife_lab.connectome.fly_swarm import (
                 make_synthetic_male_aggression_pack,
                 run_male_aggression_assay,
                 run_ramdya_collective_assay,
             )
 
-            if args.dataset_id == "synthetic_fly_embodied":
-                pack = make_synthetic_fly_embodied_pack()
-            elif args.dataset_id == "synthetic_male_aggression":
-                pack = make_synthetic_male_aggression_pack()
-            else:
-                pack = load_connectome_pack(
-                    args.dataset_id,
-                    ds_dir,
-                    verify_hashes=not args.no_verify,
-                )
+            def _load_swm(ds_id: str) -> Any:
+                if ds_id == "synthetic_fly_embodied":
+                    return make_synthetic_fly_embodied_pack()
+                if ds_id == "synthetic_male_aggression":
+                    return make_synthetic_male_aggression_pack()
+                if ds_id == "synthetic_ecosystem_male":
+                    return make_synthetic_ecosystem_male_pack()
+                if ds_id == "synthetic_ecosystem_female":
+                    return make_synthetic_ecosystem_female_pack()
+                return load_connectome_pack(ds_id, ds_dir, verify_hashes=not args.no_verify)
+
             sizes = tuple(int(s.strip()) for s in args.sizes.split(",") if s.strip())
+            if args.mode == "ecosystem":
+                m_id = (
+                    "synthetic_ecosystem_male"
+                    if args.dataset_id == "synthetic_fly_embodied"
+                    else args.dataset_id
+                )
+                f_id = args.female or (
+                    "synthetic_ecosystem_female"
+                    if m_id == "synthetic_ecosystem_male"
+                    else "banc_888"
+                )
+                rep = run_dual_sex_ecosystem_assay(
+                    _load_swm(m_id),
+                    _load_swm(f_id),
+                    num_flies=sizes[-1],
+                    ticks=args.ticks,
+                    seed=args.seed,
+                    backend=args.backend,
+                )
+                if args.json:
+                    _print_json(rep)
+                else:
+                    print(
+                        f"ecosystem male={rep['male_dataset']} female={rep['female_dataset']} "
+                        f"N={rep['num_flies']} total_neurons={rep['total_neurons']:,} "
+                        f"ticks={rep['ticks']} wall={rep['wall_seconds']:.2f}s "
+                        f"all_checks_passed={rep['all_checks_passed']}"
+                    )
+                    for ck, ok in rep["checks"].items():
+                        print(f"  [{'PASS' if ok else 'FAIL'}] {ck}")
+                    for cname, row in rep["conditions"].items():
+                        print(
+                            f"    {cname:18s}: feed={row['feeding_fly_ms']:5d} "
+                            f"song={row['song_fly_ms']:5d} lunges={row['total_lunges']:3d} "
+                            f"threat={row['wing_threat_fly_ms']:5d} "
+                            f"clean={row['mean_clean_fraction'] * 100:5.1f}% "
+                            f"DA1={row['mean_da1_pn_hz']:5.1f}Hz "
+                            f"hg34={row['mean_hg34_hz']:4.1f}Hz "
+                            f"ps1={row['mean_male_ps1_hz']:4.1f}Hz "
+                            f"fAud={row['mean_female_aud_hz']:4.1f}Hz "
+                            f"RTF={row['realtime_factor']:.2f}x"
+                        )
+                return 0 if rep["all_checks_passed"] else 1
+            pack = _load_swm(args.dataset_id)
             if args.mode == "aggression":
                 rep = run_male_aggression_assay(
                     pack,
@@ -2011,10 +2061,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     cswm = csub.add_parser(
         "swarm",
-        help="run F11 Stage 3 collective fly swarm (Ramdya odor avoidance or male aggression)",
+        help="run F11 Stage 3 fly swarm (ramdya avoidance, male aggression, or dual-sex ecosystem)",
     )
     cswm.add_argument("dataset_id", nargs="?", default="synthetic_fly_embodied")
-    cswm.add_argument("--mode", choices=["ramdya", "aggression"], default="ramdya")
+    cswm.add_argument("--female", default=None, help="female dataset_id for --mode ecosystem")
+    cswm.add_argument("--mode", choices=["ramdya", "aggression", "ecosystem"], default="ramdya")
     cswm.add_argument("--sizes", default="1,8,16,24")
     cswm.add_argument("--backend", choices=["auto", "numpy", "cupy"], default="auto")
     cswm.add_argument("--seed", type=int, default=1)

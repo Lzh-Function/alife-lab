@@ -1,0 +1,8 @@
+preset:
+  id: fly_swarm_ecosystem_16
+  scenario: fly_swarm_ecosystem_16.yaml
+  title_key: preset.fly_swarm_ecosystem_16.title
+  description_key: preset.fly_swarm_ecosystem_16.description
+  overrides: {}
+  expected_observation: '8 real MaleCNS v1.0 whole-CNS males (165,122 cells) and 8 real BANC v888 whole-CNS females (156,808 cells) = 2,575,440 concurrent biological neurons share ONE 3D arena, concurrently exhibiting sugar/bitter foraging (MN9), aversive odor & leg-touch escape (DNg84), male-male aggression (DA1_PN + hg3/4 MN wing threats & lunges), and male-to-female acoustic courtship (ps1/hg1 MN -> BANC JO-B auditory relays).'
+  negative_control: switch wiring to shuffled_control (all four connectome-mediated social/feeding pathways collapse)

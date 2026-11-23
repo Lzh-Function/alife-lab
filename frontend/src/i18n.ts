@@ -1186,6 +1186,13 @@ const ja = {
   "preset.fly_swarm_male_aggression_12.description": "実生物 MaleCNS v1.0（165,122 細胞）のオス 12 匹が中央の餌場をめぐって cVA（ORN_DA1→DA1_PN）と視覚（LC10a→aIPg→hg3/hg4 MN）で両翅威嚇・突進（lunge）・敗者退却を繰り広げる。",
   "preset.fly_swarm_male_aggression_tiny.title": "ハエの群れ（F11 Stage 3）：合成オス 8 匹闘争アリーナ（CPU軽量検証）",
   "preset.fly_swarm_male_aggression_tiny.description": "オフライン CPU ですぐ動く 32 細胞オス闘争回路×8 匹。cVA 遮断・視覚遮断・シャッフル配線で威嚇と突進が消えることを確かめられる。",
+  "metric.active_feeders": "摂食中（MN9 発火）のハエ数",
+  "metric.female_auditory_hz": "メス聴覚リレー平均発火率（BANC）",
+  "swarm.ecosystem_title": "3D 雌雄統合生態アリーナ（緑輪＝摂食 · 水色＝接触 · 金輪＝求愛歌 · 紫輪＝聴覚 · 赤輪/橙線＝オス闘争）",
+  "preset.fly_swarm_ecosystem_16.title": "ハエの群れ（F11 決定版）：雌雄リアル全中枢 全部入り生態箱（MaleCNS 8♂＋BANC 8♀・計258万細胞）",
+  "preset.fly_swarm_ecosystem_16.description": "本物のオス全中枢（MaleCNS v1.0・165,122細胞）8匹とメス全中枢（BANC v888・156,808細胞）8匹が1つの3D箱に共存。摂食（MN9）・忌避匂い＆脚接触回避（DNg84）・オス闘争（DA1_PN＋hg3/4 MN）・オス→メス求愛歌対話（ps1/hg1→JO-B）が全部同時に起きます。",
+  "preset.fly_swarm_ecosystem_tiny.title": "ハエの群れ（F11 決定版）：合成雌雄 12 匹 全部入り生態箱（CPU軽量検証）",
+  "preset.fly_swarm_ecosystem_tiny.description": "オフライン CPU ですぐ動く合成オス 6 匹＋合成メス 6 匹の全部入り生態観察箱。摂食・忌避回避・オス闘争・求愛歌聴覚応答の4系統を同時観察できます。",
 } as const;
 
 export type MessageKey = keyof typeof ja;
@@ -2374,6 +2381,13 @@ const en: Record<MessageKey, string> = {
   "preset.fly_swarm_male_aggression_12.description": "12 real 165,122-cell MaleCNS v1.0 whole-CNS males contesting a central food patch via cVA (ORN_DA1->DA1_PN) + vision (LC10a->aIPg->hg3/hg4 MN) bilateral wing threats, lunges, and loser retreats.",
   "preset.fly_swarm_male_aggression_tiny.title": "Fly swarm (F11 Stage 3): 8 synthetic males aggression arena (CPU)",
   "preset.fly_swarm_male_aggression_tiny.description": "Offline CPU-ready 32-cell male aggression circuit x 8 males. Toggle cVA or vision off in the toolbar to watch wing threats and lunges collapse.",
+  "metric.active_feeders": "Active feeders (MN9)",
+  "metric.female_auditory_hz": "Female auditory relay rate (BANC)",
+  "swarm.ecosystem_title": "3D Dual-Sex Ecosystem (Emerald = Feeding · Cyan = Touch · Gold = Song · Violet = Hearing · Crimson/Orange = Fight)",
+  "preset.fly_swarm_ecosystem_16.title": "Fly swarm (F11 Finale): All-in-one dual-sex ecosystem (8 MaleCNS ♂ + 8 BANC ♀ · 2.58M neurons)",
+  "preset.fly_swarm_ecosystem_16.description": "8 real MaleCNS v1.0 males (165,122 cells) and 8 real BANC v888 females (156,808 cells) sharing ONE 3D arena: sugar/bitter feeding (MN9), aversive odor & leg-touch escape (DNg84), male-male aggression (DA1_PN + hg3/4 MN), and male-to-female acoustic courtship (ps1/hg1 -> JO-B) all concurrently.",
+  "preset.fly_swarm_ecosystem_tiny.title": "Fly swarm (F11 Finale): 12 synthetic dual-sex all-in-one ecosystem (CPU)",
+  "preset.fly_swarm_ecosystem_tiny.description": "Offline CPU-ready all-in-one ecosystem of 6 synthetic males + 6 synthetic females demonstrating feeding, odor avoidance, male aggression, and acoustic courtship simultaneously.",
 };
 
 const dictionaries: Record<Lang, Record<MessageKey, string>> = { ja, en };

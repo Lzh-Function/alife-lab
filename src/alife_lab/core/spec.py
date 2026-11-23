@@ -2021,6 +2021,8 @@ EmbodiedFlyDatasetId = Literal[
     "synthetic_fly_embodied",
     "synthetic_cns_embodied",
     "synthetic_male_aggression",
+    "synthetic_ecosystem_male",
+    "synthetic_ecosystem_female",
 ]
 EmbodiedControlMode = Literal["level1_cpg", "level2_vnc", "level2_vnc_tuned"]
 EmbodiedFoodKind = Literal["sugar", "bitter"]
@@ -2112,7 +2114,10 @@ class FlyEmbodiedExperiment(_Frozen):
 # --------------------------------------------------------------------------- #
 
 FlySwarmSocialMode = Literal[
-    "ramdya_odor_avoidance", "mixed_courtship_swarm", "male_aggression_arena"
+    "ramdya_odor_avoidance",
+    "mixed_courtship_swarm",
+    "male_aggression_arena",
+    "dual_sex_ecosystem",
 ]
 FlySwarmMetric = Literal[
     "clean_zone_fraction",
@@ -2121,6 +2126,8 @@ FlySwarmMetric = Literal[
     "active_singers",
     "total_lunges",
     "active_threats",
+    "active_feeders",
+    "female_auditory_hz",
     "realtime_factor",
 ]
 
@@ -2151,6 +2158,7 @@ class FlySwarmExperiment(_Frozen):
     substrate: Literal["fly_swarm"]
     seed: _SEED
     dataset_id: EmbodiedFlyDatasetId = "synthetic_fly_embodied"
+    female_dataset_id: EmbodiedFlyDatasetId | None = None
     num_flies: Annotated[int, Field(ge=1, le=64)] = 16
     wiring: ConnectomeWiring = "reference"
     dynamics: FlySwarmDynamics = FlySwarmDynamics()

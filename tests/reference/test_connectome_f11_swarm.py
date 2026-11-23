@@ -8,6 +8,11 @@ import pytest
 
 from alife_lab.cli import main
 from alife_lab.connectome.embodied import make_synthetic_fly_embodied_pack
+from alife_lab.connectome.fly_ecosystem import (
+    make_synthetic_ecosystem_female_pack,
+    make_synthetic_ecosystem_male_pack,
+    run_dual_sex_ecosystem_assay,
+)
 from alife_lab.connectome.fly_swarm import (
     make_synthetic_male_aggression_pack,
     run_male_aggression_assay,
@@ -189,3 +194,79 @@ def test_cli_connectome_swarm_aggression_json(capsys: pytest.CaptureFixture[str]
     assert rc == 0, f"CLI aggression failed: {data}"
     assert data["all_checks_passed"] is True
     assert data["mode"] == "male_aggression_arena"
+
+
+def test_dual_sex_ecosystem_assay_and_exact_checkpoint_cpu() -> None:
+    m_pack = make_synthetic_ecosystem_male_pack()
+    f_pack = make_synthetic_ecosystem_female_pack()
+    rep = run_dual_sex_ecosystem_assay(
+        m_pack,
+        f_pack,
+        num_flies=12,
+        ticks=1200,
+        seed=1,
+        backend="numpy",
+    )
+    assert rep["mode"] == "dual_sex_ecosystem"
+    assert rep["all_checks_passed"], f"Ecosystem checks failed: {rep}"
+
+    # Verify FlySwarmAdapter dual-sex render + exact bitwise checkpoint continuation
+    spec = ExperimentSpec.model_validate(
+        {
+            "schema_version": 1,
+            "experiment": {
+                "name": "eco_ckpt",
+                "mode": "exploratory",
+                "substrate": "fly_swarm",
+                "seed": 2,
+                "dataset_id": "synthetic_ecosystem_male",
+                "female_dataset_id": "synthetic_ecosystem_female",
+                "num_flies": 8,
+                "dynamics": {"social_mode": "dual_sex_ecosystem"},
+            },
+        }
+    )
+    adapter = FlySwarmAdapter()
+    adapter.set_backend("numpy")
+    st = adapter.initialize(spec)
+    for _ in range(15):
+        st = adapter.step(st, spec)
+    hdr, payload = adapter.render(st)
+    assert hdr["codec"] == "fly_swarm_v1"
+    assert hdr["social_mode"] == "dual_sex_ecosystem"
+    assert len(payload) == 8 * 8 * 4
+    assert len(hdr["feeding"]) == 8 and len(hdr["listening"]) == 8
+
+    blob = adapter.serialize_state(st)
+    st2 = adapter.deserialize_state(blob, spec)
+    assert adapter.state_distance(st, st2)["exact_equal"] is True
+    for _ in range(10):
+        st = adapter.step(st, spec)
+        st2 = adapter.step(st2, spec)
+    assert adapter.state_distance(st, st2)["exact_equal"] is True
+
+
+def test_cli_connectome_swarm_ecosystem_json(capsys: pytest.CaptureFixture[str]) -> None:
+    rc = main(
+        [
+            "connectome",
+            "swarm",
+            "synthetic_ecosystem_male",
+            "--female",
+            "synthetic_ecosystem_female",
+            "--mode",
+            "ecosystem",
+            "--sizes",
+            "12",
+            "--ticks",
+            "1000",
+            "--backend",
+            "numpy",
+            "--json",
+        ]
+    )
+    out = capsys.readouterr().out
+    data = json.loads(out)
+    assert rc == 0, f"CLI ecosystem failed: {data}"
+    assert data["all_checks_passed"] is True
+    assert data["mode"] == "dual_sex_ecosystem"

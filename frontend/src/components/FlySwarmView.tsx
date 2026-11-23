@@ -22,6 +22,7 @@ interface SwarmHeader {
   total_neurons: number;
   arena_half_size: number;
   odor_enabled: boolean;
+  odor_x_max?: number;
   enable_touch: boolean;
   clean_zone_fraction: number;
   encounter_rate: number;
@@ -30,11 +31,17 @@ interface SwarmHeader {
   active_singers: number;
   total_lunges?: number;
   active_threats?: number;
+  active_feeders?: number;
+  total_feeding_ms?: number;
+  female_auditory_hz?: number;
   mean_da1_pn_hz?: number;
   mean_hg34_hz?: number;
   realtime_factor: number;
   contacts: Array<[number, number, number, number]>;
   clashes?: Array<[number, number, number, number]>;
+  foods?: Array<{ x: number; y: number; r: number; kind: string }>;
+  feeding?: number[];
+  listening?: number[];
 }
 
 interface Props {
@@ -52,6 +59,8 @@ interface FlyMeshRig {
   songRing: THREE.Mesh;
   touchHalo: THREE.Mesh;
   threatHalo: THREE.Mesh;
+  feedHalo: THREE.Mesh;
+  listenHalo: THREE.Mesh;
   legs: THREE.Mesh[];
   phase: number;
 }
@@ -155,7 +164,23 @@ function makeFlyRig(isMale: boolean): FlyMeshRig {
   threatHalo.position.z = 0.025;
   root.add(threatHalo);
 
-  return { root, wingL, wingR, songRing, touchHalo, threatHalo, legs, phase: Math.random() * Math.PI * 2 };
+  // Emerald feeding halo (visible when MN9 proboscis extension fires on sugar!)
+  const feedHalo = new THREE.Mesh(
+    new THREE.RingGeometry(0.17, 0.25, 20),
+    new THREE.MeshBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.0, side: THREE.DoubleSide }),
+  );
+  feedHalo.position.z = 0.022;
+  root.add(feedHalo);
+
+  // Soft violet female auditory listening halo (BANC JO-B -> SAD/CB1078/AVLP active!)
+  const listenHalo = new THREE.Mesh(
+    new THREE.RingGeometry(0.26, 0.33, 24),
+    new THREE.MeshBasicMaterial({ color: 0xc084fc, transparent: true, opacity: 0.0, side: THREE.DoubleSide }),
+  );
+  listenHalo.position.z = 0.018;
+  root.add(listenHalo);
+
+  return { root, wingL, wingR, songRing, touchHalo, threatHalo, feedHalo, listenHalo, legs, phase: Math.random() * Math.PI * 2 };
 }
 
 export const FlySwarmView = forwardRef<FlySwarmViewHandle, Props>(function FlySwarmView(
@@ -174,6 +199,8 @@ export const FlySwarmView = forwardRef<FlySwarmViewHandle, Props>(function FlySw
     rigs: FlyMeshRig[];
     odorZone: THREE.Mesh | null;
     divLine: THREE.Line | null;
+    ecoOdorStrip: THREE.Mesh | null;
+    ecoFoodGroup: THREE.Group | null;
     foodPatch: THREE.Mesh | null;
     contactLines: THREE.LineSegments | null;
     clashLines: THREE.LineSegments | null;
@@ -186,6 +213,8 @@ export const FlySwarmView = forwardRef<FlySwarmViewHandle, Props>(function FlySw
     odorEnabled: boolean;
     contacts: Array<[number, number, number, number]>;
     clashes: Array<[number, number, number, number]>;
+    feeding: number[];
+    listening: number[];
   } | null>(null);
 
   const hudThrottleRef = useRef(0);
@@ -285,6 +314,48 @@ export const FlySwarmView = forwardRef<FlySwarmViewHandle, Props>(function FlySw
     foodPatch.visible = false;
     scene.add(foodPatch);
 
+    // Ecosystem mode: left purple odor strip (x < -2.0) + 2 sugar discs + 1 bitter disc
+    const stripW = half - 2.0;
+    const ecoOdorStrip = new THREE.Mesh(
+      new THREE.PlaneGeometry(stripW, half * 2),
+      new THREE.MeshBasicMaterial({
+        color: 0xa855f7,
+        transparent: true,
+        opacity: 0.2,
+        side: THREE.DoubleSide,
+      }),
+    );
+    ecoOdorStrip.position.set(-half + stripW / 2, 0, 0.007);
+    ecoOdorStrip.visible = false;
+    scene.add(ecoOdorStrip);
+
+    const ecoFoodGroup = new THREE.Group();
+    const sugarMat = new THREE.MeshStandardMaterial({
+      color: 0xf59e0b,
+      emissive: 0x78350f,
+      emissiveIntensity: 0.45,
+      roughness: 0.6,
+      side: THREE.DoubleSide,
+    });
+    const bitterMat = new THREE.MeshStandardMaterial({
+      color: 0x84cc16,
+      emissive: 0x365314,
+      emissiveIntensity: 0.45,
+      roughness: 0.6,
+      side: THREE.DoubleSide,
+    });
+    for (const [fx, fy, fr, mat] of [
+      [1.65, 1.55, 0.68, sugarMat],
+      [1.65, -1.55, 0.68, sugarMat],
+      [-0.35, 0.0, 0.55, bitterMat],
+    ] as const) {
+      const m = new THREE.Mesh(new THREE.CircleGeometry(fr, 32), mat);
+      m.position.set(fx, fy, 0.009);
+      ecoFoodGroup.add(m);
+    }
+    ecoFoodGroup.visible = false;
+    scene.add(ecoFoodGroup);
+
     // Contact spark segments between touching flies
     const maxSegs = 64;
     const contactGeo = new THREE.BufferGeometry();
@@ -312,6 +383,8 @@ export const FlySwarmView = forwardRef<FlySwarmViewHandle, Props>(function FlySw
       rigs: [],
       odorZone,
       divLine,
+      ecoOdorStrip,
+      ecoFoodGroup,
       foodPatch,
       contactLines,
       clashLines,
@@ -324,6 +397,8 @@ export const FlySwarmView = forwardRef<FlySwarmViewHandle, Props>(function FlySw
       odorEnabled: true,
       contacts: [],
       clashes: [],
+      feeding: [],
+      listening: [],
     };
     if (pendingFrameRef.current) {
       applyFrameRef.current(pendingFrameRef.current);
@@ -353,9 +428,12 @@ export const FlySwarmView = forwardRef<FlySwarmViewHandle, Props>(function FlySw
         const prev = st.prevData ?? curr;
 
         const isAgg = st.socialMode === "male_aggression_arena";
-        if (st.odorZone) st.odorZone.visible = !isAgg && st.odorEnabled;
-        if (st.divLine) st.divLine.visible = !isAgg;
+        const isEco = st.socialMode === "dual_sex_ecosystem";
+        if (st.odorZone) st.odorZone.visible = !isAgg && !isEco && st.odorEnabled;
+        if (st.divLine) st.divLine.visible = !isAgg && !isEco;
         if (st.foodPatch) st.foodPatch.visible = isAgg;
+        if (st.ecoOdorStrip) st.ecoOdorStrip.visible = isEco && st.odorEnabled;
+        if (st.ecoFoodGroup) st.ecoFoodGroup.visible = isEco;
 
         for (let i = 0; i < st.numFlies; i++) {
           const b = i * 8;
@@ -368,7 +446,9 @@ export const FlySwarmView = forwardRef<FlySwarmViewHandle, Props>(function FlySw
           const spd = curr[b + 3];
           const touchOrLunge = curr[b + 5];
           const song = curr[b + 6];
-          const threat = isAgg ? curr[b + 7] : 0.0;
+          const threat = isAgg || isEco ? curr[b + 7] : 0.0;
+          const feed = isEco ? (st.feeding[i] ?? 0.0) : 0.0;
+          const listen = isEco ? (st.listening[i] ?? 0.0) : 0.0;
 
           const rig = st.rigs[i];
           rig.root.position.set(x, y, 0.0);
@@ -381,7 +461,7 @@ export const FlySwarmView = forwardRef<FlySwarmViewHandle, Props>(function FlySw
             rig.legs[li].rotation.y = Math.sin(rig.phase + (li % 2 === 0 ? 0 : Math.PI)) * amp;
           }
 
-          if (isAgg && threat > 0.12) {
+          if ((isAgg || isEco) && threat > 0.12) {
             // Bilateral wing-threat display (hg3/hg4 MN): BOTH wings elevated & splayed symmetrically!
             const elev = Math.min(0.95, 0.35 + threat * 0.65);
             rig.wingL.rotation.set(0.55 * elev, -0.45 * elev, 0.24 + 0.65 * elev);
@@ -392,14 +472,15 @@ export const FlySwarmView = forwardRef<FlySwarmViewHandle, Props>(function FlySw
             rig.wingL.rotation.set(0.08, 0.0, 0.24 + splay);
             rig.wingR.rotation.set(-0.08, 0.0, -0.24 - splay * 0.25);
           }
-          (rig.songRing.material as THREE.MeshBasicMaterial).opacity = song > 0.1 ? Math.min(0.75, song * 0.8) : 0.0;
-
-          // Cyan leg-touch halo (Ramdya) OR crimson threat/lunge halo (Aggression)
+          (rig.songRing.material as THREE.MeshBasicMaterial).opacity = song > 0.1 ? Math.min(0.78, song * 0.85) : 0.0;
           (rig.touchHalo.material as THREE.MeshBasicMaterial).opacity = !isAgg && touchOrLunge > 0.5 ? 0.85 : 0.0;
-          const threatOpacity = isAgg
-            ? Math.min(0.92, (touchOrLunge > 0.5 ? 0.88 : threat * 0.85) * (0.75 + 0.25 * Math.sin(now * 0.02)))
-            : 0.0;
+          const threatOpacity =
+            isAgg || isEco
+              ? Math.min(0.92, ((isAgg && touchOrLunge > 0.5) ? 0.88 : threat * 0.88) * (0.75 + 0.25 * Math.sin(now * 0.02)))
+              : 0.0;
           (rig.threatHalo.material as THREE.MeshBasicMaterial).opacity = threatOpacity;
+          (rig.feedHalo.material as THREE.MeshBasicMaterial).opacity = feed > 0.18 ? Math.min(0.9, feed * 0.95) : 0.0;
+          (rig.listenHalo.material as THREE.MeshBasicMaterial).opacity = listen > 0.18 ? Math.min(0.75, listen * 0.8) : 0.0;
         }
 
         // Update cyan contact spark lines between touching flies
@@ -494,6 +575,8 @@ export const FlySwarmView = forwardRef<FlySwarmViewHandle, Props>(function FlySw
         st.odorEnabled = Boolean(h.odor_enabled);
         st.contacts = Array.isArray(h.contacts) ? h.contacts : [];
         st.clashes = Array.isArray(h.clashes) ? h.clashes : [];
+        st.feeding = Array.isArray(h.feeding) ? h.feeding : [];
+        st.listening = Array.isArray(h.listening) ? h.listening : [];
       }
       const nowHud = performance.now();
       if (hudThrottleRef.current === 0 || nowHud - hudThrottleRef.current > 90) {
@@ -552,7 +635,13 @@ export const FlySwarmView = forwardRef<FlySwarmViewHandle, Props>(function FlySw
       {/* 3D Petri Dish Swarm Canvas */}
       <div style={{ border: "1px solid var(--border, #334155)", borderRadius: "8px", overflow: "hidden", background: "#0b1220" }}>
         <div style={{ padding: "6px 10px", fontSize: "0.82rem", display: "flex", justifyContent: "space-between", background: "rgba(15,23,42,0.92)", color: "#e2e8f0", borderBottom: "1px solid #1e293b" }}>
-          <strong>{hud?.social_mode === "male_aggression_arena" ? t("swarm.aggression_title") : t("swarm.arena_title")}</strong>
+          <strong>
+            {hud?.social_mode === "dual_sex_ecosystem"
+              ? t("swarm.ecosystem_title")
+              : hud?.social_mode === "male_aggression_arena"
+                ? t("swarm.aggression_title")
+                : t("swarm.arena_title")}
+          </strong>
           <span className="mono" style={{ opacity: 0.85 }}>
             {hud ? `${hud.dataset_id ?? ""} (${hud.wiring ?? ""}) · tick ${hud.tick ?? 0}` : ""}
           </span>
@@ -565,7 +654,46 @@ export const FlySwarmView = forwardRef<FlySwarmViewHandle, Props>(function FlySw
       </div>
 
       {/* Live Collective Metrics Panel */}
-      {hud && hud.social_mode === "male_aggression_arena" ? (
+      {hud && hud.social_mode === "dual_sex_ecosystem" ? (
+        <div className="panel" style={{ margin: 0, padding: "10px 12px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: "10px", fontSize: "0.84rem" }}>
+          <div>
+            <div className="muted small">{t("metric.active_feeders")}</div>
+            <strong className="mono" style={{ fontSize: "1.05rem", color: "#10b981" }}>
+              {hud.active_feeders ?? 0} ({hud.total_feeding_ms ?? 0} ms)
+            </strong>
+          </div>
+          <div>
+            <div className="muted small">{t("metric.total_lunges")}</div>
+            <strong className="mono" style={{ fontSize: "1.05rem", color: "#f97316" }}>
+              {hud.total_lunges ?? 0} · ⚔ {hud.active_threats ?? 0}
+            </strong>
+          </div>
+          <div>
+            <div className="muted small">{t("metric.active_singers")}</div>
+            <strong className="mono" style={{ fontSize: "1.05rem", color: "#fbbf24" }}>
+              {hud.active_singers ?? 0}
+            </strong>
+          </div>
+          <div>
+            <div className="muted small">{t("metric.female_auditory_hz")}</div>
+            <strong className="mono" style={{ fontSize: "1.05rem", color: "#c084fc" }}>
+              {(hud.female_auditory_hz ?? 0).toFixed(1)} Hz
+            </strong>
+          </div>
+          <div>
+            <div className="muted small">DA1_PN / hg3-4 MN</div>
+            <strong className="mono" style={{ fontSize: "1.05rem", color: "#f87171" }}>
+              {(hud.mean_da1_pn_hz ?? 0).toFixed(0)} / {(hud.mean_hg34_hz ?? 0).toFixed(0)} Hz
+            </strong>
+          </div>
+          <div>
+            <div className="muted small">{t("metric.clean_zone_fraction")}</div>
+            <strong className="mono" style={{ fontSize: "1.05rem", color: "#34d399" }}>
+              {((hud.clean_zone_fraction ?? 0) * 100).toFixed(1)}%
+            </strong>
+          </div>
+        </div>
+      ) : hud && hud.social_mode === "male_aggression_arena" ? (
         <div className="panel" style={{ margin: 0, padding: "10px 12px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px", fontSize: "0.84rem" }}>
           <div>
             <div className="muted small">{t("metric.total_lunges")}</div>

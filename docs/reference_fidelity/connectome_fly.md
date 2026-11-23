@@ -761,3 +761,12 @@ To settle unambiguously whether point-neuron ALIF on fixed biological VNC wiring
 | `shuffled_control` (degree-preserving) | **`0`** (-100%) | **`0 fly·ms`** (-100%) | **`8.7 Hz`** (16× drop) | **`0.8 Hz`** (376× drop) | `32.4 Hz` | `0.0` | `0.46×` |
 
 - **Zero-shot biological pathway discovery in `male_cns_v1`:** Stimulating `LC10a` (275 visual rival cells) or `aIPg` (56 aggression command interneurons) in the frozen MaleCNS connectome directly recruits **`hg3 MN` / `hg4 MN` bilateral wing-elevation motor neurons** (`104–164 Hz` intact vs `0–12 Hz` shuffled) and `DNg33` (`262–301 Hz` intact vs `0–0.8 Hz` shuffled), while cVA (`ORN_DA1`) specifically drives `DA1_lPN/vPN` (`140–302 Hz` intact vs `0.1 Hz` blocked / `1.6–8.7 Hz` shuffled). Requiring coincidence of biological `DA1_PN` male identity and `hg3/4 MN + DNg33` wing-threat drive reproduces cVA-gated, vision-gated, and wiring-dependent territorial wing threats, oriented lunges, and loser retreats.
+
+### 6. F11 Finale — Unified Dual-Sex Whole-CNS Ecological World (`alife connectome swarm male_cns_v1 --female banc_888 --mode ecosystem`, 2,575,440 Concurrent Neurons, **5/5 PASS**)
+
+| Condition (`8 × male_cns_v1` + `8 × banc_888`, `1,500 ms`, `12.62 s` wall) | Feeding (`MN9`) | Male Song (`ps1`) | Female Aud (`BANC`) | Lunges | Wing Threat (`hg3/4`) | `DA1_PN` | Clean Zone | `RTF` |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| **`intact_ecosystem`** | **`8,028 fly·ms`** | **`11,275 fly·ms`** (`66.2 Hz`) | **`41.0 Hz`** | **`9`** | **`6,072 fly·ms`** (`108.5 Hz`) | **`88.1 Hz`** | **`89.7%`** | `0.38×` |
+| `shuffled_control` | **`0 fly·ms`** (-100%) | `1,321 fly·ms` (`7.0 Hz`) | **`0.0 Hz`** (-100%) | **`0`** (-100%) | **`0 fly·ms`** (`18.2 Hz`) | `6.4 Hz` | `89.8%` | `0.48×` |
+
+- All four F11 biological pathways (foraging, collective odor/touch avoidance, male-male aggression, and real male-to-female acoustic courtship) run concurrently inside one 3D arena with exact deterministic checkpoint/restore, ready to serve as the ecological base for Phase F12 (`fly_world`).

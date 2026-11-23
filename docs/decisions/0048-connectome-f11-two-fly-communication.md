@@ -54,3 +54,9 @@ Phase F11 (`connectome_plan.md §4 F11`) tests how far innate two-fly social com
      - `vision_blocked`: **`16` lunges** (2.75× drop), **`1,567 fly·ms`** threats (5.7× drop), `hg3/4 MN = 19.3 Hz` (4.0× drop).
      - `shuffled_control`: **`0` lunges**, **`0 fly·ms`** threats (`DNg33 = 0.8 Hz`, 376× drop).
    - Browser 3D renderer (`FlySwarmView.tsx`) renders the central territorial food patch, symmetric elevated bilateral wing-threat posture (`±55°`), crimson threat halos, orange lunge-clash arcs, live `DA1_PN` & `hg3/4 MN` rates, and live cVA/vision ablation buttons (`fly_swarm_male_aggression_12` & `fly_swarm_male_aggression_tiny`).
+6. **Unified Dual-Sex Whole-CNS Ecological World (`dual_sex_ecosystem`, `fly_ecosystem.py`, 2026-11-23):**
+   - Runs **two distinct real sex-specific whole-CNS batches concurrently** inside ONE 3D arena (`male_cns_v1` 8 males × 165,122 + `banc_888` 8 females × 156,808 = **`2,575,440` concurrent biological neurons**), unifying sugar/bitter foraging (`MN9`), aversive odor & Ramdya leg-touch escape (`DNg84`), male-male territorial aggression (`DA1_PN` + `hg3/4 MN`), and real male-to-female acoustic courtship (`ps1/hg1 MN` → `banc_888` `JO-B` → `SAD/CB1078/AVLP`).
+   - **Measured RTX 5070 (`1,500 ms`, `12.62 s` wall for intact + shuffled, **5/5 gates PASS**, lower-bound RTF under concurrent GPU load):**
+     - `intact_ecosystem`: feeding **`8,028 fly·ms`**, song **`11,275 fly·ms`** (`ps1 = 66.2 Hz`), female auditory **`41.0 Hz`**, lunges **`9`**, wing threats **`6,072 fly·ms`** (`DA1_PN = 88.1 Hz`, `hg3/4 = 108.5 Hz`), clean zone **`89.7%`**, `0.38× RT`.
+     - `shuffled_control`: feeding **`0 fly·ms`**, lunges **`0`**, wing threats **`0 fly·ms`**, female auditory **`0.0 Hz`** (`DA1_PN = 6.4 Hz`, `ps1 = 7.0 Hz`).
+   - Browser presets: `fly_swarm_ecosystem_16` (GPU) & `fly_swarm_ecosystem_tiny` (CPU CI). Serves directly as the clean architectural foundation for Phase F12 (`fly_world`).
