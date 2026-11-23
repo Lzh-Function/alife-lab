@@ -642,3 +642,95 @@ To settle unambiguously whether point-neuron ALIF on fixed biological VNC wiring
 1. **Ratcheting loophole fully confirmed and sealed:** Enforcing `1:1` swing/stance MN gain collapsed both matched-budget shuffled-from-scratch arms to dead-brain immobility (`-0.035 to -0.041 cm`, `0.04–1.36 Hz`), proving that v2's shuffled displacement was purely an artifact of the `29×` stance/swing ratio.
 2. **Intrinsic anti-phase neural substrate exists in real VNC commissural wiring:** Under identical budget and model constraints, **both** intact isolated biological VNCs (`banc_888`: `tripod_corr = -0.435`; `male_cns_v1`: `tripod_corr = -0.936` / peak `-0.966`) spontaneously generated genuine anti-phase tripod oscillations, whereas **both** degree-preserving shuffled controls remained strictly locked to synchronous bursting (`+0.996 / +0.997`).
 3. **Point-neuron ALIF structural boundary (closing F8):** Even with strong isolated anti-phase VNC oscillations, uniform per-hemilineage ALIF did not coordinate intra-leg femur-lift vs coxa-retraction phase into sustained forward tripod locomotion (`+0.50 cm`), and whole-brain feedback damped the isolated VNC rhythm (`24.5 -> 39.0 Hz` / `19.6 -> 5.6 Hz`, `tripod_corr` collapsing toward `-0.05 / -0.20`). Achieving true emergent tripod locomotion from raw EM wiring therefore points directly to non-spiking/graded interneurons, electrical gap junctions, and plateau conductances (motivating Phase S1 *C. elegans* graded+gap-junction engine before revisiting VNC biophysics).
+
+---
+
+## Phase F9: Parallel Multi-Fly Simulation (`mujoco-warp` GPU + Batched GPU LIF, 2026-11-23)
+
+> **Environment:** RTX 5070 (`sm_120`, 12 GiB), CUDA 13.4, `mujoco==3.17.0`, `mujoco-warp==3.17.0`, `warp-lang==1.19.0`, `cupy==14.2.0`.
+> **Honest determinism note (`connectome_plan.md §4 F9`):** GPU MuJoCo Warp is NOT strictly bitwise-identical across runs (`max|dqpos| = 1.49 × 10⁻⁸`, 1 float32 ULP at `nworld = 16`) or vs CPU float64 MuJoCo (`max|dqpos| = 1.97 × 10⁻⁷`, `max|dqvel| = 4.05 × 10⁻⁶` over `500` substeps = `50 ms`). Key hits are therefore re-verified on exact CPU float64 MuJoCo.
+
+### 1. Coupled Throughput Scaling (`alife connectome embody-batch flywire_783 --mode benchmark`, 138,639 cells × 250 ms)
+
+| Batch Size (`B` flies) | Coupled Throughput | Batched 1 ms Tick (Brain / Body) | Brain GPU VRAM | Mean Sugar Feeding |
+|---:|---:|---:|---:|---:|
+| `B = 1` | `0.23 fly-s/s` | `4.39 ms` (`0.74 / 3.14 ms`) | `128.8 MiB` | `175.0 ms` |
+| `B = 8` | `1.58 fly-s/s` | `5.05 ms` (`0.88 / 3.64 ms`) | `220.4 MiB` | `173.4 ms` |
+| `B = 16` | `3.56 fly-s/s` | `4.50 ms` (`0.69 / 3.62 ms`) | `325.1 MiB` | `174.8 ms` |
+| **`B = 32`** | **`5.14 fly-s/s`** | `6.22 ms` (`2.67 / 3.34 ms`) | **`534.5 MiB`** | `174.3 ms` |
+
+- Pure MuJoCo Warp physics (`nworld = 64`, CUDA Graph capture of 10 substeps): **`25.3 fly-s/wall-s`** (`2.53 ms` per batched 1 ms tick across 64 flies).
+- **CPU float64 vs GPU Warp behavioral parity (`flywire_783`, `seed = 1`, `250 ms`):** `feeding_ms = 175 vs 175 ms` (`diff = 0 ms`), `distance_cm_diff = 0.0 cm`.
+
+### 2. Embodied Behavioral Silencing Screen & Parallel Search (`flywire_783`, RTX 5070)
+
+- **Screen (`sugar_feeding`, 20 full-brain evaluations, `B = 16`, `8.08 s` wall):**
+  - `intact`: `173.8 ms` | `shuffled_control`: **`0.0 ms`**
+  - `CB0701` (`MN9`, 2 cells silenced): **`0.0 ms`** (`+100.0%` suppression, confirmed on CPU float64 MuJoCo: `218 -> 0 ms`)
+  - `DNp09` (2 cells silenced): `173.5 ms` (`+0.1%`, unaffected)
+  - `DNg84` (2 cells silenced): `173.8 ms` (`+0.0%`, unaffected)
+- **Parallel foraging search (`4 gens × 16 flies = 64` full-brain embodied rollouts × `350 ms`):** `2.26 fly-s/s`, `best_score = 0.2808`.
+
+---
+
+## Phase F10: `flyvis` Visual System & Cross-Sex Connectome Comparison (2026-11-23)
+
+### 1. `flyvis 1.2.0` Pretrained Optic Lobe Verification (`alife connectome vision`, 45,669 cells, 65 types, RTX 5070 `cuda:0`, `7.87 s`)
+
+| Visual Stimulus (`30 frames × 64×64 -> 721 hex ommatidia`) | `T4a / T4b` Mean | `T5a / T5b` Mean | Horizontal Opponency | `T4 + T5` Temporal Std | Gate |
+|---|---:|---:|---:|---:|---|
+| Drifting grating leftward (`-X`) | `+0.2004 / -0.0734` | `+0.1030 / -0.0355` | **`+0.2061`** (`+0.147` corr) | `0.8707` | **PASS** (`optomotor_reverses_with_direction`) |
+| Drifting grating rightward (`+X`) | `+0.0052 / +0.3531` | `-0.1621 / -0.1428` | **`-0.1836`** (`-0.243` corr) | `0.9986` | **PASS** (clean sign reversal) |
+| Expanding dark looming disc | `-0.0271 / -0.0551` | `+0.1034 / +0.0072` | `+0.0621` | **`0.3221`** (**3.67×** vs static) | **PASS** (`looming_exceeds_static`) |
+| Static dark disc (control) | `+0.0728 / +0.0082` | `+0.0805 / -0.0107` | `+0.0779` | `0.0877` | Control |
+| Static uniform gray (control) | `+0.0791 / +0.0241` | `+0.0775 / +0.0147` | `+0.0589` (rest offset) | **`0.0045`** (190× lower) | **PASS** (`static_gray_quiescent`) |
+
+### 2. Cross-Sex Comparative Connectomics (`alife connectome compare-sex`, 300 ms/protocol, `9.92 s` GPU)
+
+- **Cell-type homology:** `4,419` shared across all 3 packs; `7,560` shared `flywire_783 × banc_888`; `7,445` shared `banc_888 × male_cns_v1`.
+- **Sexual dimorphism markers:** Male-only `pIP10 (2)`, `pMP2 (2)`, `dPR1 (2)`, `vPR6 (8)`, `vMS11 (14 vs 6 female)` in `male_cns_v1` vs female-only `pC1a–e (2 each = 10)` in both `flywire_783` and `banc_888`.
+
+| Dataset (Sex) | `sugar_150hz` → `MN9` (Shuf) | Bitter Supp. | `antennal_poke` → `DNg84` (Shuf) | `forward_dn` → VNC Leg MNs (Shuf) |
+|---|---:|---:|---:|---:|
+| **`flywire_783`** (Female brain, 138,639) | **`71.7 Hz`** (`0.0`) | **`100.0%`** | **`66.7 Hz`** (`0.0`) | N/A (brain-only) |
+| **`banc_888`** (Female CNS, 156,808) | **`10.0 Hz`** (`0.0`) | **`83.3%`** | **`75.6 Hz`** (`0.0`) | **`0.22 Hz`** (`0.00`) |
+| **`male_cns_v1`** (Male CNS, 165,122) | `0.0 Hz` (`0.0`) * | `0.0%` * | **`273.3 Hz`** (`0.0`) | **`3.03 Hz`** (`0.02`, **151×**) |
+
+*\* Honest cross-dataset caveat: MaleCNS `sugar_grn` taste annotation covers fewer proboscis-feeding GRNs than FlyWire/BANC, so `sugar_150hz` alone does not recruit `MN9` in `male_cns_v1` under uniform `LIFParams()`.*
+
+---
+
+## Phase F11: Two-Fly Innate Communication (`male_cns_v1` 165,122 ↔ `banc_888` 156,808 = 321,930 Cells, 2026-11-23)
+
+### 1. Stage ① — Brain-to-Brain Acoustic Courtship (`alife connectome social --stage dialogue`, `18.38 s`, RTX 5070, **5/5 PASS**)
+
+| Condition (`400 ms` lockstep) | Male `pIP10` | Male `dPR1` | Male Pulse (`ps1 MN`) | Male Sine (`hg1 MN`) | Female Auditory Relays | Female `pC1a-e` |
+|---|---:|---:|---:|---:|---:|---:|
+| **`intact_close` (`0.25 cm`)** | **`202.5 Hz`** | **`146.3 Hz`** | **`145.0 Hz`** | **`31.3 Hz`** | **`65.1 Hz`** | `0.0 Hz` * |
+| `acoustic_blocked` (muted) | `202.5 Hz` | `146.3 Hz` | `145.0 Hz` | `31.3 Hz` | **`0.0 Hz`** | `0.0 Hz` |
+| `far_distance_5cm` | `202.5 Hz` | `146.3 Hz` | `145.0 Hz` | `31.3 Hz` | **`0.0 Hz`** | `0.0 Hz` |
+| `male_shuffled` | `0.0 Hz` | `0.0 Hz` | `12.5 Hz` | `0.0 Hz` | **`1.48 Hz`** (44× drop) | `0.0 Hz` |
+| `female_shuffled` | `202.5 Hz` | `146.3 Hz` | `145.0 Hz` | `31.3 Hz` | **`0.10 Hz`** (651× drop) | `0.0 Hz` |
+
+### 2. Janelia Nested Song-Circuit Single-Cell-Type Silencing Screen (`male_cns_v1`, zero tuning)
+
+| Silenced Type (Cells) | Pulse `ps1 MN` (Supp %) | Sine `hg1 MN` (Supp %) | Female Auditory (Supp %) | Biological Correspondence (Lillvis et al. 2024) |
+|---|---:|---:|---:|---|
+| **`pIP10` (2)** | `35.0 Hz` (**+75.9%**) | `46.2 Hz` (-48.0%) | `14.3 Hz` (**+78.0%**) | Core descending pulse-song command |
+| **`dPR1` (2)** | `80.0 Hz` (**+44.8%**) | `7.5 Hz` (**+76.0%**) | `52.1 Hz` (+20.0%) | Premotor song relay |
+| **`vPR9_a` (4)** | `192.5 Hz` (-32.8%) | **`130.0 Hz` (-316.0%)** | `68.7 Hz` (-5.6%) | **GABAergic sine-song inhibitor (strong disinhibition!)** |
+| **`vPR9_c` (3)** | `197.5 Hz` (-36.2%) | **`152.5 Hz` (-388.0%)** | `68.4 Hz` (-5.1%) | **GABAergic sine-song inhibitor (strong disinhibition!)** |
+| `TN1a_g` (4) / `TN1a_i` (2) | `117.5 / 126.2 Hz` (+19% / +13%) | `43.8 / 30.0 Hz` | `61.4 / 60.9 Hz` | Modulatory song interneurons |
+| **`ps1 MN` (2)** | **`0.0 Hz` (+100.0%)** | `31.2 Hz` (0.0%) | **`3.5 Hz` (+94.6%)** | Pulse wing motor neuron |
+| **`hg1 MN` (2)** | `130.0 Hz` (+10.3%) | **`0.0 Hz` (+100.0%)** | `61.1 Hz` (+6.2%) | Sine wing motor neuron |
+
+### 3. Stage ② — Two-Fly Shared Arena (`alife connectome social --stage arena`, `1,200 ms`, `9.48 s`, **5/5 PASS**)
+
+| Arena Condition | Min Dist (`cm`) | Close Pursuit | Male Singing | Female Travel | Female Final Aud. |
+|---|---:|---:|---:|---:|---:|
+| **`intact_pair`** | **`0.250 cm`** | `311 ms` | **`1,153 ms`** | **`1.115 cm`** (slowed) | **`81.18 Hz`** |
+| `acoustic_blocked` | `0.374 cm` | `264 ms` | `1,153 ms` | **`1.380 cm`** (no pause) | `0.00 Hz` |
+| `vision_blocked` | **`1.598 cm`** (no chase) | `0 ms` | `0 ms` | `1.380 cm` | `0.00 Hz` |
+| `male_shuffled` | `0.362 cm` | `272 ms` | **`48 ms`** (24× drop) | `1.376 cm` | **`0.45 Hz`** (180× drop) |
+
+*\* Honest limitation (`connectome_plan.md §4 F11`): Female third-order receptivity neurons `pC1a–e` remain `0.0 Hz` under uniform resting LIF without mating-state neuromodulation; first- and second-order female auditory relays (`SAD052/53`, `CB1078`, `AVLP082/194_a`) respond robustly (`65.1–81.2 Hz` intact vs `0.10 Hz` shuffled).*

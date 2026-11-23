@@ -711,8 +711,8 @@ F12a は軽い版で作れるため、F8（実時間で動くハエ）より**�
 - [x] F7：本物の脳活動の記録データのダウンロード — 2026-11-23 承認・取得完了（Aimon et al. 2023 `Walk_anatomical_regions.zip` 176.09 MiB + DoOR 2.0 CSV、SHA-256 検証済み）
 - [x] F8：NeuroMechFly の体のデータ（Apache-2.0）の取得 — 2026-11-23 承認済み（体のデータのみ取得、FlyGym Python コードは導入しない）
 - [x] F8 レベル2：BANC または MaleCNS（脊髄に相当する部分を含む配線図）の取得 — 2026-11-23 両方承認・取得完了（BANC v888 417.5 MiB + MaleCNS v1.0 539.6 MiB、全6 `.feather`/`.csv` ファイル SHA-256 検証済み）
-- [ ] F9：MuJoCo Warp の導入
-- [ ] F10：flyvis の導入
+- [x] F9：MuJoCo Warp の導入 — 2026-11-23 承認・オプション extra `embodied-gpu`（`mujoco-warp 3.17.0` + `warp-lang 1.19.0`）として導入・RTX 5070 実測完了（64 匹純物理 `25.3 fly-s/s`、32 匹 FlyWire 全脳結合 `5.14 fly-s/s`、CPU 一致確認済み）
+- [x] F10：flyvis の導入 — 2026-11-23 承認・オプション extra `vision`（`flyvis 1.2.0`＋事前学習重み 10 MiB を `.alife/datasets/flyvis/` へ隔離配置）として導入・45,669 細胞視覚系（視運動反転＋接近影 3.67 倍）および雌雄 3 配線図比較を実測完了
 - [x] F11：MaleCNS の取得（2026-11-23 F8 レベル2 と同時に取得・SHA-256 検証完了）
 - [ ] S1〜S7：各生き物のデータの取得（S5 マウス視覚野は大きいので、取得する表と容量を事前に相談）
 - [ ] 各段階のコミット・push

@@ -825,13 +825,47 @@ class CupyBatchedLIFRunner:
         self.d_substep = cp.zeros(1, dtype=cp.int64)
         self._stream = cp.cuda.Stream(non_blocking=False)
         self._graphs: dict[int, Any] = {}
+        self._cached_idx: dict[tuple[int, int], Any] = {}
         cp.cuda.get_current_stream().synchronize()
+
+    def _device_indices(self, indices: np.ndarray[Any, np.dtype[np.int32]]) -> Any:
+        key = (id(indices), int(indices.size))
+        d_idx = self._cached_idx.get(key)
+        if d_idx is None:
+            d_idx = self.cp.asarray(np.ascontiguousarray(indices, dtype=np.int32))
+            self._cached_idx[key] = d_idx
+        return d_idx
 
     def set_silenced(self, silenced: np.ndarray[Any, Any]) -> None:
         """Synchronously upload (B, N) uint8 silencing mask before graph launches."""
         self._stream.synchronize()
         self.d_silenced.set(np.ascontiguousarray(silenced, dtype=np.uint8))
         self.cp.cuda.get_current_stream().synchronize()
+
+    def upload_stim_subset_batch(
+        self,
+        indices: np.ndarray[Any, np.dtype[np.int32]],
+        rates_b_k: np.ndarray[Any, np.dtype[np.float32]],
+    ) -> None:
+        """Minimal-transfer update of sensory rates (B, K) across all B parallel brains."""
+        if indices.size == 0:
+            return
+        d_idx = self._device_indices(indices)
+        d_val = self.cp.asarray(np.ascontiguousarray(rates_b_k, dtype=np.float32))
+        self.d_stim_rate_hz[:, d_idx] = d_val
+
+    def read_total_spikes_subset(
+        self, indices: np.ndarray[Any, np.dtype[np.int32]]
+    ) -> np.ndarray[Any, np.dtype[np.int32]]:
+        """Minimal-transfer read of cumulative spike counts (B, K) across all B brains."""
+        if indices.size == 0:
+            return np.zeros((self.batch_size, 0), dtype=np.int32)
+        self._stream.synchronize()
+        d_idx = self._device_indices(indices)
+        out: np.ndarray[Any, np.dtype[np.int32]] = self.cp.asnumpy(
+            self.d_total_spikes[:, d_idx]
+        ).astype(np.int32, copy=False)
+        return out
 
     def _launch_substep(self) -> None:
         b = self.batch_size

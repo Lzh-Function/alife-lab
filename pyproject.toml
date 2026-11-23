@@ -35,6 +35,12 @@ asal = [
 # for small creatures: 4096-way MJX batches on an RTX 5070 reach ~0.37 M steps/s, one CPU
 # core ~0.18 M steps/s (ADR 0030).
 embodied = ["mujoco>=3.17"]
+embodied-gpu = [
+    "mujoco-warp>=3.17.0",
+]
+vision = [
+    "flyvis>=1.2.0",
+]
 
 [project.scripts]
 alife = "alife_lab.cli:main"
@@ -93,7 +99,8 @@ plugins = ["pydantic.mypy"]
 # pyarrow ships without type information.
 module = ["pyarrow", "pyarrow.*", "brotli", "numba", "numba.*", "cupy", "cupy.*", "jax", "jax.*",
           "torch", "torch.*", "open_clip", "open_clip.*", "safetensors", "safetensors.*",
-          "huggingface_hub", "huggingface_hub.*", "mujoco", "mujoco.*"]
+          "huggingface_hub", "huggingface_hub.*", "mujoco", "mujoco.*",
+          "mujoco_warp", "mujoco_warp.*", "warp", "warp.*", "flyvis", "flyvis.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

@@ -1337,6 +1337,245 @@ def cmd_connectome(args: argparse.Namespace) -> int:
                         f"corr={v['tripod_corr']:+.2f} steps={v['tarsus_transitions']:3d}"
                     )
             return 0
+
+        if args.connectome_cmd == "embody-batch":
+            from alife_lab.connectome.embodied import make_synthetic_fly_embodied_pack
+            from alife_lab.connectome.embodied_batch import (
+                benchmark_batched_embodied,
+                run_batched_embodied_screen,
+                run_batched_embodied_search,
+            )
+
+            if args.dataset_id == "synthetic_fly_embodied":
+                pack = make_synthetic_fly_embodied_pack()
+            else:
+                pack = load_connectome_pack(
+                    args.dataset_id, ds_dir, verify_hashes=not args.no_verify
+                )
+            if args.mode == "benchmark":
+                sizes = tuple(int(s.strip()) for s in args.batch_sizes.split(",") if s.strip())
+                rep = benchmark_batched_embodied(
+                    pack,
+                    batch_sizes=sizes,
+                    ticks=args.ticks,
+                    seed=args.seed,
+                    physics_backend=args.physics,
+                    brain_backend=args.brain,
+                )
+                if args.json:
+                    _print_json(rep)
+                else:
+                    print(
+                        f"embody-batch benchmark {rep['dataset_id']} "
+                        f"physics={rep['physics_backend']} brain={rep['brain_backend']}"
+                    )
+                    for row in rep["scaling"]:
+                        print(
+                            f"  B={row['batch_size']:2d}: "
+                            f"{row['fly_seconds_per_wall_second']:6.2f} fly-s/s "
+                            f"({row['ms_per_batched_tick']:.2f} ms/tick: "
+                            f"brain={row['brain_ms_per_tick']:.2f} "
+                            f"body={row['body_ms_per_tick']:.2f}) "
+                            f"vram={row['brain_gpu_mib']:.1f}MiB feed={row['mean_feeding_ms']}ms"
+                        )
+                    ck = rep["cpu_vs_warp_check"]
+                    print(
+                        f"  cpu vs warp: feed={ck['cpu_feeding_ms']} vs {ck['warp_feeding_ms']}ms "
+                        f"(diff={ck['feeding_ms_diff']}ms) dist_diff={ck['distance_cm_diff']}cm"
+                    )
+                return 0
+
+            if args.mode == "search":
+                rep = run_batched_embodied_search(
+                    pack,
+                    generations=args.generations,
+                    pop_size=args.batch_size,
+                    ticks=args.ticks,
+                    seed=args.seed,
+                    physics_backend=args.physics,
+                    brain_backend=args.brain,
+                )
+                if args.json:
+                    _print_json(rep)
+                else:
+                    print(
+                        f"embody-batch search {rep['dataset_id']} "
+                        f"physics={rep['physics_backend']} brain={rep['brain_backend']} "
+                        f"{rep['fly_seconds_per_wall_second']:.2f} fly-s/s "
+                        f"best_score={rep['best_score']} params={rep['best_params']}"
+                    )
+                return 0
+
+            seeds = tuple(int(s.strip()) for s in args.seeds.split(",") if s.strip())
+            cts = [c.strip() for c in args.cell_types.split(",") if c.strip()]
+            if not cts:
+                cts = (
+                    ["IN_sugar", "CB0701", "IN_groom"]
+                    if args.dataset_id == "synthetic_fly_embodied"
+                    else ["CB0701", "DNg84", "DNp09", "G2N_1"]
+                )
+            rep = run_batched_embodied_screen(
+                pack,
+                cell_types=cts,
+                seeds=seeds,
+                ticks=args.ticks,
+                scene=args.scene,
+                batch_size=args.batch_size,
+                physics_backend=args.physics,
+                brain_backend=args.brain,
+                verify_top_cpu=not args.no_cpu_verify,
+            )
+            if args.json:
+                _print_json(rep)
+            else:
+                print(
+                    f"embody-batch screen {rep['dataset_id']} scene={rep['scene']} "
+                    f"physics={rep['physics_backend']} brain={rep['brain_backend']} "
+                    f"evals={rep['total_evaluations']} wall={rep['wall_seconds']:.2f}s "
+                    f"({rep['fly_seconds_per_wall_second']:.2f} fly-s/s)"
+                )
+                print(
+                    f"  intact={rep['baseline']['mean_ms']:.1f}ms "
+                    f"shuffled={rep['shuffled_control']['mean_ms']:.1f}ms"
+                )
+                for r in rep["results"]:
+                    print(
+                        f"  {r['cell_type']:12s} ({r['cell_count']:3d} cells): "
+                        f"{r['mean_ms']:5.1f}ms (supp={r['suppression_pct']:+.1f}% "
+                        f"p_holm={r.get('p_value_holm')})"
+                    )
+                if rep["cpu_confirmation"]:
+                    print(f"  cpu_confirm: {rep['cpu_confirmation']}")
+            return 0
+
+        if args.connectome_cmd == "vision":
+            from alife_lab.connectome.vision_flyvis import (
+                flyvis_available,
+                run_flyvis_visual_assay,
+                run_synthetic_visual_assay,
+            )
+
+            if args.synthetic or not flyvis_available(ds_dir):
+                rep = run_synthetic_visual_assay(n_frames=args.frames)
+            else:
+                rep = run_flyvis_visual_assay(ds_dir, model_id=args.model_id, n_frames=args.frames)
+            if args.json:
+                _print_json(rep)
+            else:
+                print(
+                    f"vision {rep['backend']} cells={rep['num_cells']:,} "
+                    f"types={rep['unique_cell_types']} wall={rep['wall_seconds']:.2f}s "
+                    f"all_checks_passed={rep['all_checks_passed']}"
+                )
+                for ck, ok in rep["checks"].items():
+                    print(f"  [{'PASS' if ok else 'FAIL'}] {ck}")
+                for sk, sv in rep["stimuli"].items():
+                    print(f"  {sk:15s}: {sv}")
+            return 0 if rep["all_checks_passed"] else 1
+
+        if args.connectome_cmd == "compare-sex":
+            from alife_lab.connectome.embodied import (
+                make_synthetic_cns_embodied_pack,
+                make_synthetic_fly_embodied_pack,
+            )
+            from alife_lab.connectome.sex_compare import compare_sex_connectomes
+
+            ids = [s.strip() for s in args.datasets.split(",") if s.strip()]
+            packs = {}
+            for did in ids:
+                if did == "synthetic_fly_embodied":
+                    packs[did] = make_synthetic_fly_embodied_pack()
+                elif did == "synthetic_cns_embodied":
+                    packs[did] = make_synthetic_cns_embodied_pack()
+                else:
+                    packs[did] = load_connectome_pack(did, ds_dir, verify_hashes=not args.no_verify)
+            rep = compare_sex_connectomes(
+                packs, backend=args.backend, seed=args.seed, ticks=args.ticks
+            )
+            if args.json:
+                _print_json(rep)
+            else:
+                print(
+                    f"compare-sex datasets={rep['datasets']} "
+                    f"shared_all={rep['shared_cell_types_all']:,} "
+                    f"wall={rep['wall_seconds']:.2f}s"
+                )
+                print(f"  pairwise_shared: {rep['pairwise_shared_cell_types']}")
+                for dname in rep["datasets"]:
+                    an = rep["anatomy"][dname]
+                    ph = rep["physiology"][dname]
+                    ref = ph["reference"]
+                    print(
+                        f"  {dname:12s} ({an['num_cells']:>7,} cells, "
+                        f"types={an['unique_cell_types']:>5,}): "
+                        f"sugar_mn9={ref['sugar_150hz']['mn9_hz']:5.1f}Hz "
+                        f"(bitter_supp={ph['bitter_suppression_pct']:5.1f}%) "
+                        f"groom_dng84={ref['antennal_poke_180hz']['dng84_hz']:5.1f}Hz "
+                        f"fwd_vnc_mn={ref['forward_dn_150hz']['vnc_leg_mn_hz']:5.2f}Hz"
+                    )
+            return 0
+
+        if args.connectome_cmd == "social":
+            from alife_lab.connectome.dyadic_fly import (
+                make_synthetic_female_auditory_pack,
+                make_synthetic_male_song_pack,
+                run_f11_song_dialogue,
+                run_f11_two_fly_arena,
+            )
+
+            m_pack = (
+                make_synthetic_male_song_pack()
+                if args.male == "synthetic_male_song"
+                else load_connectome_pack(args.male, ds_dir, verify_hashes=not args.no_verify)
+            )
+            f_pack = (
+                make_synthetic_female_auditory_pack()
+                if args.female == "synthetic_female_auditory"
+                else load_connectome_pack(args.female, ds_dir, verify_hashes=not args.no_verify)
+            )
+            if args.stage == "dialogue":
+                rep = run_f11_song_dialogue(
+                    m_pack,
+                    f_pack,
+                    backend=args.backend,
+                    seed=args.seed,
+                    ticks=args.ticks,
+                    run_janelia_ablations=not args.no_ablations,
+                )
+            else:
+                rep = run_f11_two_fly_arena(
+                    m_pack,
+                    f_pack,
+                    backend=args.backend,
+                    seed=args.seed,
+                    ticks=args.ticks,
+                )
+            if args.json:
+                _print_json(rep)
+            else:
+                print(
+                    f"social {rep['stage']} male={rep['male_dataset']} "
+                    f"female={rep['female_dataset']} total_cells={rep['total_cells']:,} "
+                    f"backend={rep['backend']} wall={rep['wall_seconds']:.2f}s "
+                    f"all_checks_passed={rep['all_checks_passed']}"
+                )
+                for ck, ok in rep["checks"].items():
+                    print(f"  [{'PASS' if ok else 'FAIL'}] {ck}")
+                for sn, sv in rep["scenes"].items():
+                    print(f"  {sn:18s}: {sv}")
+                if rep.get("janelia_song_ablations"):
+                    print("  Janelia song-circuit silencing screen:")
+                    for ab in rep["janelia_song_ablations"]:
+                        print(
+                            f"    -{ab['silenced_cell_type']:8s} ({ab['cell_count']:2d} cells): "
+                            f"pulse={ab['male_pulse_ps1_hz']:5.1f}Hz "
+                            f"({ab['pulse_suppression_pct']:+5.1f}%) "
+                            f"sine={ab['male_sine_hg1_hz']:5.1f}Hz "
+                            f"({ab['sine_suppression_pct']:+5.1f}%) "
+                            f"female_aud={ab['female_auditory_relay_hz']:5.1f}Hz "
+                            f"({ab['female_aud_suppression_pct']:+5.1f}%)"
+                        )
+            return 0 if rep["all_checks_passed"] else 1
     except (DatasetError, ValueError, FileNotFoundError) as exc:
         print(f"connectome error: {exc}", file=sys.stderr)
         return 1
@@ -1629,6 +1868,62 @@ def build_parser() -> argparse.ArgumentParser:
     clearn.add_argument("--no-shuffled-cmaes", action="store_true")
     clearn.add_argument("--no-verify", action="store_true")
     clearn.add_argument("--json", action="store_true")
+
+    cbat = csub.add_parser(
+        "embody-batch",
+        help="run F9 parallel multi-fly GPU Warp + batched LIF benchmark, screen, or search",
+    )
+    cbat.add_argument("dataset_id", choices=["flywire_783", "synthetic_fly_embodied"])
+    cbat.add_argument("--mode", choices=["screen", "benchmark", "search"], default="screen")
+    cbat.add_argument(
+        "--scene", choices=["sugar_feeding", "antennal_grooming"], default="sugar_feeding"
+    )
+    cbat.add_argument("--cell-types", default="")
+    cbat.add_argument("--seeds", default="1,2,3,4")
+    cbat.add_argument("--seed", type=int, default=1)
+    cbat.add_argument("--ticks", type=int, default=250)
+    cbat.add_argument("--batch-size", type=int, default=16)
+    cbat.add_argument("--batch-sizes", default="1,8,16,32")
+    cbat.add_argument("--generations", type=int, default=4)
+    cbat.add_argument("--physics", choices=["auto", "warp", "cpu"], default="auto")
+    cbat.add_argument("--brain", choices=["auto", "cupy", "numpy"], default="auto")
+    cbat.add_argument("--no-cpu-verify", action="store_true")
+    cbat.add_argument("--no-verify", action="store_true")
+    cbat.add_argument("--json", action="store_true")
+
+    cvis = csub.add_parser(
+        "vision",
+        help="run F10-A flyvis optic-lobe optomotor & looming assay (or offline synthetic HR)",
+    )
+    cvis.add_argument("--model-id", default="000")
+    cvis.add_argument("--frames", type=int, default=30)
+    cvis.add_argument("--synthetic", action="store_true")
+    cvis.add_argument("--json", action="store_true")
+
+    csex = csub.add_parser(
+        "compare-sex",
+        help="run F10-B cross-sex connectome anatomy & identical-stimulus physiology comparison",
+    )
+    csex.add_argument("--datasets", default="flywire_783,banc_888,male_cns_v1")
+    csex.add_argument("--backend", choices=["auto", "numpy", "cupy"], default="auto")
+    csex.add_argument("--seed", type=int, default=1)
+    csex.add_argument("--ticks", type=int, default=300)
+    csex.add_argument("--no-verify", action="store_true")
+    csex.add_argument("--json", action="store_true")
+
+    csoc = csub.add_parser(
+        "social",
+        help="run F11 two-fly communication (male courtship song <-> female auditory & pursuit)",
+    )
+    csoc.add_argument("--stage", choices=["dialogue", "arena"], default="dialogue")
+    csoc.add_argument("--male", default="male_cns_v1")
+    csoc.add_argument("--female", default="banc_888")
+    csoc.add_argument("--backend", choices=["auto", "numpy", "cupy"], default="auto")
+    csoc.add_argument("--seed", type=int, default=1)
+    csoc.add_argument("--ticks", type=int, default=400)
+    csoc.add_argument("--no-ablations", action="store_true")
+    csoc.add_argument("--no-verify", action="store_true")
+    csoc.add_argument("--json", action="store_true")
 
     p.set_defaults(func=cmd_connectome)
     return parser
