@@ -1,0 +1,8 @@
+preset:
+  id: fly_embodied_malecns_vnc
+  scenario: fly_embodied_malecns_vnc.yaml
+  title_key: preset.fly_embodied_malecns_vnc.title
+  description_key: preset.fly_embodied_malecns_vnc.description
+  overrides: {}
+  expected_observation: 'Full 165,122-neuron FlyEM Male CNS v1.0 (124M synapses) male Brain + VNC connectome directly driving 18 MuJoCo leg joints via 36 biological leg motor neuron pools + proprioceptive feedback (Level 2: NO hand-crafted CPG).'
+  negative_control: set wiring to shuffled_control to verify VNC motor collapse

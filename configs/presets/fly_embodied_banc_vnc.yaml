@@ -1,0 +1,8 @@
+preset:
+  id: fly_embodied_banc_vnc
+  scenario: fly_embodied_banc_vnc.yaml
+  title_key: preset.fly_embodied_banc_vnc.title
+  description_key: preset.fly_embodied_banc_vnc.description
+  overrides: {}
+  expected_observation: 'Full 156,808-neuron BANC v888 female Brain + Ventral Nerve Cord (VNC) connectome directly driving all 18 MuJoCo leg joints via 36 biological leg motor neuron pools + proprioceptive feedback (Level 2: NO hand-crafted CPG).'
+  negative_control: preset fly_embodied_banc_vnc_shuffled (degree-preserving shuffled CNS wiring)

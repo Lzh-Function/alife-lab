@@ -2014,7 +2014,14 @@ class ConnectomeTaskExperiment(_Frozen):
 # Embodied Drosophila Brain <-> Body (F8 Level 1)
 # --------------------------------------------------------------------------- #
 
-EmbodiedFlyDatasetId = Literal["flywire_783", "synthetic_fly_embodied"]
+EmbodiedFlyDatasetId = Literal[
+    "flywire_783",
+    "banc_888",
+    "male_cns_v1",
+    "synthetic_fly_embodied",
+    "synthetic_cns_embodied",
+]
+EmbodiedControlMode = Literal["level1_cpg", "level2_vnc", "level2_vnc_tuned"]
 EmbodiedFoodKind = Literal["sugar", "bitter"]
 
 
@@ -2035,7 +2042,14 @@ class EmbodiedArenaSpec(_Frozen):
 class FlyEmbodiedDynamics(_Frozen):
     clock_unit: Literal["tick"] = "tick"
     numeric_policy: Literal["float32_lif_float64_mujoco"] = "float32_lif_float64_mujoco"
+    control_mode: EmbodiedControlMode = "level1_cpg"
     explore_drive_hz: Annotated[float, Field(ge=0.0, le=300.0)] = 110.0
+    vnc_synapse_scale: Annotated[float, Field(gt=0.05, le=10.0)] = 1.0
+    vnc_proprio_gain_hz: Annotated[float, Field(ge=0.0, le=300.0)] = 95.0
+    vnc_mn_norm_hz: Annotated[float, Field(gt=1.0, le=300.0)] = 30.0
+    vnc_coxa_gain: Annotated[float, Field(ge=0.0, le=2.0)] = 0.45
+    vnc_femur_gain: Annotated[float, Field(ge=0.0, le=2.0)] = 0.55
+    vnc_tibia_gain: Annotated[float, Field(ge=0.0, le=2.0)] = 0.50
 
 
 FlyEmbodiedMetric = Literal[
@@ -2047,6 +2061,8 @@ FlyEmbodiedMetric = Literal[
     "feeding_ms",
     "grooming_ms",
     "realtime_factor",
+    "vnc_mn_mean_hz",
+    "vnc_tripod_alternation",
 ]
 
 
@@ -2060,6 +2076,8 @@ class FlyEmbodiedObservationSpec(_Frozen):
         "feeding_ms",
         "grooming_ms",
         "realtime_factor",
+        "vnc_mn_mean_hz",
+        "vnc_tripod_alternation",
     )
 
 

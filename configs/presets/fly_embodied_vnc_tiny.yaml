@@ -1,0 +1,8 @@
+preset:
+  id: fly_embodied_vnc_tiny
+  scenario: fly_embodied_vnc_tiny.yaml
+  title_key: preset.fly_embodied_vnc_tiny.title
+  description_key: preset.fly_embodied_vnc_tiny.description
+  overrides: {}
+  expected_observation: 'Lightweight 72-neuron synthetic Brain + VNC spiking CNS circuit (CPU-only CI & offline demo): DNp09 excites mutually inhibitory VNC premotor half-centers driving 36 antagonist leg MNs directly with proprioceptive feedback (NO hand-crafted CPG).'
+  negative_control: set wiring to shuffled_control to break VNC half-center alternation

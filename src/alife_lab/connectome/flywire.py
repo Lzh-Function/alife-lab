@@ -703,9 +703,17 @@ def load_connectome_pack(
     *,
     verify_hashes: bool = True,
 ) -> ConnectomePack:
-    """Dispatch loader by dataset_id (extensible for S1..S7 species packs)."""
+    """Dispatch loader by dataset_id (extensible for whole-CNS and S1..S7 species packs)."""
     if dataset_id == "flywire_783":
         return load_flywire_783(datasets_dir, verify_hashes=verify_hashes)
+    if dataset_id == "banc_888":
+        from alife_lab.connectome.cns_packs import load_banc_888
+
+        return load_banc_888(datasets_dir, verify_hashes=verify_hashes)
+    if dataset_id == "male_cns_v1":
+        from alife_lab.connectome.cns_packs import load_male_cns_v1
+
+        return load_male_cns_v1(datasets_dir, verify_hashes=verify_hashes)
     raise DatasetError(f"no loader implemented for dataset {dataset_id!r}")
 
 

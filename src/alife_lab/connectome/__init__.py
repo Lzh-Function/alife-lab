@@ -20,8 +20,10 @@ from alife_lab.connectome.lif import (
     step_tick_cpu,
 )
 from alife_lab.connectome.registry import (
+    BANC_888_SPEC,
     DATASETS,
     FLYWIRE_783_SPEC,
+    MALE_CNS_V1_SPEC,
     DatasetError,
     DatasetFileSpec,
     DatasetSpec,
@@ -64,11 +66,13 @@ from alife_lab.connectome.schema import (
 )
 
 __all__ = [
+    "BANC_888_SPEC",
     "CELL_MODEL_NAMES",
     "CELL_ROLE_NAMES",
     "DATASETS",
     "FLYWIRE_783_REFERENCE",
     "FLYWIRE_783_SPEC",
+    "MALE_CNS_V1_SPEC",
     "MODEL_GRADED",
     "MODEL_OTHER",
     "MODEL_SPIKING_LIF",

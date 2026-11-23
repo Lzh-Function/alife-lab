@@ -1189,6 +1189,107 @@ def cmd_connectome(args: argparse.Namespace) -> int:
                         f"xfer={tm['transfer_ms']:.3f} ms)"
                     )
             return 0 if rep["all_checks_passed"] else 1
+
+        if args.connectome_cmd == "embody-l2":
+            from alife_lab.connectome.embodied import (
+                make_synthetic_cns_embodied_pack,
+                run_embodied_level2_verification,
+            )
+
+            if args.dataset_id == "synthetic_cns_embodied":
+                pack = make_synthetic_cns_embodied_pack()
+            else:
+                pack = load_connectome_pack(
+                    args.dataset_id, ds_dir, verify_hashes=not args.no_verify
+                )
+            backend = args.backend
+            if backend == "auto":
+                from alife_lab.connectome.lif_cupy import available as cupy_ok
+
+                backend = "cupy" if (pack.cells.num_cells > 5000 and cupy_ok()) else "numpy"
+            rep = run_embodied_level2_verification(
+                pack,
+                backend=backend,
+                seed=args.seed,
+                ticks_per_scene=args.ticks,
+                control_mode=args.mode,
+                vnc_synapse_scale=args.synapse_scale,
+                vnc_proprio_gain_hz=args.proprio_gain,
+                datasets_dir=ds_dir,
+            )
+            if args.json:
+                _print_json(rep)
+            else:
+                print(
+                    f"embody-l2 {rep['dataset_id']} mode={rep['control_mode']} "
+                    f"cells={rep['num_cells']:,} backend={rep['backend']} "
+                    f"wall={rep['wall_seconds']:.2f}s all_checks_passed={rep['all_checks_passed']}"
+                )
+                print(f"  framing: {rep['framing_note']}")
+                for ck, ok in rep["checks"].items():
+                    print(f"  [{'PASS' if ok else 'FAIL'}] {ck}")
+                for sname, sc in rep["scenes"].items():
+                    tm = sc["timing_ms"]
+                    print(
+                        f"  {sname:18s}: dist={sc['distance_cm']:.3f}cm "
+                        f"mn={sc['vnc_mn_mean_hz']:5.1f}Hz (peak {sc['vnc_mn_peak_hz']:5.1f}Hz) "
+                        f"alt={sc['vnc_tripod_alternation_mean']:.3f} "
+                        f"steps={sc['tarsus_contact_transitions']:3d} "
+                        f"rtf={tm['realtime_factor']:.2f}x "
+                        f"(brain={tm['brain_ms']:.3f} body={tm['body_ms']:.3f} "
+                        f"xfer={tm['transfer_ms']:.3f} ms)"
+                    )
+            return 0 if rep["all_checks_passed"] else 1
+
+        if args.connectome_cmd == "tune-vnc":
+            from alife_lab.connectome.embodied import (
+                make_synthetic_cns_embodied_pack,
+                tune_vnc_locomotion,
+            )
+
+            if args.dataset_id == "synthetic_cns_embodied":
+                pack = make_synthetic_cns_embodied_pack()
+            else:
+                pack = load_connectome_pack(
+                    args.dataset_id, ds_dir, verify_hashes=not args.no_verify
+                )
+            backend = args.backend
+            if backend == "auto":
+                from alife_lab.connectome.lif_cupy import available as cupy_ok
+
+                backend = "cupy" if (pack.cells.num_cells > 5000 and cupy_ok()) else "numpy"
+            rep = tune_vnc_locomotion(
+                pack,
+                backend=backend,
+                seed=args.seed,
+                ticks_per_eval=args.ticks,
+                datasets_dir=ds_dir,
+            )
+            if args.json:
+                _print_json(rep)
+            else:
+                b0 = rep["baseline_untuned"]
+                bi = rep["best_intact"]
+                bs = rep["shuffled_at_best"]
+                print(
+                    f"tune-vnc {rep['dataset_id']} backend={rep['backend']} "
+                    f"wall={rep['wall_seconds']:.2f}s"
+                )
+                print(
+                    f"  untuned : syn={b0['vnc_synapse_scale']}x dist={b0['distance_cm']:.3f}cm "
+                    f"mn={b0['vnc_mn_mean_hz']:.1f}Hz alt={b0['vnc_tripod_alternation']:.3f}"
+                )
+                print(
+                    f"  best    : syn={bi['vnc_synapse_scale']}x "
+                    f"prop={bi['vnc_proprio_gain_hz']}Hz "
+                    f"dist={bi['distance_cm']:.3f}cm mn={bi['vnc_mn_mean_hz']:.1f}Hz "
+                    f"alt={bi['vnc_tripod_alternation']:.3f} rtf={bi['realtime_factor']:.2f}x"
+                )
+                print(
+                    f"  shuffled: dist={bs['distance_cm']:.3f}cm mn={bs['vnc_mn_mean_hz']:.1f}Hz "
+                    f"alt={bs['vnc_tripod_alternation']:.3f}"
+                )
+            return 0
     except (DatasetError, ValueError, FileNotFoundError) as exc:
         print(f"connectome error: {exc}", file=sys.stderr)
         return 1
@@ -1440,6 +1541,31 @@ def build_parser() -> argparse.ArgumentParser:
     cemb.add_argument("--ticks", type=int, default=250)
     cemb.add_argument("--no-verify", action="store_true")
     cemb.add_argument("--json", action="store_true")
+
+    cemb2 = csub.add_parser(
+        "embody-l2",
+        help="run F8 Level 2 VNC direct-drive verification & negative controls (no CPG)",
+    )
+    cemb2.add_argument("dataset_id", choices=["banc_888", "male_cns_v1", "synthetic_cns_embodied"])
+    cemb2.add_argument("--mode", choices=["level2_vnc", "level2_vnc_tuned"], default="level2_vnc")
+    cemb2.add_argument("--synapse-scale", type=float, default=1.0)
+    cemb2.add_argument("--proprio-gain", type=float, default=95.0)
+    cemb2.add_argument("--backend", choices=["auto", "numpy", "cupy"], default="auto")
+    cemb2.add_argument("--seed", type=int, default=1)
+    cemb2.add_argument("--ticks", type=int, default=400)
+    cemb2.add_argument("--no-verify", action="store_true")
+    cemb2.add_argument("--json", action="store_true")
+
+    ctune = csub.add_parser(
+        "tune-vnc",
+        help="fixed-topology VNC synaptic/readout gain search vs shuffled-VNC control (F8 L2)",
+    )
+    ctune.add_argument("dataset_id", choices=["banc_888", "male_cns_v1", "synthetic_cns_embodied"])
+    ctune.add_argument("--backend", choices=["auto", "numpy", "cupy"], default="auto")
+    ctune.add_argument("--seed", type=int, default=1)
+    ctune.add_argument("--ticks", type=int, default=500)
+    ctune.add_argument("--no-verify", action="store_true")
+    ctune.add_argument("--json", action="store_true")
 
     p.set_defaults(func=cmd_connectome)
     return parser

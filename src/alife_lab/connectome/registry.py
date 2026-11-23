@@ -25,6 +25,7 @@ from alife_lab.core.hashing import canonical_json, sha256_file
 
 ALLOWED_SUFFIXES: tuple[str, ...] = (
     ".parquet",
+    ".feather",
     ".csv",
     ".tsv",
     ".csv.gz",
@@ -164,8 +165,98 @@ FLYWIRE_783_SPEC = DatasetSpec(
     ),
 )
 
+_BANC_BASE = (
+    "https://storage.googleapis.com/lee-lab_brain-and-nerve-cord-fly-connectome"
+    "/compiled_data/banc_888"
+)
+_MALECNS_BASE = "https://storage.googleapis.com/flyem-male-cns/v1.0/connectome-data/flat-connectome"
+
+BANC_888_SPEC = DatasetSpec(
+    dataset_id="banc_888",
+    species="drosophila_melanogaster_adult_female_cns",
+    version="v888",
+    citation=(
+        "Bates, Phelps, Kim, Yang, Tuthill, Lee et al. (2025/2026) "
+        "'Distributed control circuits across a brain-and-nerve-cord connectome' "
+        "(Harvard Dataverse DOI: 10.7910/DVN/7WTH1N)."
+    ),
+    licence_note=(
+        "Personal non-commercial research use (data not redistributed in Git). "
+        "BANC v888 public release: CC-BY 4.0."
+    ),
+    files=(
+        DatasetFileSpec(
+            filename="banc_888_meta.feather",
+            url=f"{_BANC_BASE}/banc_888_meta.feather",
+            sha256="60a7c2252841c9f05aef0803c84bc3be7802b211f6bd2a40cef123ee3ad6265f",
+            size_bytes=57_550_730,
+            source_label="BANC v888 GCS (Lee Lab)",
+            licence_note="CC-BY 4.0",
+        ),
+        DatasetFileSpec(
+            filename="banc_888_neurotransmitter_prediction_v2.csv",
+            url=f"{_BANC_BASE}/banc_888_neurotransmitter_prediction_v2.csv",
+            sha256="d941b62059f3bbd491619df72ce96651dba0a4b008d8f4ce62abd78e472ab29e",
+            size_bytes=21_037_063,
+            source_label="BANC v888 GCS (Lee Lab)",
+            licence_note="CC-BY 4.0",
+        ),
+        DatasetFileSpec(
+            filename="banc_888_edgelist_simple_v3.feather",
+            url=f"{_BANC_BASE}/banc_888_edgelist_simple_v3.feather",
+            sha256="8c296e946f3c69a8c7222f30ad75fa8a98eeb189124fec6df829c9125f4be64b",
+            size_bytes=359_161_658,
+            source_label="BANC v888 GCS (Lee Lab)",
+            licence_note="CC-BY 4.0",
+        ),
+    ),
+)
+
+MALE_CNS_V1_SPEC = DatasetSpec(
+    dataset_id="male_cns_v1",
+    species="drosophila_melanogaster_adult_male_cns",
+    version="v1.0",
+    citation=(
+        "Berg, Schlegel, Jefferis, Rubin, Jain et al. (2025) "
+        "'Connectome of the adult male Drosophila central nervous system' "
+        "(HHMI Janelia / University of Cambridge / Google Research, male-cns:v1.0)."
+    ),
+    licence_note=(
+        "Personal non-commercial research use (data not redistributed in Git). "
+        "FlyEM Male CNS v1.0 public release: CC-BY 4.0."
+    ),
+    files=(
+        DatasetFileSpec(
+            filename="body-annotations-male-cns-v1.0-minconf-0.5.feather",
+            url=f"{_MALECNS_BASE}/body-annotations-male-cns-v1.0-minconf-0.5.feather",
+            sha256="2177e246113e4cfbf1e7772ec37c6da1955ff22e8063d0b1f833101f99a9a3b2",
+            size_bytes=14_483_314,
+            source_label="FlyEM Male CNS v1.0 GCS (Janelia)",
+            licence_note="CC-BY 4.0",
+        ),
+        DatasetFileSpec(
+            filename="body-neurotransmitters-male-cns-v1.0.feather",
+            url=f"{_MALECNS_BASE}/body-neurotransmitters-male-cns-v1.0.feather",
+            sha256="95c9289220663abeb3409f3ad9e5a7f8a53f8093f5139d15502cd08da8879621",
+            size_bytes=43_282_834,
+            source_label="FlyEM Male CNS v1.0 GCS (Janelia)",
+            licence_note="CC-BY 4.0",
+        ),
+        DatasetFileSpec(
+            filename="connectome-weights-male-cns-v1.0-minconf-0.5-traced-only.feather",
+            url=f"{_MALECNS_BASE}/connectome-weights-male-cns-v1.0-minconf-0.5-traced-only.feather",
+            sha256="9b3beab17bad5f618be3f2c02d3139a8d07b822565919c013f1e5506d93e604b",
+            size_bytes=508_025_642,
+            source_label="FlyEM Male CNS v1.0 GCS (Janelia)",
+            licence_note="CC-BY 4.0",
+        ),
+    ),
+)
+
 DATASETS: dict[str, DatasetSpec] = {
     FLYWIRE_783_SPEC.dataset_id: FLYWIRE_783_SPEC,
+    BANC_888_SPEC.dataset_id: BANC_888_SPEC,
+    MALE_CNS_V1_SPEC.dataset_id: MALE_CNS_V1_SPEC,
 }
 
 

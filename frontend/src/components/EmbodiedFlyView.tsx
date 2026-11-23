@@ -277,6 +277,12 @@ interface EmbodiedHeader {
     realtime_factor: number;
   };
   mn9_silenced: boolean;
+  control_mode?: "level1_cpg" | "level2_vnc" | "level2_vnc_tuned";
+  has_vnc_ports?: boolean;
+  vnc_mn_mean_hz?: number;
+  vnc_tripod_alternation?: number;
+  proprio?: number[];
+  leg_mn_hz?: Record<string, Record<string, number>> | null;
   has_stl_meshes?: boolean;
   body_asset_source: string;
   level_note: string;
@@ -886,13 +892,29 @@ export const EmbodiedFlyView = forwardRef<EmbodiedFlyViewHandle, Props>(function
 
   return (
     <div data-testid={testId} style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%" }}>
-      {/* Honest Level 1 Banner */}
+      {/* Honest Level 1 / Level 2 VNC Banner */}
       <div
         data-testid="fly-level1-banner"
         className="notice small"
-        style={{ margin: 0, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}
+        style={{
+          margin: 0,
+          display: "flex",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "8px",
+          borderLeft:
+            hud?.control_mode && hud.control_mode !== "level1_cpg"
+              ? "3px solid #10b981"
+              : undefined,
+        }}
       >
-        <span>{t("fly.level1_banner")}</span>
+        <span>
+          {hud?.control_mode === "level2_vnc_tuned"
+            ? t("fly.level2_tuned_banner")
+            : hud?.control_mode === "level2_vnc"
+              ? t("fly.level2_banner")
+              : t("fly.level1_banner")}
+        </span>
         {tm && (
           <span className="mono" data-testid="fly-realtime-badge">
             {t("fly.realtime").replace("{rtf}", rtf.toFixed(2))}
@@ -1063,7 +1085,7 @@ export const EmbodiedFlyView = forwardRef<EmbodiedFlyViewHandle, Props>(function
               borderBottom: "1px solid #1e293b",
             }}
           >
-            <strong>{t("fly.pane.brain")}</strong>
+            <strong>{hud?.has_vnc_ports ? t("fly.pane.cns") : t("fly.pane.brain")}</strong>
             <span className="mono" style={{ opacity: 0.85 }}>
               {hud ? `${hud.num_cells.toLocaleString()} cells · ${hud.fired_count} spikes` : datasetId}
             </span>
@@ -1124,6 +1146,62 @@ export const EmbodiedFlyView = forwardRef<EmbodiedFlyViewHandle, Props>(function
           })}
         </div>
       </div>
+
+      {/* Phase F8 Level 2: Live 6-Leg x 6-Muscle VNC Motor Neuron & Proprioception Matrix */}
+      {hud?.has_vnc_ports && hud.leg_mn_hz && (
+        <div data-testid="fly-vnc-matrix" className="panel" style={{ margin: 0, padding: "10px 12px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "8px", marginBottom: "8px", fontSize: "0.85rem" }}>
+            <strong>{t("fly.vnc.title")}</strong>
+            <span className="small muted mono">
+              MN avg={(hud.vnc_mn_mean_hz ?? 0).toFixed(1)} Hz · Tripod alt={(hud.vnc_tripod_alternation ?? 0).toFixed(2)}
+            </span>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "8px" }}>
+            {(["LF", "LM", "LH", "RF", "RM", "RH"] as const).map((leg, li) => {
+              const row = hud.leg_mn_hz?.[leg] ?? {};
+              const prop = hud.proprio?.[li] ?? 0;
+              const channels: Array<[string, string, string]> = [
+                ["coxa_pro", "Cx+", "#38bdf8"],
+                ["coxa_ret", "Cx-", "#0284c7"],
+                ["fem_flex", "Fe+", "#34d399"],
+                ["fem_ext", "Fe-", "#059669"],
+                ["tib_ext", "Ti+", "#f59e0b"],
+                ["tib_flex", "Ti-", "#d97706"],
+              ];
+              return (
+                <div
+                  key={leg}
+                  style={{
+                    background: "rgba(15,23,42,0.55)",
+                    border: "1px solid #1e293b",
+                    borderRadius: "6px",
+                    padding: "6px 8px",
+                    fontSize: "0.75rem",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                    <strong className="mono">{leg}</strong>
+                    <span className="mono muted">prop {(prop * 100).toFixed(0)}%</span>
+                  </div>
+                  {channels.map(([ck, lbl, col]) => {
+                    const hz = row[ck] ?? 0;
+                    const pct = Math.min(100, (hz / 40) * 100);
+                    return (
+                      <div key={ck} style={{ display: "grid", gridTemplateColumns: "28px 1fr 38px", alignItems: "center", gap: "4px", marginBottom: "2px" }}>
+                        <span className="mono muted">{lbl}</span>
+                        <div style={{ height: "5px", borderRadius: "3px", background: "#1e293b", overflow: "hidden" }}>
+                          <div style={{ width: `${pct}%`, height: "100%", background: col }} />
+                        </div>
+                        <span className="mono" style={{ textAlign: "right" }}>{hz.toFixed(0)}Hz</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 });

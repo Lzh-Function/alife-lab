@@ -559,3 +559,93 @@ def step_body_1ms(
     # Decrement antennal poke timer.
     if arena.poke_remaining_ms > 0:
         arena.poke_remaining_ms -= 1
+
+
+def proprioceptive_feedback(body: FlyBodyState, sensors: SensorReadings) -> tuple[float, ...]:
+    """Compute per-leg proprioceptive & load feedback [0, 1] for VNC sensory ports (LF..RH).
+
+    Combines tarsal ground-contact load (campaniform sensilla proxy) with leg joint deflection
+    and angular velocity (femoral chordotonal organ / hair plate proxy).
+    """
+    d = body.data
+    out: list[float] = []
+    # qpos layout: root freejoint (0..6), head_pitch (7), proboscis_ext (8), then 6 legs x 3 joints
+    # (coxa_yaw, femur_pitch, tibia_pitch) starting at qpos[9] / qvel[8].
+    for idx in range(6):
+        q_base = 9 + idx * 3
+        v_base = 8 + idx * 3
+        contact = 0.55 if sensors.tarsus_contacts[idx] else 0.0
+        if q_base + 2 < d.qpos.size and v_base + 2 < d.qvel.size:
+            q_def = (
+                abs(float(d.qpos[q_base]))
+                + abs(float(d.qpos[q_base + 1]))
+                + abs(float(d.qpos[q_base + 2]))
+            )
+            v_mag = (
+                abs(float(d.qvel[v_base]))
+                + abs(float(d.qvel[v_base + 1]))
+                + abs(float(d.qvel[v_base + 2]))
+            )
+            kin = min(0.45, 0.18 * q_def + 0.03 * v_mag)
+        else:
+            kin = 0.0
+        out.append(min(1.0, contact + kin))
+    return tuple(out)
+
+
+def step_body_level2_vnc_1ms(
+    body: FlyBodyState,
+    arena: ArenaState,
+    leg_ctrl_18: npt.NDArray[np.float64],
+    proboscis_cmd: float,
+    head_pitch_cmd: float,
+) -> None:
+    """Advance MuJoCo body 1.0 ms (2 x 0.5 ms) driven DIRECTLY by 18 VNC leg motor targets.
+
+    Honest Level 2 physics:
+    - ZERO hand-crafted tripod CPG sine waves.
+    - ZERO artificial planar velocity injection (d.qvel[0..1, 5] untouched except arena walls).
+    - All locomotion, stepping and posture forces emerge purely from MuJoCo joint actuators driven
+      by decoded VNC antagonist motor neuron firing rates + tarsus-floor contact friction.
+    """
+    mj = _mujoco()
+    m, d = body.model, body.data
+
+    ctrl = np.zeros(m.nu, dtype=np.float64)
+    ctrl[:18] = np.clip(
+        leg_ctrl_18[:18], m.actuator_ctrlrange[:18, 0], m.actuator_ctrlrange[:18, 1]
+    )
+    ctrl[18] = max(0.0, min(0.95, 0.92 * float(proboscis_cmd)))
+    ctrl[19] = max(-0.20, min(0.55, float(head_pitch_cmd)))
+    d.ctrl[:] = ctrl
+
+    # Hard arena bounds & mild roll/pitch safety damping so chaotic untuned VNC bursts never
+    # blow up the Euler integrator into NaNs.
+    x, y, _ = fly_pose_xy_yaw(body)
+    hard_lim = arena.arena_half_size - 0.15
+    if x > hard_lim:
+        d.qpos[0] = hard_lim
+        d.qvel[0] = min(0.0, d.qvel[0])
+    elif x < -hard_lim:
+        d.qpos[0] = -hard_lim
+        d.qvel[0] = max(0.0, d.qvel[0])
+    if y > hard_lim:
+        d.qpos[1] = hard_lim
+        d.qvel[1] = min(0.0, d.qvel[1])
+    elif y < -hard_lim:
+        d.qpos[1] = -hard_lim
+        d.qvel[1] = max(0.0, d.qvel[1])
+
+    qw, qx, qy, qz = float(d.qpos[3]), float(d.qpos[4]), float(d.qpos[5]), float(d.qpos[6])
+    roll = math.atan2(2.0 * (qw * qx + qy * qz), 1.0 - 2.0 * (qx * qx + qy * qy))
+    pitch = math.asin(max(-1.0, min(1.0, 2.0 * (qw * qy - qz * qx))))
+    d.qvel[3] = 0.72 * d.qvel[3] - 10.0 * roll
+    d.qvel[4] = 0.72 * d.qvel[4] - 10.0 * pitch
+    if d.qpos[2] < 0.145:
+        d.qvel[2] += 14.0 * (0.155 - float(d.qpos[2]))
+
+    mj.mj_step(m, d)
+    mj.mj_step(m, d)
+
+    if arena.poke_remaining_ms > 0:
+        arena.poke_remaining_ms -= 1

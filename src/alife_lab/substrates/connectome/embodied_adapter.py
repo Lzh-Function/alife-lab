@@ -20,10 +20,12 @@ import numpy as np
 
 from alife_lab import API_CONTRACT_VERSION
 from alife_lab.connectome import ConnectomePack, load_connectome_pack
+from alife_lab.connectome.cns_packs import LEG_NAMES, MUSCLE_CHANNELS
 from alife_lab.connectome.embodied import (
     EMBODIED_LEVEL1_FRAMING,
     EmbodiedFlyWorld,
     make_embodied_world,
+    make_synthetic_cns_embodied_pack,
     make_synthetic_fly_embodied_pack,
     step_embodied_tick,
 )
@@ -58,6 +60,8 @@ def _get_pack(dataset_id: str) -> ConnectomePack:
         return cached
     if dataset_id == "synthetic_fly_embodied":
         pack = make_synthetic_fly_embodied_pack()
+    elif dataset_id == "synthetic_cns_embodied":
+        pack = make_synthetic_cns_embodied_pack()
     else:
         pack = load_connectome_pack(dataset_id, ds_dir, verify_hashes=True)
     _PACK_CACHE[key] = pack
@@ -89,6 +93,12 @@ _METRICS = (
        "every tick", 1, "never null"),
     _M("realtime_factor", "metric.realtime_factor", "x", "tick",
        "Measured closed-loop simulation speed relative to 1 ms wall time (1.0x = real time).",
+       "mean", "every tick", 1, "never null"),
+    _M("vnc_mn_mean_hz", "metric.vnc_mn_mean_hz", "Hz", "tick",
+       "Mean firing rate across all 36 biological VNC leg motor neuron pools (Level 2).",
+       "mean", "every tick", 1, "never null"),
+    _M("vnc_tripod_alternation", "metric.vnc_tripod_alternation", "norm", "tick",
+       "Tripod A {LF,RM,LH} vs Tripod B {RF,LM,RH} motor neuron alternation index [0, 1].",
        "mean", "every tick", 1, "never null"),
 )  # fmt: skip
 
@@ -151,6 +161,7 @@ class FlyEmbodiedAdapter:
         pack = _get_pack(exp.dataset_id)
         ds_dir = load_settings().resolved_datasets_dir
         foods = [FoodSpot(x=f.x, y=f.y, radius=f.radius, kind=f.kind) for f in exp.arena.foods]
+        dyn = exp.dynamics
         world = make_embodied_world(
             pack,
             wiring=exp.wiring,
@@ -158,7 +169,14 @@ class FlyEmbodiedAdapter:
             backend=self.backend,
             foods=foods,
             arena_half_size=exp.arena.half_size,
-            explore_drive_hz=exp.dynamics.explore_drive_hz,
+            explore_drive_hz=dyn.explore_drive_hz,
+            control_mode=dyn.control_mode,
+            vnc_synapse_scale=dyn.vnc_synapse_scale,
+            vnc_proprio_gain_hz=dyn.vnc_proprio_gain_hz,
+            vnc_mn_norm_hz=dyn.vnc_mn_norm_hz,
+            vnc_coxa_gain=dyn.vnc_coxa_gain,
+            vnc_femur_gain=dyn.vnc_femur_gain,
+            vnc_tibia_gain=dyn.vnc_tibia_gain,
             datasets_dir=ds_dir,
         )
         for port_id in exp.silenced_ports:
@@ -184,6 +202,8 @@ class FlyEmbodiedAdapter:
             "feeding_ms": float(state.total_feeding_ms),
             "grooming_ms": float(state.total_grooming_ms),
             "realtime_factor": float(state.timing.realtime_factor),
+            "vnc_mn_mean_hz": float(state.vnc_mn_mean_hz),
+            "vnc_tripod_alternation": float(state.last_vnc_tripod_alt),
         }
         return {k: v for k, v in out.items() if k in wanted}
 
@@ -259,9 +279,25 @@ class FlyEmbodiedAdapter:
                 "realtime_factor": state.timing.realtime_factor,
             },
             "mn9_silenced": mn9_silenced,
+            "control_mode": state.control_mode,
+            "has_vnc_ports": state.ports.has_vnc_ports,
+            "vnc_mn_mean_hz": round(state.vnc_mn_mean_hz, 2),
+            "vnc_tripod_alternation": round(state.last_vnc_tripod_alt, 3),
+            "proprio": [round(float(v), 3) for v in state.last_proprio],
+            "leg_mn_hz": (
+                {
+                    leg: {
+                        ch: round(float(state.leg_mn_rates[li, mi]), 1)
+                        for mi, ch in enumerate(MUSCLE_CHANNELS)
+                    }
+                    for li, leg in enumerate(LEG_NAMES)
+                }
+                if state.ports.has_vnc_ports
+                else None
+            ),
             "has_stl_meshes": bool(state.body.asset_info.get("installed", False)),
             "body_asset_source": state.body.asset_info.get("source", "procedural_fallback"),
-            "level_note": EMBODIED_LEVEL1_FRAMING,
+            "level_note": state.framing_note,
             "pos_xy": [round(x, 3), round(y, 3)],
         }
         return header, geom_bytes + fired_bytes
@@ -409,6 +445,7 @@ class FlyEmbodiedAdapter:
                 "total_spikes": lif.total_spikes.copy(),
                 "mj_state": self._mj_state_vec(state),
                 "stumble_lift": state.body.stumble_lift.copy(),
+                "leg_mn_rates": state.leg_mn_rates.copy(),
             },
             "meta": {
                 "serialize_version": SERIALIZE_VERSION,
@@ -467,6 +504,8 @@ class FlyEmbodiedAdapter:
         world.body.cpg_phase = float(meta["cpg_phase"])
         world.body.groom_phase = float(meta["groom_phase"])
         world.body.stumble_lift[...] = arrs["stumble_lift"]
+        if "leg_mn_rates" in arrs:
+            world.leg_mn_rates[...] = arrs["leg_mn_rates"]
 
         foods_raw = json.loads(meta["foods_json"])
         world.arena.foods = [

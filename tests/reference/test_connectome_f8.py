@@ -195,3 +195,69 @@ def test_render_body_poses_are_horizontal() -> None:
         # Row-major 3x3: mat[8] = R[2,2] (dorsal +Z aligned with world +Z), mat[0] = R[0,0]
         assert mat[8] > 0.90, f"{name} body frame tilted vertically: R22={mat[8]}"
         assert mat[0] > 0.85, f"{name} body frame unexpectedly rotated: R00={mat[0]}"
+
+
+def test_level2_synthetic_cns_pack_cpu_only() -> None:
+    """CPU-only verification of the 72-neuron synthetic Brain+VNC pack (36 leg MNs + 6 proprio)."""
+    from alife_lab.connectome.embodied import make_synthetic_cns_embodied_pack
+
+    pack = make_synthetic_cns_embodied_pack()
+    assert pack.cells.num_cells == 72
+    mn_ports = [k for k in pack.io_ports if k.startswith("mn_")]
+    pr_ports = [k for k in pack.io_ports if k.startswith("proprio_")]
+    assert len(mn_ports) == 36
+    assert len(pr_ports) == 6
+    ports = resolve_embodied_ports(pack)
+    assert ports.has_vnc_ports is True
+    assert len(ports.proprio_ports) == 6
+    assert len(ports.leg_mn_slices) == 36
+
+
+@needs_mujoco
+def test_level2_vnc_direct_drive_controls_and_checkpoint() -> None:
+    """Level 2 VNC direct drive (NO hand-crafted CPG): passes all 4 checks + bitwise checkpoint."""
+    from alife_lab.connectome.embodied import (
+        make_synthetic_cns_embodied_pack,
+        run_embodied_level2_verification,
+    )
+
+    pack = make_synthetic_cns_embodied_pack()
+    rep = run_embodied_level2_verification(pack, backend="numpy", seed=7, ticks_per_scene=250)
+    assert rep["all_checks_passed"] is True
+    assert rep["scenes"]["vnc_intact"]["vnc_mn_peak_hz"] >= 1.0
+
+    # Bitwise Brain+VNC+MuJoCo checkpoint round-trip on Level 2 preset
+    spec = load_experiment_spec(ROOT / "configs/scenarios/fly_embodied_vnc_tiny.yaml")
+    adapter = FlyEmbodiedAdapter()
+    s1 = adapter.initialize(spec)
+    for _ in range(40):
+        s1 = adapter.step(s1, spec)
+    payload = adapter.serialize_state(s1)
+    s2 = adapter.deserialize_state(payload, spec)
+    for _ in range(30):
+        s1 = adapter.step(s1, spec)
+        s2 = adapter.step(s2, spec)
+    dist = adapter.state_distance(s1, s2)
+    assert dist["exact_equal"] is True
+    assert dist["qpos_max_abs_diff"] == 0.0
+    assert dist["qvel_max_abs_diff"] == 0.0
+
+    hdr, _ = adapter.render(s1)
+    assert hdr["control_mode"] == "level2_vnc"
+    assert hdr["has_vnc_ports"] is True
+    assert hdr["leg_mn_hz"] is not None and len(hdr["leg_mn_hz"]) == 6
+
+
+@needs_mujoco
+def test_level2_rejects_brain_only_pack_and_cli_works(capsys: pytest.CaptureFixture[str]) -> None:
+    """Brain-only packs (without VNC leg MNs) must be rejected cleanly in Level 2 mode."""
+    from alife_lab.connectome.embodied import make_embodied_world
+
+    brain_only = make_synthetic_fly_embodied_pack()
+    with pytest.raises(ValueError, match="VNC"):
+        make_embodied_world(brain_only, control_mode="level2_vnc")
+
+    rc = cli_main(["connectome", "embody-l2", "synthetic_cns_embodied", "--ticks", "120", "--json"])
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["all_checks_passed"] is True

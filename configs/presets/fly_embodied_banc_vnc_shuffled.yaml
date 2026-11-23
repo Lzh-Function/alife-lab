@@ -1,0 +1,8 @@
+preset:
+  id: fly_embodied_banc_vnc_shuffled
+  scenario: fly_embodied_banc_vnc_shuffled.yaml
+  title_key: preset.fly_embodied_banc_vnc_shuffled.title
+  description_key: preset.fly_embodied_banc_vnc_shuffled.description
+  overrides: {}
+  expected_observation: 'Negative control for Level 2 BANC v888: degree-preserving shuffled Brain + VNC wiring collapses descending-to-leg motor neuron recruitment to near zero.'
+  negative_control: compare against intact preset fly_embodied_banc_vnc

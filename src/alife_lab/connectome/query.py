@@ -164,9 +164,19 @@ def get_connectome_index(dataset_id: str, datasets_dir: Path) -> ConnectomeIndex
 
         pack = make_synthetic_fly_embodied_pack()
         index = _build_index(dataset_id, pack.cells, pack.io_ports, pack.provenance)
+    elif dataset_id == "synthetic_cns_embodied":
+        from alife_lab.connectome.embodied import make_synthetic_cns_embodied_pack
+
+        pack = make_synthetic_cns_embodied_pack()
+        index = _build_index(dataset_id, pack.cells, pack.io_ports, pack.provenance)
     elif dataset_id == "flywire_783":
         cells, io_ports, prov = load_flywire_783_cells(datasets_dir, verify_hashes=False)
         index = _build_index(dataset_id, cells, io_ports, prov)
+    elif dataset_id in ("banc_888", "male_cns_v1"):
+        from alife_lab.connectome.flywire import load_connectome_pack
+
+        pack = load_connectome_pack(dataset_id, datasets_dir, verify_hashes=False)
+        index = _build_index(dataset_id, pack.cells, pack.io_ports, pack.provenance)
     else:
         raise DatasetError(f"unknown connectome dataset {dataset_id!r}")
 

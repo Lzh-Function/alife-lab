@@ -1,0 +1,35 @@
+schema_version: 1
+experiment:
+  name: fly_embodied_banc_vnc
+  mode: exploratory
+  substrate: fly_embodied
+  seed: 1
+  dataset_id: banc_888
+  wiring: reference
+  arena:
+    half_size: 6.0
+    foods:
+      - x: 1.35
+        y: 0.30
+        radius: 0.36
+        kind: sugar
+  dynamics:
+    clock_unit: tick
+    numeric_policy: float32_lif_float64_mujoco
+    control_mode: level2_vnc
+    explore_drive_hz: 140.0
+    vnc_synapse_scale: 1.0
+    vnc_proprio_gain_hz: 95.0
+    vnc_mn_norm_hz: 25.0
+  runner:
+    max_steps: 30000
+    checkpoint_interval: 15000
+  observations:
+    metrics:
+      - cmd_forward
+      - cmd_proboscis
+      - cmd_grooming
+      - distance_cm
+      - vnc_mn_mean_hz
+      - vnc_tripod_alternation
+      - realtime_factor

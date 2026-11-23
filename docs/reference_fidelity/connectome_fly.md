@@ -519,3 +519,46 @@ Command: `uv run alife connectome embody flywire_783 --no-verify` (RTX 5070 CUDA
 
 
 
+
+---
+
+## Phase F8 Level 2: Whole-CNS (Brain + Ventral Nerve Cord) Direct Leg Motor Control (2026-11-23)
+
+> **Honest framing:** Phase F8 Level 2 (`control_mode = "level2_vnc"` / `"level2_vnc_tuned"`)
+> removes **all** hand-crafted tripod CPG sine waves and **all** artificial planar velocity
+> injection. All 18 MuJoCo leg actuators are driven directly by 36 biological leg motor neuron
+> pools resolved from real adult *Drosophila* whole-CNS connectomes (`banc_888` female and
+> `male_cns_v1` male), with closed-loop 6-leg proprioceptive feedback into `proprio_{LF..RH}`.
+
+### 1. Real Whole-CNS Species Packs Verified (`cns_packs.py`, pure `.feather` / `.csv`, zero pickles)
+
+| Dataset | Sex / Scope | Proofread / Traced Cells | Directed Edges | Chemical Synapses | Exc / Inh Syn Ratio | Leg MN Pools | Proprio Ports | Cached Load | GPU VRAM (RTX 5070) |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| **`banc_888`** (Lee Lab / Bates et al., CC-BY 4.0) | Female Brain + VNC | **156,808** | 13,376,835 | 41,867,711 | 58.5% / 38.3% | **36 / 36** | **6 / 6** | 0.15 s | 118.1 MiB |
+| **`male_cns_v1`** (HHMI Janelia / Google, CC-BY 4.0) | Male Brain + VNC | **165,122** | 25,563,197 | 124,025,046 | 60.2% / 38.2% | **36 / 36** | **6 / 6** | 0.21 s | 211.9 MiB |
+| **`synthetic_cns_embodied`** (offline CPU CI) | Synthetic Brain + VNC | 72 | 126 | — | — | 36 / 36 | 6 / 6 | <0.01 s | CPU |
+
+### 2. Zero-Shot Level 2 VNC Verification (`alife connectome embody-l2`, 400 ms/scene, RTX 5070 + CPU MuJoCo)
+
+| Dataset / Arm | `vnc_mn_mean_hz` (Peak) | `vnc_tripod_alt` | Tarsus Transitions | Distance (400 ms) | Speed (RTF) | Checks |
+|---|---:|---:|---:|---:|---:|---|
+| **`banc_888` intact (closed-loop)** | **2.7 Hz** (5.7 Hz) | **0.300** | 40 | 0.008 cm | **2.18× RT** | **4/4 PASS** |
+| `banc_888` open-loop (`proprio=0`) | 0.9 Hz (3.2 Hz) | 0.449 | 38 | 0.003 cm | 2.03× RT | Proprioception 3× boosts VNC MNs |
+| `banc_888` **shuffled control** | **0.0 Hz** (0.2 Hz) | 0.080 | 36 | 0.001 cm | 1.89× RT | Complete collapse on shuffled wiring |
+| `banc_888` `DNp09` silenced | 1.7 Hz (3.7 Hz) | 0.289 | 40 | 0.005 cm | 2.06× RT | Descending drive confirmed |
+| **`male_cns_v1` intact (closed-loop)** | **13.4 Hz** (21.7 Hz) | 0.170 | 62 | **0.025 cm** | **1.52× RT** | **4/4 PASS** |
+| `male_cns_v1` open-loop (`proprio=0`) | 9.1 Hz (16.6 Hz) | 0.316 | 90 | 0.020 cm | 1.30× RT | Proprioception modulates VNC |
+| `male_cns_v1` **shuffled control** | **0.4 Hz** (1.8 Hz) | 0.523 | 36 | 0.011 cm | 1.43× RT | 33× collapse on shuffled wiring |
+| `male_cns_v1` `DNp09` silenced | 11.9 Hz (21.6 Hz) | 0.241 | 44 | 0.019 cm | 1.86× RT | Descending contribution measured |
+
+### 3. Fixed-Topology VNC Gain Search (`alife connectome tune-vnc`, 500 ms/eval, RTX 5070)
+
+| Dataset | Untuned (`syn=1.0×`) | Best Intact (Fixed Topology) | Shuffled Control at Best Params | Key Finding |
+|---|---|---|---|---|
+| **`banc_888`** | `dist=0.015 cm`, `mn=2.6 Hz`, `alt=0.300` | `syn=0.75×`, `prop=120 Hz`: `dist=0.019 cm`, `mn=1.3 Hz`, `alt=0.369`, `1.73× RT` | `dist=0.001 cm`, `mn=0.0 Hz`, `alt=0.022` | 19× higher displacement & 17× higher alternation than shuffled |
+| **`male_cns_v1`** | `dist=0.035 cm`, `mn=12.9 Hz`, `alt=0.161` | `syn=3.2×`, `prop=140 Hz`: `dist=0.082 cm`, `mn=37.4 Hz`, `1.48× RT` | `dist=0.056 cm`, **`mn=127.6 Hz`** (runaway burst) | Intact MaleCNS stays homeostatically regulated while shuffled enters seizure |
+
+### 4. Honest Scientific Caveats (Level 2)
+
+1. **No spontaneous sustained tripod locomotion under uniform-weight LIF:** Even though real `banc_888` and `male_cns_v1` VNC circuits run faster than real time (`1.52×–2.18× RT`), preserve descending-to-leg specificity (collapsing 17×–33× when shuffled), and respond to proprioceptive feedback, uniform single-parameter LIF (`w_syn_mv = 0.275 mV`, no heterogeneous per-cell-type weights, no pacemaker/plateau conductances, no tonic aminergic modulation) produces small stepping twitches (`0.008–0.082 cm` in 400–500 ms) rather than sustained `~2.2 cm/s` walking. This empirically confirms the hypothesis stated in `connectome_plan.md §8`.
+2. **Antennal grooming front-leg specificity in MaleCNS:** Stimulating `antennal_grooming_mechanosensory` at 180 Hz in `male_cns_v1` fired `DNg84 = 274.9 Hz` and recruited front-leg MNs (`LF = 39.4 Hz, RF = 30.9 Hz`) ~4.5× more strongly than hind-leg MNs (`LH = 8.8 Hz, RH = 6.6 Hz`) purely from biological wiring.
