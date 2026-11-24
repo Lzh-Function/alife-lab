@@ -4,12 +4,12 @@
 import type { Frame } from "./api";
 import { popcount } from "./api";
 
-export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network" | "nca_train" | "nca" | "pd_nca" | "protocell" | "agent_world" | "lenia_mc" | "creature" | "search" | "connectome" | "connectome_sysid" | "connectome_task" | "fly_embodied" | "fly_swarm" | "fly_world" | "cultural_world";
+export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network" | "nca_train" | "nca" | "pd_nca" | "protocell" | "agent_world" | "lenia_mc" | "creature" | "search" | "connectome" | "connectome_sysid" | "connectome_task" | "fly_embodied" | "fly_swarm" | "fly_world" | "cultural_world" | "worm_embodied";
 
 /** Substrates rendered as continuous particles (vs. grids). */
 export const PARTICLE_SUBSTRATES = new Set(["boids", "particle_life"]);
 /** Substrates rendered as a continuous scalar field (codec field_u8). */
-export const FIELD_SUBSTRATES = new Set(["lenia", "flow_lenia", "gray_scott", "physarum", "reaction_network", "nca_train", "nca", "pd_nca", "protocell", "agent_world", "lenia_mc", "search", "connectome_sysid", "connectome_task", "cultural_world"]);
+export const FIELD_SUBSTRATES = new Set(["lenia", "flow_lenia", "gray_scott", "physarum", "reaction_network", "nca_train", "nca", "pd_nca", "protocell", "agent_world", "lenia_mc", "search", "connectome_sysid", "connectome_task", "cultural_world", "worm_embodied"]);
 /** Non-spatial substrates whose display is a species x time image (rows = species). */
 export const ROW_DISPLAY_SUBSTRATES = new Set(["reaction_network"]);
 
@@ -193,6 +193,11 @@ export const TOOLS: Record<SubstrateId, ToolDescriptor> = {
     modes: ["off", "inspect", "add_resource"],
     radius: { min: 2, max: 16, step: 2, initial: 6 },
     noteKey: "lab.tool.cultural_world_note",
+  },
+  worm_embodied: {
+    modes: ["off", "inspect", "place_food", "place_repellent"],
+    radius: { min: 1, max: 3, step: 0.5, initial: 1.5 },
+    noteKey: "lab.tool.worm_embodied_note",
   },
 };
 
@@ -652,6 +657,21 @@ export const FORM_FIELDS: Record<SubstrateId, FormField[]> = {
     { path: "dynamics.technology.invention_prob", labelKey: "form.cultural_world.invention_prob", kind: "float", min: 0, max: 0.5, step: 0.005 },
     { path: "dynamics.controller.learning_rate", labelKey: "form.cultural_world.learning_rate", kind: "float", min: 0, max: 2, step: 0.01 },
     { path: "dynamics.controller.mutation_sigma", labelKey: "form.cultural_world.mutation_sigma", kind: "float", min: 0, max: 2, step: 0.01 },
+    ...RUNNER,
+  ],
+  worm_embodied: [
+    { path: "seed", labelKey: "form.seed", kind: "int", min: 0 },
+    {
+      path: "wiring",
+      labelKey: "form.connectome.wiring",
+      kind: "select",
+      options: [
+        { value: "reference", labelKey: "form.connectome.wiring.reference" },
+        { value: "shuffled_control", labelKey: "form.connectome.wiring.shuffled_control" },
+      ],
+    },
+    { path: "dynamics.explore_drive", labelKey: "form.worm_embodied.explore_drive", kind: "float", min: 0, max: 10, step: 0.25 },
+    { path: "arena.half_mm", labelKey: "form.worm_embodied.arena_half", kind: "float", min: 3, max: 12, step: 0.5 },
     ...RUNNER,
   ],
 };

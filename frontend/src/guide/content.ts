@@ -590,6 +590,29 @@ export const SUBSTRATE_GUIDE: Record<string, SubstrateGuide> = {
     canSay: "3層を分離し同一環境乱数と比較対照を置いた閉じた保存則の世界で、特定条件における文化伝達・死後保持・因果介入の効果や無効果を測定できた。",
     cannotSay: "「人間社会の文化進化一般を証明した」。本モデルは小さな有限DSL手順と局所観測範囲に基づく人工生命実験です。",
   },
+  worm_embodied: {
+    slug: "worm_embodied",
+    title: "線虫脳＋這う体（S1 `worm_embodied`：非発火電位＋ギャップ結合）",
+    category: "brain",
+    level: 2,
+    atlas: "S1",
+    oneLine: "発火しない連続膜電位（MODEL_GRADED）と双方向電気シナプス（ギャップ結合）を持つ線虫 302 細胞モデルを、抵抗力理論（RFT）の12節ボディへつないだ実験世界です。",
+    what:
+      "ハエ（LIF 発火モデル）とは違い、線虫の神経系は電位のなめらかな変化と電気シナプス（ギャップ結合）で運動指令を運びます。探索中は AVB 系がギャップ結合を介して DB/VB 運動神経を駆動し頭から尾へ波を伝えます。鼻先に触れたり忌避物質に近づくと ALM/ASH から AVA 系へ切り替わり、波の向きが逆転して後退回避します。",
+    watch: [
+      "12 節ボディのうねり（head->tail 波で前進、tail->head 波で後退）と下の 302 細胞電位帯。",
+      "同じ配線でも「ギャップ結合なし（no_gap_control）」にすると AVB から運動神経へ電流が届かず前進距離・波振幅が大きく低下します。",
+      "「配線シャッフル対照（shuffled_control）」では次数を保ったまま接続先を混ぜるため、背腹の交代抑制や回避切り替えが崩れます。",
+    ],
+    tryThis: [
+      "上部の「鼻先に触れる（poke_nose）」を押し、AVB から AVA へ優位が反転して後退するかを確かめる。",
+      "「ギャップ結合 ON/OFF 切替」を押し、電気シナプスを切った瞬間に推進力が落ちる因果効果を観察する。",
+      "誘引物質（緑）や忌避物質（赤）をクリックで寒天培地に置いて進路変化を見る。",
+    ],
+    controls: "「ギャップ結合なし対照」「配線シャッフル対照」と並べることで、302 細胞の特定配線と電気シナプスの両方が移動に必要であることを確かめられます。",
+    canSay: "非発火・ギャップ結合を統合した 302 細胞モデルと抵抗力理論の閉ループで、配線と電気結合を外すと前進・後退回避が崩れることを確認できた。",
+    cannotSay: "「実物の線虫の正確な筋骨格や全行動を再現した」。現在はオフライン標準配線と簡易物理を用いた Stage 2 探索モデルです。",
+  },
 };
 
 // 設定パラメータのやさしい説明。キーは "<世界>:<path>"、全世界共通は "*:<path>"。
@@ -689,6 +712,9 @@ export const PARAM_HELP: Record<string, string> = {
   "cultural_world:dynamics.technology.invention_prob": "1 tick ごとに新しい技能DSL手順を発明・改良し得る確率の上限です。",
   "cultural_world:dynamics.controller.learning_rate": "一生のうちの政策勾配学習（ΔW）の学習率です（遺伝には引き継がれません）。",
   "cultural_world:dynamics.controller.mutation_sigma": "子が遺伝する重み（W1/b1/W2/b2）に加わる突然変異の標準偏差です。",
+  "worm_embodied:wiring": "線虫 302 細胞の配線です。「実測の配線」は前進/後退コマンド〜VNC運動回路とギャップ結合を備え、「シャッフル（比較用）」は結合数を保ったまま配線先を入れ替えます。",
+  "worm_embodied:dynamics.explore_drive": "探索時に後部接触感覚・PVC/AVB 経路へ入るベースライン駆動の強さです。",
+  "worm_embodied:arena.half_mm": "寒天培地アリーナの半辺長（mm）です（6 mm なら 12 mm × 12 mm）。",
 };
 
 // 計測値のやさしい説明。キーは計測値ID、または "<世界>:<ID>"（世界ごとに意味が違う場合）。
@@ -802,6 +828,13 @@ export const METRIC_HELP: Record<string, string> = {
   social_learning_fraction: "技能の実行回数のうち、親や仲間から社会学習で受け継いだ技能が使われた割合です。",
   improvement_depth: "現在生きている個体が持つ技能のうち、他者の手順を改良して積み上げた世代深さの最大値です。",
   innovation_utility: "素材加工技能の1回あたり・素材1単位あたりの平均粗エネルギー獲得量です。",
+  distance_mm: "線虫ボディの累積移動距離（mm）です。",
+  forward_speed_mm_s: "頭部接線方向への瞬間推進速度（mm/秒。＋で前進、−で後退）です。",
+  body_wave_power: "体内 11 関節の曲げ角の二乗平均平方根振幅（rad）です。",
+  reversals: "前進状態から後退回避へ切り替わった累計回数です。",
+  avb_mean_mv: "前進指令介在神経 AVBL/AVBR の平均膜電位（mV）です。",
+  ava_mean_mv: "後退指令介在神経 AVAL/AVAR の平均膜電位（mV）です。",
+  chemotaxis_index: "誘引物質に対する時間平均の接近指数（-1〜+1）です。",
 };
 
 export const BASICS: Array<{ title: string; body: string[] }> = [

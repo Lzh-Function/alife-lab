@@ -1,0 +1,15 @@
+preset:
+  id: worm_embodied_crawl
+  scenario: worm_embodied_default.yaml
+  title_key: preset.worm_embodied_crawl.title
+  description_key: preset.worm_embodied_crawl.description
+  overrides:
+    experiment:
+      name: Worm Embodied C. elegans S1 Crawl
+      wiring: reference
+      dynamics:
+        gap_junctions_enabled: true
+  expected_observation: >-
+    Intact 302-neuron graded+gap circuit activates AVB and DB/VB motor waves, generating steady
+    forward crawling on the 12-segment RFT agar plate and escape reversals upon nose poke.
+  negative_control: worm_embodied_no_gap_control

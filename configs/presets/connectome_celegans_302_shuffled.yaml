@@ -1,0 +1,13 @@
+preset:
+  id: connectome_celegans_302_shuffled
+  scenario: connectome_celegans_302.yaml
+  title_key: preset.connectome_celegans_302_shuffled.title
+  description_key: preset.connectome_celegans_302_shuffled.description
+  overrides:
+    experiment:
+      name: Connectome C. elegans 302 Shuffled Control
+      wiring: shuffled_control
+  expected_observation: >-
+    Degree- and sign-preserving edge permutation scrambles specific sensory-command-motor
+    routing while preserving neuron counts and degree distributions.
+  negative_control: connectome_celegans_302

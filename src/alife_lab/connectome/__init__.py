@@ -2,12 +2,28 @@
 
 from __future__ import annotations
 
+from alife_lab.connectome.celegans import (
+    CELEGANS_302_SPEC,
+    celegans_302_reference_checks,
+    load_celegans_302,
+    load_celegans_from_edgelist_csv,
+    make_synthetic_celegans_302_pack,
+)
 from alife_lab.connectome.flywire import (
     FLYWIRE_783_REFERENCE,
     flywire_783_reference_checks,
     load_connectome_pack,
     load_flywire_783,
     summarize_connectome_pack,
+)
+from alife_lab.connectome.graded import (
+    GradedCircuit,
+    GradedParams,
+    has_graded_or_gap,
+    make_initial_graded_state,
+    step_graded_substep_cpu,
+    step_graded_tick_cpu,
+    step_hybrid_tick_cpu,
 )
 from alife_lab.connectome.lif import (
     LIFParams,
@@ -67,6 +83,7 @@ from alife_lab.connectome.schema import (
 
 __all__ = [
     "BANC_888_SPEC",
+    "CELEGANS_302_SPEC",
     "CELL_MODEL_NAMES",
     "CELL_ROLE_NAMES",
     "DATASETS",
@@ -97,23 +114,34 @@ __all__ = [
     "DatasetSpec",
     "EdgeTable",
     "FileProvenance",
+    "GradedCircuit",
+    "GradedParams",
     "IOPort",
     "LIFParams",
     "LIFState",
+    "celegans_302_reference_checks",
     "compute_pack_digest",
     "dataset_root",
     "fetch_dataset",
     "flywire_783_reference_checks",
     "get_dataset_spec",
+    "has_graded_or_gap",
     "list_dataset_specs",
+    "load_celegans_302",
+    "load_celegans_from_edgelist_csv",
     "load_connectome_pack",
     "load_flywire_783",
+    "make_initial_graded_state",
     "make_initial_state",
     "make_shuffled_csr",
+    "make_synthetic_celegans_302_pack",
     "make_synthetic_tiny_pack",
     "manifest_path",
     "raw_dir",
     "splitmix64_u01_f32",
+    "step_graded_substep_cpu",
+    "step_graded_tick_cpu",
+    "step_hybrid_tick_cpu",
     "step_substep_cpu",
     "step_tick_cpu",
     "summarize_connectome_pack",

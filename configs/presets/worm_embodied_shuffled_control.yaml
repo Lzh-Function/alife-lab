@@ -1,0 +1,15 @@
+preset:
+  id: worm_embodied_shuffled_control
+  scenario: worm_embodied_default.yaml
+  title_key: preset.worm_embodied_shuffled_control.title
+  description_key: preset.worm_embodied_shuffled_control.description
+  overrides:
+    experiment:
+      name: Worm Embodied Shuffled Connectome Control
+      wiring: shuffled_control
+      dynamics:
+        gap_junctions_enabled: true
+  expected_observation: >-
+    Degree-preserving rewiring across the 302 neurons preserves degree and gap-junction totals but
+    disrupts command-to-motor coordination and dorsal-ventral anti-phase wave propagation.
+  negative_control: worm_embodied_crawl

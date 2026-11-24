@@ -1,0 +1,23 @@
+schema_version: 1
+experiment:
+  name: Connectome C. elegans 302 Graded
+  mode: exploratory
+  substrate: connectome
+  seed: 42
+  dataset_id: synthetic_celegans_302
+  wiring: reference
+  stimuli:
+    - port: posterior_touch
+      rate_hz: 120.0
+  silenced_ports: []
+  runner:
+    max_steps: 500
+    checkpoint_interval: 100
+  observations:
+    metrics:
+      - spikes_tick
+      - active_neurons_tick
+      - total_spikes
+      - mean_firing_rate_hz
+      - mean_v_mv
+      - time_ms

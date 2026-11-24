@@ -714,9 +714,24 @@ def load_connectome_pack(
         from alife_lab.connectome.cns_packs import load_male_cns_v1
 
         return load_male_cns_v1(datasets_dir, verify_hashes=verify_hashes)
+    if dataset_id == "synthetic_celegans_302":
+        from alife_lab.connectome.celegans import make_synthetic_celegans_302_pack
+
+        return make_synthetic_celegans_302_pack()
+    if dataset_id == "celegans_302":
+        from alife_lab.connectome.celegans import load_celegans_302
+
+        return load_celegans_302(datasets_dir, verify_hashes=verify_hashes)
     raise DatasetError(f"no loader implemented for dataset {dataset_id!r}")
 
 
 def summarize_connectome_pack(pack: ConnectomePack) -> dict[str, Any]:
-    checks = flywire_783_reference_checks(pack) if pack.dataset_id == "flywire_783" else []
+    if pack.dataset_id == "flywire_783":
+        checks = flywire_783_reference_checks(pack)
+    elif pack.dataset_id in ("synthetic_celegans_302", "celegans_302"):
+        from alife_lab.connectome.celegans import celegans_302_reference_checks
+
+        checks = celegans_302_reference_checks(pack)
+    else:
+        checks = []
     return summarize_pack(pack, reference_checks=checks)

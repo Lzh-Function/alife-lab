@@ -20,6 +20,14 @@ from alife_lab.connectome import (
     CSRGraph,
     load_connectome_pack,
 )
+from alife_lab.connectome.celegans import make_synthetic_celegans_302_pack
+from alife_lab.connectome.graded import (
+    GradedCircuit,
+    GradedParams,
+    has_graded_or_gap,
+    make_initial_graded_state,
+    step_graded_tick_cpu,
+)
 from alife_lab.connectome.lif import (
     LIFParams,
     LIFState,
@@ -131,6 +139,8 @@ def _get_pack_and_csr(exp: ConnectomeExperiment) -> tuple[ConnectomePack, CSRGra
             pack = make_synthetic_tiny_pack()
         elif exp.dataset_id == "synthetic_mb":
             pack = make_synthetic_mb_pack()
+        elif exp.dataset_id == "synthetic_celegans_302":
+            pack = make_synthetic_celegans_302_pack()
         else:
             pack = load_connectome_pack(exp.dataset_id, ds_dir, verify_hashes=True)
         csr = pack.edges.to_csr(pack.cells.num_cells)
@@ -163,6 +173,8 @@ class ConnectomeWorld:
     )
     plastic_map: PlasticSynapseMap | None = None
     plastic_state: PlasticityState | None = None
+    graded_circuit: GradedCircuit | None = None
+    graded_params: GradedParams | None = None
 
     @property
     def tick(self) -> int:
@@ -301,12 +313,26 @@ class ConnectomeAdapter:
     ) -> ConnectomeWorld:
         pack, base_csr = _get_pack_and_csr(exp)
         params = _params_from_exp(exp)
+        is_graded = has_graded_or_gap(pack, base_csr)
+        graded_circuit: GradedCircuit | None = None
+        graded_params: GradedParams | None = None
         p_params = _plasticity_from_exp(exp)
         pmap: PlasticSynapseMap | None = None
         pstate: PlasticityState | None = None
         csr = base_csr
 
-        if p_params.enabled:
+        if is_graded:
+            graded_params = GradedParams()
+            graded_circuit = GradedCircuit.from_csr(csr)
+            params = LIFParams(
+                v_0=graded_params.e_leak_mv,
+                v_rst=graded_params.e_leak_mv,
+                v_th=graded_params.v_active_mv,
+                dt_ms=graded_params.dt_ms,
+                substeps_per_tick=graded_params.substeps_per_tick,
+            )
+
+        if p_params.enabled and not is_graded:
             pkey = (
                 pack.pack_digest,
                 exp.wiring,
@@ -336,7 +362,8 @@ class ConnectomeAdapter:
                 csr.signed_weight[pmap.csr_edge_idx] = eff_w
 
         gpu_runner: Any = None
-        if self.backend == "cupy":
+        backend = "numpy" if is_graded else self.backend
+        if backend == "cupy":
             from alife_lab.connectome.lif_cupy import CupyLIFRunner
 
             gpu_runner = CupyLIFRunner(csr, params, int(exp.seed))
@@ -346,19 +373,24 @@ class ConnectomeAdapter:
             csr=csr,
             params=params,
             lif=lif,
-            backend=self.backend,
+            backend=backend,
             gpu_runner=gpu_runner,
             gpu_synced_to_host=True,
             plasticity_params=p_params,
             plastic_map=pmap,
             plastic_state=pstate,
+            graded_circuit=graded_circuit,
+            graded_params=graded_params,
         )
 
     def initialize(self, spec: ExperimentSpec) -> ConnectomeWorld:
         exp = _ce(spec)
-        pack, _ = _get_pack_and_csr(exp)
-        params = _params_from_exp(exp)
-        lif = make_initial_state(pack.cells.num_cells, params)
+        pack, base_csr = _get_pack_and_csr(exp)
+        if has_graded_or_gap(pack, base_csr):
+            lif = make_initial_graded_state(pack.cells.num_cells, GradedParams())
+        else:
+            params = _params_from_exp(exp)
+            lif = make_initial_state(pack.cells.num_cells, params)
         for stim in exp.stimuli:
             if stim.port not in pack.io_ports:
                 known = ", ".join(sorted(pack.io_ports))
@@ -385,6 +417,9 @@ class ConnectomeAdapter:
 
     def step(self, state: ConnectomeWorld, spec: ExperimentSpec) -> ConnectomeWorld:
         exp = _ce(spec)
+        if state.graded_circuit is not None and state.graded_params is not None:
+            step_graded_tick_cpu(state.lif, state.graded_circuit, state.graded_params)
+            return state
         if state.gpu_runner is not None:
             state.gpu_runner.step_tick(use_graph=True)
             state.lif.substep += state.params.substeps_per_tick

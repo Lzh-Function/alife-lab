@@ -1,0 +1,13 @@
+preset:
+  id: connectome_celegans_302
+  scenario: connectome_celegans_302.yaml
+  title_key: preset.connectome_celegans_302.title
+  description_key: preset.connectome_celegans_302.description
+  overrides:
+    experiment:
+      name: Connectome C. elegans 302 Graded
+      wiring: reference
+  expected_observation: >-
+    Posterior mechanosensory stimulation propagates across graded synapses and ohmic gap junctions
+    into forward command (AVB/PVC) and DB/VB ventral nerve cord motor pools across all 302 cells.
+  negative_control: connectome_celegans_302_shuffled

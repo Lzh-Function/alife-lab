@@ -1,0 +1,23 @@
+preset:
+  id: worm_embodied_avoidance
+  scenario: worm_embodied_default.yaml
+  title_key: preset.worm_embodied_avoidance.title
+  description_key: preset.worm_embodied_avoidance.description
+  overrides:
+    experiment:
+      name: Worm Embodied Nociceptive Avoidance
+      arena:
+        half_mm: 6.0
+        foods:
+          - x: 1.8
+            y: 0.1
+            radius: 1.5
+            kind: repellent
+          - x: -2.4
+            y: -1.4
+            radius: 1.6
+            kind: attractant
+  expected_observation: >-
+    Approaching the repellent plume stimulates ASH/ADL nociceptors, switching command state toward
+    AVA and triggering backward reversals away from aversive chemicals.
+  negative_control: worm_embodied_shuffled_control

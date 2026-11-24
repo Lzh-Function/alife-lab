@@ -1,0 +1,34 @@
+schema_version: 1
+experiment:
+  name: Worm Embodied C. elegans S1 Crawl
+  mode: exploratory
+  substrate: worm_embodied
+  seed: 42
+  dataset_id: synthetic_celegans_302
+  wiring: reference
+  arena:
+    half_mm: 6.0
+    foods:
+      - x: 2.4
+        y: 0.6
+        radius: 1.6
+        kind: attractant
+  silenced_ports: []
+  dynamics:
+    clock_unit: tick
+    numeric_policy: float32_graded_float64_rft
+    gap_junctions_enabled: true
+    explore_drive: 3.5
+  runner:
+    max_steps: 3000
+    checkpoint_interval: 300
+  observations:
+    metrics:
+      - distance_mm
+      - forward_speed_mm_s
+      - body_wave_power
+      - reversals
+      - avb_mean_mv
+      - ava_mean_mv
+      - mean_v_mv
+      - chemotaxis_index

@@ -1,0 +1,15 @@
+preset:
+  id: worm_embodied_no_gap_control
+  scenario: worm_embodied_default.yaml
+  title_key: preset.worm_embodied_no_gap_control.title
+  description_key: preset.worm_embodied_no_gap_control.description
+  overrides:
+    experiment:
+      name: Worm Embodied No Gap Junctions Control
+      wiring: reference
+      dynamics:
+        gap_junctions_enabled: false
+  expected_observation: >-
+    Disabling electrical gap junctions isolates AVB/AVA from VNC motor units, causing DB/VB to
+    drop near leak potential and degrading forward crawling speed and wave amplitude.
+  negative_control: worm_embodied_crawl

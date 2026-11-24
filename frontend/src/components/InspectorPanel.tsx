@@ -169,6 +169,14 @@ export interface Inspection extends Omit<Partial<SearchInspection>, "region"> {
   stim_rate_hz?: number;
   silenced?: boolean;
   last_tick_spikes?: number;
+  // worm_embodied
+  wiring?: string;
+  gap_junctions_enabled?: boolean;
+  worm_pose?: { x_mm: number; y_mm: number; heading_rad: number; v_forward_mm_s: number; v_lateral_mm_s: number; omega_rad_s: number };
+  worm_pools_mv?: { avb: number; ava: number; db: number; vb: number; da: number; va: number };
+  reversals?: number;
+  distance_mm?: number;
+  chemotaxis_index?: number;
 }
 
 const f = (v: number, d = 3) => (Math.abs(v) >= 100 ? v.toFixed(1) : v.toPrecision(d));
@@ -749,6 +757,42 @@ export function InspectorPanel({
                 </tbody>
               </table>
             </>
+          )}
+          {data.substrate === "worm_embodied" && (
+            <div data-testid="inspector-worm-embodied">
+              {data.worm_pose && (
+                <dl className="stats small">
+                  <dt>{t("inspector.worm.wiring")}</dt>
+                  <dd className="mono">
+                    {data.wiring ?? "reference"} · gap={data.gap_junctions_enabled ? "ON" : "OFF"}
+                  </dd>
+                  <dt>{t("inspector.worm.pose")}</dt>
+                  <dd className="mono">
+                    ({data.worm_pose.x_mm.toFixed(2)}, {data.worm_pose.y_mm.toFixed(2)}) mm · {(data.worm_pose.heading_rad * 180 / Math.PI).toFixed(0)}°
+                  </dd>
+                  <dt>{t("inspector.worm.speed")}</dt>
+                  <dd className="mono">
+                    fwd={data.worm_pose.v_forward_mm_s.toFixed(3)} mm/s · dist={(data.distance_mm ?? 0).toFixed(3)} mm · rev={data.reversals ?? 0}
+                  </dd>
+                </dl>
+              )}
+              {data.worm_pools_mv && (
+                <dl className="stats small mono">
+                  <dt>AVB / AVA</dt>
+                  <dd>
+                    {data.worm_pools_mv.avb.toFixed(1)} / {data.worm_pools_mv.ava.toFixed(1)} mV
+                  </dd>
+                  <dt>DB / VB</dt>
+                  <dd>
+                    {data.worm_pools_mv.db.toFixed(1)} / {data.worm_pools_mv.vb.toFixed(1)} mV
+                  </dd>
+                  <dt>DA / VA</dt>
+                  <dd>
+                    {data.worm_pools_mv.da.toFixed(1)} / {data.worm_pools_mv.va.toFixed(1)} mV
+                  </dd>
+                </dl>
+              )}
+            </div>
           )}
           {data.substrate === "connectome" && (
             <div data-testid="inspector-connectome">

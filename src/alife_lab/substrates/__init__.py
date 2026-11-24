@@ -28,6 +28,10 @@ from alife_lab.substrates.connectome.task_adapter import (
     CONNECTOME_TASK_MANIFEST,
     ConnectomeTaskAdapter,
 )
+from alife_lab.substrates.connectome.worm_adapter import (
+    WORM_EMBODIED_MANIFEST,
+    WormEmbodiedAdapter,
+)
 from alife_lab.substrates.creature.adapter import CREATURE_MANIFEST, CreatureAdapter
 from alife_lab.substrates.cultural_world.adapter import (
     CULTURAL_WORLD_MANIFEST,
@@ -77,6 +81,7 @@ _REGISTRY: dict[str, tuple[PluginManifest, type[SubstrateAdapter]]] = {
     "fly_swarm": (FLY_SWARM_MANIFEST, FlySwarmAdapter),
     "fly_world": (FLY_WORLD_MANIFEST, FlyWorldAdapter),
     "cultural_world": (CULTURAL_WORLD_MANIFEST, CulturalWorldAdapter),
+    "worm_embodied": (WORM_EMBODIED_MANIFEST, WormEmbodiedAdapter),
 }
 
 

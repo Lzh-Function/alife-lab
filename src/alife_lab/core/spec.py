@@ -1727,7 +1727,13 @@ class SearchExperiment(_Frozen):
 # --------------------------------------------------------------------------- #
 
 
-ConnectomeDatasetId = Literal["flywire_783", "synthetic_tiny", "synthetic_mb"]
+ConnectomeDatasetId = Literal[
+    "flywire_783",
+    "synthetic_tiny",
+    "synthetic_mb",
+    "synthetic_celegans_302",
+    "celegans_302",
+]
 ConnectomeWiring = Literal["reference", "shuffled_control"]
 
 
@@ -2398,6 +2404,84 @@ class CulturalWorldExperiment(_Frozen):
 SearchExperiment.model_rebuild()
 
 
+# --------------------------------------------------------------------------- #
+# WormEmbodied: C. elegans 302-neuron graded/gap nervous system + RFT body (S1)
+# --------------------------------------------------------------------------- #
+
+WormDatasetId = Literal["synthetic_celegans_302", "celegans_302"]
+WormFoodKind = Literal["attractant", "repellent"]
+
+
+class WormFoodSpec(_Frozen):
+    x: Annotated[float, Field(ge=-10.0, le=10.0)] = 2.4
+    y: Annotated[float, Field(ge=-10.0, le=10.0)] = 0.6
+    radius: Annotated[float, Field(ge=0.25, le=4.0)] = 1.6
+    kind: WormFoodKind = "attractant"
+
+
+class WormArenaSpec(_Frozen):
+    half_mm: Annotated[float, Field(ge=3.0, le=12.0)] = 6.0
+    foods: Annotated[tuple[WormFoodSpec, ...], Field(max_length=12)] = (
+        WormFoodSpec(x=2.4, y=0.6, radius=1.6, kind="attractant"),
+    )
+
+
+class WormEmbodiedDynamics(_Frozen):
+    clock_unit: Literal["tick"] = "tick"
+    numeric_policy: Literal["float32_graded_float64_rft"] = "float32_graded_float64_rft"
+    gap_junctions_enabled: bool = True
+    explore_drive: Annotated[float, Field(ge=0.0, le=10.0)] = 3.5
+
+
+WormEmbodiedMetric = Literal[
+    "distance_mm",
+    "forward_speed_mm_s",
+    "body_wave_power",
+    "reversals",
+    "avb_mean_mv",
+    "ava_mean_mv",
+    "mean_v_mv",
+    "chemotaxis_index",
+]
+
+
+class WormEmbodiedObservationSpec(_Frozen):
+    metrics: tuple[WormEmbodiedMetric, ...] = (
+        "distance_mm",
+        "forward_speed_mm_s",
+        "body_wave_power",
+        "reversals",
+        "avb_mean_mv",
+        "ava_mean_mv",
+        "mean_v_mv",
+        "chemotaxis_index",
+    )
+
+
+class WormEmbodiedExperiment(_Frozen):
+    """Closed-loop C. elegans 302-neuron MODEL_GRADED + RFT crawling substrate (S1)."""
+
+    name: _NAME
+    mode: Literal["reference", "exploratory"] = "exploratory"
+    substrate: Literal["worm_embodied"]
+    seed: _SEED
+    dataset_id: WormDatasetId = "synthetic_celegans_302"
+    wiring: ConnectomeWiring = "reference"
+    arena: WormArenaSpec = WormArenaSpec()
+    silenced_ports: tuple[str, ...] = ()
+    dynamics: WormEmbodiedDynamics = WormEmbodiedDynamics()
+    runner: RunnerSpec = RunnerSpec(max_steps=3000, checkpoint_interval=300)
+    observations: WormEmbodiedObservationSpec = WormEmbodiedObservationSpec()
+
+    @model_validator(mode="after")
+    def _check_mode(self) -> WormEmbodiedExperiment:
+        if self.mode == "reference":
+            raise ValueError(
+                "worm_embodied uses simplified RFT crawling mechanics; use mode='exploratory'"
+            )
+        return self
+
+
 AnyExperiment = Annotated[
     ConwayExperiment
     | BoidsExperiment
@@ -2422,7 +2506,8 @@ AnyExperiment = Annotated[
     | FlyEmbodiedExperiment
     | FlySwarmExperiment
     | FlyWorldExperiment
-    | CulturalWorldExperiment,
+    | CulturalWorldExperiment
+    | WormEmbodiedExperiment,
     Field(discriminator="substrate"),
 ]
 

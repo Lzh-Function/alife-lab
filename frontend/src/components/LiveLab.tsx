@@ -447,6 +447,42 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
             </button>
           </div>
         )}
+        {summary.substrate === "worm_embodied" && (
+          <div className="toolbar" role="group" aria-label="C. elegans controls" data-testid="worm-embodied-bar">
+            <button
+              type="button"
+              data-testid="worm-poke-nose"
+              disabled={!live}
+              onClick={() => onIntervene("poke_nose", { duration_ticks: 25 })}
+            >
+              {t("worm.act.poke_nose")}
+            </button>
+            <button
+              type="button"
+              data-testid="worm-poke-tail"
+              disabled={!live}
+              onClick={() => onIntervene("poke_tail", { duration_ticks: 25 })}
+            >
+              {t("worm.act.poke_tail")}
+            </button>
+            <button
+              type="button"
+              data-testid="worm-toggle-gap"
+              disabled={!live}
+              onClick={() => onIntervene("toggle_gap_junctions", {})}
+            >
+              {t("worm.act.toggle_gap")}
+            </button>
+            <button
+              type="button"
+              data-testid="worm-clear-food"
+              disabled={!live}
+              onClick={() => onIntervene("clear_food", {})}
+            >
+              {t("worm.act.clear_food")}
+            </button>
+          </div>
+        )}
         {error && <p className="error" role="alert">{t("common.error")}: {error}</p>}
         {summary.restorable && <p className="notice">{t("lab.restorable")}</p>}
         {!live && !summary.restorable && <p className="muted">{t("lab.not_live")}</p>}
