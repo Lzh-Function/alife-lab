@@ -1776,6 +1776,82 @@ def cmd_connectome(args: argparse.Namespace) -> int:
                         f"poke_DNg84={sr['antennal_poke_dng84']}Hz"
                     )
             return 0 if rep["all_checks_passed"] else 1
+        if args.connectome_cmd == "fit-worm":
+            from alife_lab.connectome.worm_activity import (
+                run_real_worm_activity_fit,
+                run_worm_activity_benchmark,
+            )
+
+            seeds = tuple(int(s.strip()) for s in args.seeds.split(",") if s.strip())
+            if args.source == "synthetic":
+                rep = run_worm_activity_benchmark(seed=int(seeds[0]))
+                if args.json:
+                    _print_json(rep)
+                else:
+                    print(
+                        f"fit-worm synthetic cells={rep['evaluated_neurons']} steps={rep['steps']}"
+                    )
+                    for arm, r in rep["arms"].items():
+                        print(
+                            f"  {arm:18s}: heldout_r2={r['heldout_r2']:+.4f} "
+                            f"r={r['heldout_pearson_r']:+.4f} rmse={r['rmse']:.4f}"
+                        )
+                return 0
+
+            pack = load_connectome_pack(args.dataset_id, ds_dir, verify_hashes=not args.no_verify)
+            rep = run_real_worm_activity_fit(
+                pack,
+                ds_dir,
+                max_worms=args.max_worms,
+                min_matched_neurons=args.min_matched,
+                max_frames=args.max_frames,
+                source_filter=args.source_filter or None,
+                horizon=args.horizon,
+                epochs=args.epochs,
+                lr=args.lr,
+                seeds=seeds,
+                device=args.device,
+                verify_hash=not args.no_verify,
+            )
+            if args.json:
+                _print_json(rep)
+            else:
+                sm = rep["summary"]
+                cp = rep["comparisons"]
+                hz = rep["rollout_horizon_steps"]
+                print(
+                    f"fit-worm {rep['dataset']} connectome={rep['connectome_dataset']} "
+                    f"worms={rep['n_worms']} mean_cells={rep['mean_matched_neurons']} "
+                    f"horizon={hz} sources={rep['source_datasets']} device={rep['device']} "
+                    f"vram={rep['peak_vram_mb']:.1f}MiB wall={rep['wall_seconds']:.2f}s"
+                )
+                for arm in (
+                    "reference",
+                    "no_gap_junctions",
+                    "raw_em_gaba_only",
+                    "shuffled_control",
+                    "unconnected",
+                ):
+                    row = sm[arm]
+                    print(
+                        f"  {arm:18s}: spatial_r2={row['spatial_unobs_r2']['mean']:+.4f} "
+                        f"(r={row['spatial_unobs_r']['mean']:+.4f}) | "
+                        f"rollout{hz}_r2={row['temporal_rollout_r2']['mean']:+.4f} "
+                        f"(r={row['temporal_rollout_r']['mean']:+.4f})"
+                    )
+                for metric in ("spatial_unobs_r2", "temporal_rollout_r2"):
+                    sh = cp[metric]["reference_vs_shuffled_control"]
+                    ng = cp[metric]["reference_vs_no_gap_junctions"]
+                    rw = cp[metric]["reference_vs_raw_em_gaba_only"]
+                    print(
+                        f"  {metric:19s}: vs_shuf d={sh['cliffs_delta']:+.2f} "
+                        f"(p={sh['permutation']['p_value']:.4f}) | "
+                        f"vs_nogap d={ng['cliffs_delta']:+.2f} "
+                        f"(p={ng['permutation']['p_value']:.4f}) | "
+                        f"vs_rawGABA d={rw['cliffs_delta']:+.2f} "
+                        f"(p={rw['permutation']['p_value']:.4f})"
+                    )
+            return 0
     except (DatasetError, ValueError, FileNotFoundError) as exc:
         print(f"connectome error: {exc}", file=sys.stderr)
         return 1
@@ -2155,6 +2231,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cevo.add_argument("--no-verify", action="store_true")
     cevo.add_argument("--json", action="store_true")
+
+    cworm = csub.add_parser(
+        "fit-worm",
+        help="run Stage 2 / S1 C. elegans connectome fit on real GCaMP activity or synthetic check",
+    )
+    cworm.add_argument("--source", choices=["real", "synthetic"], default="real")
+    cworm.add_argument("--dataset-id", default="celegans_302")
+    cworm.add_argument("--max-worms", type=int, default=12)
+    cworm.add_argument("--min-matched", type=int, default=40)
+    cworm.add_argument("--max-frames", type=int, default=600)
+    cworm.add_argument("--source-filter", default="")
+    cworm.add_argument("--horizon", type=int, default=15)
+    cworm.add_argument("--epochs", type=int, default=100)
+    cworm.add_argument("--lr", type=float, default=0.05)
+    cworm.add_argument("--seeds", default="1,2,3,4,5")
+    cworm.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
+    cworm.add_argument("--no-verify", action="store_true")
+    cworm.add_argument("--json", action="store_true")
 
     p.set_defaults(func=cmd_connectome)
     return parser

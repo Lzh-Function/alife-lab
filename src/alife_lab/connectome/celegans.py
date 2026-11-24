@@ -11,6 +11,7 @@ Supports:
 from __future__ import annotations
 
 import csv
+import re
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -18,9 +19,8 @@ from typing import Any
 import numpy as np
 
 from alife_lab.connectome.registry import (
+    CELEGANS_302_SPEC,
     DatasetError,
-    DatasetFileSpec,
-    DatasetSpec,
     raw_dir,
     verify_dataset,
 )
@@ -38,31 +38,6 @@ from alife_lab.connectome.schema import (
     EdgeTable,
     IOPort,
     compute_pack_digest,
-)
-
-CELEGANS_302_SPEC = DatasetSpec(
-    dataset_id="celegans_302",
-    species="caenorhabditis_elegans_hermaphrodite",
-    version="openworm_edgelist_v1",
-    citation=(
-        "White et al. (1986) Phil. Trans. R. Soc. B 314:1-340; "
-        "Cook et al. (2019) Nature 571:63-71 'Whole-animal connectomes of both "
-        "Caenorhabditis elegans sexes'; OpenWorm CElegansNeuroML / ConnectomeToolbox."
-    ),
-    licence_note=(
-        "Public research connectome tables (not redistributed in Git; requires user approval "
-        "before downloading into .alife/datasets/celegans_302/)."
-    ),
-    files=(
-        DatasetFileSpec(
-            filename="herm_full_edgelist.csv",
-            url="https://raw.githubusercontent.com/openworm/CElegansNeuroML/master/herm_full_edgelist.csv",
-            sha256="",  # Pinned once downloaded & verified with explicit user approval.
-            size_bytes=210_000,
-            source_label="openworm/CElegansNeuroML",
-            licence_note="OpenWorm MIT / WormWiring",
-        ),
-    ),
 )
 
 _BILATERAL_SENSORY_STEMS: tuple[str, ...] = (
@@ -855,6 +830,19 @@ def make_synthetic_celegans_302_pack() -> ConnectomePack:
     )
 
 
+_VNC_ZERO_PAD_RE = re.compile(r"^(DA|DB|DD|VA|VB|VC|VD|AS)0([1-9])$")
+
+
+def normalize_celegans_name(raw_name: str) -> str:
+    """Normalize C. elegans neuron names (strip whitespace + VA01 -> VA1 zero-pad)."""
+    clean = str(raw_name).strip()
+    match = _VNC_ZERO_PAD_RE.match(clean)
+    return f"{match.group(1)}{match.group(2)}" if match else clean
+
+
+_normalize_celegans_name = normalize_celegans_name
+
+
 def load_celegans_from_edgelist_csv(
     edgelist_path: Path,
     *,
@@ -866,32 +854,43 @@ def load_celegans_from_edgelist_csv(
         raise DatasetError(f"missing C. elegans edgelist CSV: {edgelist_path}")
     names_roles = canonical_celegans_302_names()
     cells, idx, io_ports = _build_cell_table_and_ports(names_roles, dataset_id)
-    edges_raw: list[tuple[int, int, int, int, int]] = []
+    chem_merged: dict[tuple[int, int, int], int] = defaultdict(int)
+    gap_pairs: dict[tuple[int, int], list[int]] = defaultdict(list)
 
     with edgelist_path.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
         for row in reader:
-            src = str(row.get("Source") or row.get("source") or row.get("pre") or "").strip()
-            dst = str(row.get("Target") or row.get("target") or row.get("post") or "").strip()
+            clean = {
+                str(k).strip().lower(): ("" if v is None else str(v).strip())
+                for k, v in row.items()
+                if k is not None
+            }
+            src = normalize_celegans_name(clean.get("source") or clean.get("pre") or "")
+            dst = normalize_celegans_name(clean.get("target") or clean.get("post") or "")
             if src not in idx or dst not in idx or src == dst:
                 continue
-            w_raw = row.get("Weight") or row.get("weight") or row.get("count") or "1"
+            w_raw = clean.get("weight") or clean.get("count") or "1"
             try:
                 w = max(1, round(float(w_raw)))
             except ValueError:
                 continue
-            kind_str = (
-                str(row.get("Type") or row.get("type") or row.get("kind") or "chemical")
-                .strip()
-                .lower()
-            )
+            kind_str = (clean.get("type") or clean.get("kind") or "chemical").lower()
             iu, iv = idx[src], idx[dst]
             if any(tok in kind_str for tok in ("ej", "gap", "elec")):
-                edges_raw.append((iu, iv, w, 1, SYNAPSE_GAP_JUNCTION))
-                edges_raw.append((iv, iu, w, 1, SYNAPSE_GAP_JUNCTION))
+                lo, hi = (iu, iv) if iu < iv else (iv, iu)
+                gap_pairs[(lo, hi)].append(w)
             else:
                 sign = -1 if cells.neurotransmitter[iu] in ("gaba",) else 1
-                edges_raw.append((iu, iv, w, sign, SYNAPSE_CHEMICAL))
+                chem_merged[(iu, iv, sign)] += w
+
+    edges_raw: list[tuple[int, int, int, int, int]] = [
+        (pre, post, cnt, sign, SYNAPSE_CHEMICAL) for (pre, post, sign), cnt in chem_merged.items()
+    ]
+    for (lo, hi), ws in gap_pairs.items():
+        # Deduplicate bidirectional CSV gap-junction entries without doubling electrical weight.
+        w_sym = max(ws)
+        edges_raw.append((lo, hi, w_sym, 1, SYNAPSE_GAP_JUNCTION))
+        edges_raw.append((hi, lo, w_sym, 1, SYNAPSE_GAP_JUNCTION))
 
     edges = _aggregate_edges(edges_raw)
     edges.validate(cells.num_cells)

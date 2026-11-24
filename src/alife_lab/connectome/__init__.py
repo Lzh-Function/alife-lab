@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from alife_lab.connectome.celegans import (
-    CELEGANS_302_SPEC,
     celegans_302_reference_checks,
     load_celegans_302,
     load_celegans_from_edgelist_csv,
@@ -37,6 +36,7 @@ from alife_lab.connectome.lif import (
 )
 from alife_lab.connectome.registry import (
     BANC_888_SPEC,
+    CELEGANS_302_SPEC,
     DATASETS,
     FLYWIRE_783_SPEC,
     MALE_CNS_V1_SPEC,

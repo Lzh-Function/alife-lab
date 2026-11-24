@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+import json
 import math
 from pathlib import Path
 
 import numpy as np
+import pytest
 
+from alife_lab.cli import main as cli_main
 from alife_lab.connectome.celegans import (
     celegans_302_reference_checks,
+    load_celegans_302,
     load_celegans_from_edgelist_csv,
     make_synthetic_celegans_302_pack,
+    normalize_celegans_name,
 )
 from alife_lab.connectome.graded import (
     GradedCircuit,
@@ -21,6 +26,7 @@ from alife_lab.connectome.graded import (
     step_hybrid_tick_cpu,
 )
 from alife_lab.connectome.lif import LIFParams, make_initial_state
+from alife_lab.connectome.registry import verify_dataset
 from alife_lab.connectome.schema import (
     MODEL_GRADED,
     MODEL_SPIKING_LIF,
@@ -36,7 +42,12 @@ from alife_lab.connectome.schema import (
     EdgeTable,
     compute_pack_digest,
 )
-from alife_lab.connectome.worm_activity import run_worm_activity_benchmark
+from alife_lab.connectome.worm_activity import (
+    CELEGANS_ACTIVITY_DIR_NAME,
+    CELEGANS_ACTIVITY_FILENAME,
+    load_celegans_activity_recordings,
+    run_worm_activity_benchmark,
+)
 from alife_lab.connectome.worm_body import (
     BODY_LENGTH_MM,
     N_JOINTS,
@@ -177,6 +188,27 @@ def test_celegans_302_pack_checks_and_csv_loader(tmp_path: Path) -> None:
     assert loaded.edges.num_edges == 3  # 1 chemical + 2 symmetric gap edges
     gap_rows = loaded.edges.kind == SYNAPSE_GAP_JUNCTION
     assert int(gap_rows.sum()) == 2
+
+    # VNC zero-pad normalization, spaced headers, and bidirectional electrical deduplication
+    assert normalize_celegans_name("VA01") == "VA1"
+    assert normalize_celegans_name("DB01") == "DB1"
+    assert normalize_celegans_name("DD06") == "DD6"
+    assert normalize_celegans_name("VA12") == "VA12"
+    assert normalize_celegans_name(" AVAL ") == "AVAL"
+
+    spaced_csv = tmp_path / "herm_spaced.csv"
+    spaced_csv.write_text(
+        "Source, Target, Weight, Type\n"
+        "ALML , AVAL , 10 , chemical\n"
+        "AVBL , DB01 , 6 , electrical\n"
+        "DB01 , AVBL , 6 , electrical\n",
+        encoding="utf-8",
+    )
+    loaded_spaced = load_celegans_from_edgelist_csv(spaced_csv, dataset_id="celegans_302")
+    assert loaded_spaced.edges.num_edges == 3
+    gap_mask = loaded_spaced.edges.kind == SYNAPSE_GAP_JUNCTION
+    assert int(gap_mask.sum()) == 2
+    assert list(loaded_spaced.edges.count[gap_mask]) == [6, 6]
 
 
 def test_rft_scallop_theorem_and_directional_traveling_waves() -> None:
@@ -368,3 +400,49 @@ def test_s1_api_lifecycle_connectome_and_worm_embodied(tmp_path: Path) -> None:
             headers={**headers, "Idempotency-Key": "s1-test-worm-paired-fork-0001"},
         )
         assert pf.status_code == 201, pf.text
+
+
+def test_cli_fit_worm_synthetic_json(capsys: pytest.CaptureFixture[str]) -> None:
+    rc = cli_main(["connectome", "fit-worm", "--source", "synthetic", "--json"])
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    arms = out["arms"]
+    assert (
+        arms["reference"]["heldout_r2"]
+        > arms["no_gap_junctions"]["heldout_r2"]
+        > arms["shuffled_control"]["heldout_r2"]
+    )
+
+
+_DATASETS_DIR = Path(__file__).resolve().parents[2] / ".alife" / "datasets"
+_HAS_REAL_CELEGANS_EM = (
+    _DATASETS_DIR / "celegans_302" / "raw" / "herm_full_edgelist.csv"
+).is_file()
+_HAS_REAL_CELEGANS_ACT = (
+    _DATASETS_DIR / CELEGANS_ACTIVITY_DIR_NAME / "raw" / CELEGANS_ACTIVITY_FILENAME
+).is_file()
+
+
+@pytest.mark.skipif(not _HAS_REAL_CELEGANS_EM, reason="local celegans_302 EM CSV not downloaded")
+def test_real_celegans_302_empirical_pack() -> None:
+    rep = verify_dataset("celegans_302", _DATASETS_DIR)
+    assert rep["ok"] is True
+    pack = load_celegans_302(_DATASETS_DIR, verify_hashes=True)
+    checks = celegans_302_reference_checks(pack)
+    assert all(c["ok"] for c in checks)
+    assert pack.edges.num_edges == 5764
+
+
+@pytest.mark.skipif(
+    not _HAS_REAL_CELEGANS_ACT, reason="local worm_data_short.parquet not downloaded"
+)
+def test_real_celegans_activity_parquet_loader() -> None:
+    recs = load_celegans_activity_recordings(
+        _DATASETS_DIR, max_worms=2, min_matched_neurons=40, max_frames=200, verify_hash=True
+    )
+    assert len(recs) == 2
+    for rec in recs:
+        assert rec.traces.ndim == 2
+        assert np.all(np.isfinite(rec.traces))
+        assert int(rec.cell_indices.min()) >= 0
+        assert int(rec.cell_indices.max()) < 302

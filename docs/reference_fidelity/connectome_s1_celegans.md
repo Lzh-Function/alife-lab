@@ -1,6 +1,6 @@
 # Connectome Stage 2 / S1 (*C. elegans* 302-Neuron Graded + Gap-Junction Nervous System & Crawling Body) Report
 
-> **Scientific mode:** `exploratory` (uses offline `synthetic_celegans_302` canonical wiring + simplified 12-segment Resistive Force Theory planar crawling mechanics per [ADR 0051](../decisions/0051-connectome-s1-celegans.md); no external empirical EM connectome or real calcium data has been fetched yet without explicit user approval).
+> **Scientific mode:** `exploratory` (uses offline `synthetic_celegans_302` for embodied crawling + real empirical `celegans_302` EM wiring & `worm_data_short.parquet` whole-brain GCaMP recordings downloaded into `.alife/datasets/` after explicit user approval, per [ADR 0051](../decisions/0051-connectome-s1-celegans.md)).
 >
 > **Architecture:** [ADR 0051](../decisions/0051-connectome-s1-celegans.md) · **Unified Roadmap:** [cultural_world_plan.md](../plans/cultural_world_plan.md) · **Connectome Plan:** [connectome_plan.md](../plans/connectome_plan.md)
 
@@ -53,10 +53,72 @@
 
 ---
 
-## 3. Honest Assessment, Limitations & Pending Real-Data Gate
+## 3. Honest Assessment & Synthetic Baseline Limitations
 
-- **Evidence Level:** **E3** within the offline canonical `synthetic_celegans_302` model (`intact` vs `no_gap_junctions`, `shuffled_control`, and `poke_nose` causal circuit reversals), **E1** (synthetic-to-synthetic oracle) for `worm_activity` until real empirical calcium traces are approved and tested.
-- **Honest Limitations:**
-  1. `synthetic_celegans_302` uses curated canonical biological pathway weights rather than real empirical Cook et al. (2019) / White et al. (1986) synapse counts (`celegans_302`), which await explicit user approval before download.
-  2. Real calcium imaging traces (e.g., Kato et al. 2015 / Atanas & Kim et al. 2023 WormWideWeb) are not yet fitted; pure CSV/JSON ingestion in `worm_activity.py` is implemented and ready.
-  3. Chemotaxis trajectories show mild improvement (`0.595 -> 0.626` over `8 s`) under baseline head steering gains; stronger klinotaxis tuning and sinusoidal clinical/behavioral benchmarks against real *C. elegans* tracking (velocity `~0.15-0.25 mm/s`, reversal latency) belong to empirical S1 validation after real connectome/activity acquisition.
+- **Synthetic Evidence Level:** **E3** within the offline canonical `synthetic_celegans_302` model (`intact` vs `no_gap_junctions`, `shuffled_control`, and `poke_nose` causal circuit reversals), **E1** (synthetic-to-synthetic oracle) for offline `run_worm_activity_benchmark`.
+- **Synthetic Crawling Baseline Notes:**
+  1. `synthetic_celegans_302` uses curated canonical biological pathway weights rather than real empirical Cook et al. (2019) / White et al. (1986) synapse counts (`celegans_302`).
+  2. Chemotaxis trajectories show mild improvement (`0.595 -> 0.626` over `8 s`) under baseline head steering gains; stronger klinotaxis tuning against real *C. elegans* tracking (`~0.15-0.25 mm/s`, reversal latency) remains open work.
+
+---
+
+## 4. Real Empirical *C. elegans* EM Connectome & Whole-Brain Calcium Validation
+
+### 4.1 Pinned Empirical Dataset Provenance (Stored Outside Git in `.alife/datasets/`)
+
+| Dataset ID | Source & Immutable Commit | File | Size (Bytes) | SHA-256 |
+|---|---|---|---:|---|
+| **`celegans_302`** | `openworm/CElegansNeuroML` (`1ca08b14f4e795a973ce447565e0c97b897ee4dc`) | `herm_full_edgelist.csv` | `245,463` | `142693f17556148d7f962835b18ac6dd5af18b7467eef61815ebc1dd5474c0ca` |
+| **`celegans_activity`** | HF `qsimeon/celegans_neural_data` (`a28aacad1a997ac7aee98f1c52993ab8c0599ee8`, MIT) | `worm_data_short.parquet` | `669,511,381` | `17701963149851d37d40955096de181d8c5378c256fe4ede93864380f9363ddc` |
+
+- **`alife connectome summary celegans_302`:**
+  - `cells=302`, `edges=5,764` (`chemical=3,604`, `gap_junction=2,160` deduplicated symmetric pairs), `synapses=29,114`, `isolated=2` (`CANL`/`CANR`, which lack chemical/electrical synapses in the adult somatic wiring diagram; all 148 other CSV tokens are verified muscles/end-organs).
+  - VNC zero-pad normalization (`VA01 -> VA1`, `DB01 -> DB1`, etc.) raises canonical neuron coverage from `236/302` to `300/302` synaptic cells; all 4 `celegans_302_reference_checks` pass (`ok`).
+  - `worm_data_short.parquet`: `42,798` rows across 12 papers (`32,879` labeled rows, `0` unmatched neuron strings after normalization, `341` worms with `>= 20` matched canonical neurons).
+
+### 4.2 Unsigned Raw EM Connectome in `worm_embodied` (Honest Negative / Blocker Finding)
+
+- Applying `celegans_302` (`herm_full_edgelist.csv`) directly inside `worm_embodied` with GABA-only inhibitory signing (`5,656` excitatory vs `108` inhibitory edges = `98.13%` E / `1.87%` I) fails to generate directional forward crawling or nose-poke reversal across global scalar conductance scaling (`g_chem` in `0.004..0.08`, `g_gap` in `0.05..0.14`):
+  - At default `g_chem=0.08`, excitatory feedback saturates the brain near `0 mV` (`avb=-2.06 mV`, `ava=-1.43 mV`, `poke_nose delta_sf=+0.0008 mm`).
+  - At `g_chem=0.008, g_gap=0.08`: `reference (gap=True)` yields `distance_mm=0.009`, `signed_forward=+0.003 mm`, `avb=-10.0 mV`, `ava=-8.2 mV` (`poke_nose delta_sf=+0.0002 mm`) while `gap=False` lets excitation escape into `ava=-1.8 mV` (`signed_forward=-0.535 mm`).
+- **Biophysical cause:** `herm_full_edgelist.csv` lacks postsynaptic receptor polarity (`GluCl`/`AChCl`); sensory pools (`ALM/AVM/ASH`) project `97` excitatory chemical synapses onto `AVA/D/E` AND `97` onto `AVB/PVC`, while `AVB -> AVA` carries `47` excitatory synapses. Closed-loop locomotion switching on the real EM graph requires inferred/measured postsynaptic signs (e.g., Fenyves et al. 2020 *PLoS Comput. Biol.* `bank-fenyves/CeConn-SignPrediction`, not yet downloaded).
+
+### 4.3 Real Whole-Brain Calcium Activity Fitting (`alife connectome fit-worm`, `horizon = 15` = `5.0 s`, `seeds = 1..5`, RTX 5070 CUDA)
+
+- All arms evaluated strictly on held-out **final 30% frames** (zero leakage, zero teacher forcing):
+  - **`spatial_unobs_r2 / r`**: 50% observed → 50% unobserved canonical neurons via EM submatrix `(W_chem + W_gap)[unobs, obs]`.
+  - **`rollout15_r2 / r`**: 15-step (`5.0 s`, matching the dataset's `window_size=15` smoothing timescale) open-loop recurrent rollout.
+
+| Cohort (`n_worms`, `mean_cells`, VRAM, wall) | Arm | `spatial_unobs_r2` | `spatial_unobs_r` | `rollout15_r2` | `rollout15_r` |
+|---|---|---:|---:|---:|---:|
+| **`Venkatachalam2024`** (`12`, `188.4`, `115.5 MiB`, `25.69 s`) | **`reference`** (EM chem + gap) | **`+0.0859`** | **`+0.3684`** | `+0.7076` | `+0.8623` |
+| | `no_gap_junctions` | `-0.0043` | `+0.2657` | **`+0.7102`** | `+0.8631` |
+| | `raw_em_gaba_only` | `+0.0547` | `+0.2745` | `+0.3197` | `+0.6145` |
+| | `shuffled_control` | `-0.0066` | `+0.2153` | `+0.6951` | `+0.8608` |
+| | `unconnected` | `-0.0533` | `-0.0090` | `+0.7042` | `+0.8839` |
+| **`Flavell2023`** (`10`, `101.9`, `101.3 MiB`, `25.00 s`) | **`reference`** (EM chem + gap) | **`+0.1069`** | **`+0.3717`** | `+0.6598` | `+0.8311` |
+| | `no_gap_junctions` | `+0.0622` | `+0.3026` | **`+0.6605`** | `+0.8313` |
+| | `raw_em_gaba_only` | `+0.0555` | `+0.2857` | `+0.5752` | `+0.7903` |
+| | `shuffled_control` | `-0.0016` | `+0.2102` | `+0.6531` | `+0.8329` |
+| | `unconnected` | `-0.0298` | `-0.0042` | `+0.6577` | `+0.8448` |
+| **`Kato2015`** (`10`, `44.6`, `99.5 MiB`, `25.30 s`) | **`reference`** (EM chem + gap) | **`+0.2618`** | **`+0.5185`** | `+0.7063` | `+0.8546` |
+| | `no_gap_junctions` | `+0.1575` | `+0.4327` | **`+0.7104`** | `+0.8565` |
+| | `raw_em_gaba_only` | `+0.1994` | `+0.4616` | `+0.6840` | `+0.8548` |
+| | `shuffled_control` | `+0.0587` | `+0.2652` | `+0.6935` | `+0.8529` |
+| | `unconnected` | `-0.0153` | `+0.0070` | `+0.6852` | `+0.8622` |
+
+- **Statistical Contrasts (`n = 5` seeds per cohort, two-sided exact permutation test & Cliff's $\delta$):**
+  - `spatial_unobs_r2`:
+    - `reference` vs `shuffled_control`: `d = +1.00, p = 0.0079` in **all 3 cohorts** (`Venkatachalam2024`, `Flavell2023`, `Kato2015`).
+    - `reference` vs `no_gap_junctions`: `d = +1.00, p = 0.0079` in `Venkatachalam2024` & `Kato2015`; `d = +0.52, p = 0.2063` (not statistically significant at `n=5`) in `Flavell2023`.
+    - `reference` vs `raw_em_gaba_only`: `d = +1.00, p = 0.0079` in `Kato2015`; `d = +0.60, p = 0.0873` (`Venkatachalam2024`); `d = +0.68, p = 0.0714` (`Flavell2023`).
+  - `temporal_rollout_r2` (`15` steps):
+    - `reference` vs `shuffled_control`: `d = +1.00, p = 0.0079` in all 3 cohorts (`+0.0067..+0.0128` gain).
+    - `reference` vs `raw_em_gaba_only`: `d = +1.00, p = 0.0079` in all 3 cohorts (most pronounced in `Venkatachalam2024`: `+0.7076 vs +0.3197`, showing raw GABA-only E/I signs distort multi-step recurrent dynamics).
+    - `reference` vs `no_gap_junctions`: `d = -1.00, p = 0.0079` across all 3 cohorts (gap junctions slightly hurt `rollout15_r2` by `0.0007..0.0041`), and `unconnected` autonomous per-cell decay already scores `+0.6577..+0.7042` because moving-average smoothing (`window_size=15` in `worm_data_short.parquet`) creates high intrinsic autocorrelation across 5-second open-loop rollouts without external stimuli.
+
+### 4.4 Updated Evidence Assessment
+
+- **Empirical Structural Verification (`celegans_302`):** Verified against OpenWorm `herm_full_edgelist.csv` (`300/302` synaptic neurons + `2` isolated `CANL/R`, `5,764` edges, `29,114` synapses).
+- **Empirical Calcium Activity Fit (`fit-worm`):** **E2/E3 observational + negative-control support** across 3 independent real cohorts for **simultaneous unobserved-neuron EM connectivity** (`reference > shuffled_control`, `d=+1.00, p=0.0079` in 3/3 cohorts; electrical gap-junction contribution clearly positive in `Venkatachalam2024` and `Kato2015`), alongside honest null/weak gain over autonomous `unconnected` baselines in open-loop 15-step temporal rollouts on smoothed unstimulated recordings.
+- **Embodied Crawling (`worm_embodied`):** **E3** on offline canonical `synthetic_celegans_302`, and **blocked at raw unsigned EM** on `celegans_302` without postsynaptic receptor polarity annotations.

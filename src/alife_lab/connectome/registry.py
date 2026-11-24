@@ -253,10 +253,41 @@ MALE_CNS_V1_SPEC = DatasetSpec(
     ),
 )
 
+_CELEGANS_COMMIT = "1ca08b14f4e795a973ce447565e0c97b897ee4dc"
+
+CELEGANS_302_SPEC = DatasetSpec(
+    dataset_id="celegans_302",
+    species="caenorhabditis_elegans_hermaphrodite",
+    version="openworm_edgelist_v1",
+    citation=(
+        "White et al. (1986) Phil. Trans. R. Soc. B 314:1-340; "
+        "Varshney et al. (2011) PLoS Comput. Biol. 7:e1001066; "
+        "Cook et al. (2019) Nature 571:63-71; OpenWorm CElegansNeuroML."
+    ),
+    licence_note=(
+        "Personal/academic research use (data not redistributed in Git; "
+        "stored under .alife/datasets/celegans_302/). OpenWorm CElegansNeuroML (MIT)."
+    ),
+    files=(
+        DatasetFileSpec(
+            filename="herm_full_edgelist.csv",
+            url=(
+                f"https://raw.githubusercontent.com/openworm/CElegansNeuroML/"
+                f"{_CELEGANS_COMMIT}/herm_full_edgelist.csv"
+            ),
+            sha256="142693f17556148d7f962835b18ac6dd5af18b7467eef61815ebc1dd5474c0ca",
+            size_bytes=245_463,
+            source_label="openworm/CElegansNeuroML",
+            licence_note="OpenWorm MIT / WormWiring",
+        ),
+    ),
+)
+
 DATASETS: dict[str, DatasetSpec] = {
     FLYWIRE_783_SPEC.dataset_id: FLYWIRE_783_SPEC,
     BANC_888_SPEC.dataset_id: BANC_888_SPEC,
     MALE_CNS_V1_SPEC.dataset_id: MALE_CNS_V1_SPEC,
+    CELEGANS_302_SPEC.dataset_id: CELEGANS_302_SPEC,
 }
 
 
