@@ -1,0 +1,18 @@
+schema_version: 1
+sweep:
+  name: Cultural World Lifetime Learning Ablation
+  base_preset: cultural_world_baseline
+  seeds: [0, 1, 2, 3, 4]
+  factors:
+    - path: dynamics.lifetime_learning
+      values: [false, true]
+      labels: [no_lifetime_learning, with_lifetime_learning]
+  reference_condition: 0
+  endpoint:
+    metric: mean_energy
+    at: final
+  design: exploratory
+  hypothesis: >-
+    Within-lifetime policy gradient plasticity alters per-agent energy returns alongside cultural
+    skill inheritance over multi-seed trajectories.
+  profile_id: cpu_dev

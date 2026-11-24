@@ -1,0 +1,23 @@
+preset:
+  id: cultural_world_seasonal_shift
+  scenario: cultural_world_default.yaml
+  title_key: preset.cultural_world_seasonal_shift.title
+  description_key: preset.cultural_world_seasonal_shift.description
+  overrides:
+    experiment:
+      name: Cultural World Shifting Patches
+      world:
+        environment_regime: shifting_patches
+        regime_period: 150
+      dynamics:
+        lifetime_learning: true
+        transmission_regime: all
+        transmission:
+          vertical: true
+          horizontal: true
+          oblique: true
+          transmission_cost: 0.005
+  expected_observation: >-
+    Food and material patches drift periodically across seasons; vertical, horizontal, and oblique
+    learning respond differently than fixed seasonal regimes.
+  negative_control: cultural_world_genetic_only

@@ -2255,6 +2255,146 @@ class FlyWorldExperiment(_Frozen):
         return self
 
 
+# --------------------------------------------------------------------------- #
+# CulturalWorld: evolutionary social learning & cumulative culture research
+# --------------------------------------------------------------------------- #
+
+MAX_CULTURAL_AGENTS = 2000
+
+
+class CulturalWorldWorld(_Frozen):
+    width: Annotated[float, Field(ge=16.0, le=512.0)] = 64.0
+    height: Annotated[float, Field(ge=16.0, le=512.0)] = 64.0
+    boundary: Literal["periodic"] = "periodic"
+    resolution: Annotated[int, Field(ge=8, le=128)] = 32
+    environment_regime: Literal["stationary", "seasonal", "shifting_patches"] = "seasonal"
+    regime_period: Annotated[int, Field(ge=20, le=10_000)] = 200
+
+
+class CulturalWorldResources(_Frozen):
+    food_capacity: Annotated[float, Field(gt=0.0, le=20.0)] = 1.0
+    food_regrowth: Annotated[float, Field(ge=0.0, le=1.0)] = 0.015
+    material_a_capacity: Annotated[float, Field(gt=0.0, le=20.0)] = 0.8
+    material_a_regrowth: Annotated[float, Field(ge=0.0, le=1.0)] = 0.012
+    material_b_capacity: Annotated[float, Field(gt=0.0, le=20.0)] = 0.8
+    material_b_regrowth: Annotated[float, Field(ge=0.0, le=1.0)] = 0.012
+    food_decay: Annotated[float, Field(ge=0.0, le=0.5)] = 0.002
+    material_decay: Annotated[float, Field(ge=0.0, le=0.5)] = 0.001
+
+
+class CulturalWorldTransmission(_Frozen):
+    vertical: bool = True
+    horizontal: bool = True
+    oblique: bool = False
+    observation_range: Annotated[float, Field(ge=0.5, le=32.0)] = 5.0
+    transmission_cost: Annotated[float, Field(ge=0.0, le=1.0)] = 0.01
+    error_probability: Annotated[float, Field(ge=0.0, le=0.5)] = 0.05
+    base_success_prob: Annotated[float, Field(ge=0.0, le=1.0)] = 0.6
+
+
+class CulturalWorldTechnology(_Frozen):
+    allow_invention: bool = True
+    allow_improvement: bool = True
+    max_program_length: Annotated[int, Field(ge=1, le=12)] = 4
+    max_skills_per_agent: Annotated[int, Field(ge=1, le=16)] = 4
+    invention_prob: Annotated[float, Field(ge=0.0, le=0.5)] = 0.015
+    skill_energy_cost: Annotated[float, Field(ge=0.0, le=1.0)] = 0.02
+    forbid_preinstalled_recipes: bool = True
+
+
+class CulturalWorldController(_Frozen):
+    kind: Literal["scripted", "mlp"] = "mlp"
+    hidden: Annotated[int, Field(ge=2, le=32)] = 8
+    learning_rate: Annotated[float, Field(ge=0.0, le=2.0)] = 0.04
+    mutation_sigma: Annotated[float, Field(ge=0.0, le=2.0)] = 0.08
+    temperature: Annotated[float, Field(gt=0.0, le=50.0)] = 1.0
+
+
+CulturalTransmissionRegime = Literal[
+    "custom", "none", "vertical_only", "vertical_horizontal", "all"
+]
+
+
+class CulturalWorldDynamics(_Frozen):
+    clock_unit: Literal["tick"] = "tick"
+    numeric_policy: Literal["float64_numpy"] = "float64_numpy"
+    genetic_evolution: bool = True
+    lifetime_learning: bool = True
+    transmission_regime: CulturalTransmissionRegime = "custom"
+    resources: CulturalWorldResources = CulturalWorldResources()
+    transmission: CulturalWorldTransmission = CulturalWorldTransmission()
+    technology: CulturalWorldTechnology = CulturalWorldTechnology()
+    controller: CulturalWorldController = CulturalWorldController()
+    initial_energy: Annotated[float, Field(gt=0.0, le=1000.0)] = 5.0
+    metabolism: Annotated[float, Field(ge=0.0, le=10.0)] = 0.045
+    move_cost: Annotated[float, Field(ge=0.0, le=10.0)] = 0.015
+    reproduce_threshold: Annotated[float, Field(gt=0.0, le=10_000.0)] = 9.5
+    max_age: Annotated[int, Field(ge=50, le=10_000)] = 300
+    max_population: Annotated[int, Field(ge=8, le=MAX_CULTURAL_AGENTS)] = 400
+
+
+class CulturalWorldInitialization(_Frozen):
+    count: Annotated[int, Field(ge=4, le=1000)] = 80
+
+
+CulturalWorldMetric = Literal[
+    "population",
+    "births",
+    "deaths",
+    "mean_energy",
+    "resource_ledger_residual",
+    "mean_skills_per_agent",
+    "knowledge_diversity",
+    "successful_transmission_rate",
+    "skill_retention_after_death",
+    "social_learning_fraction",
+    "improvement_depth",
+    "innovation_utility",
+]
+
+
+class CulturalWorldObservation(_Frozen):
+    metrics: tuple[CulturalWorldMetric, ...] = (
+        "population",
+        "births",
+        "deaths",
+        "mean_energy",
+        "resource_ledger_residual",
+        "mean_skills_per_agent",
+        "knowledge_diversity",
+        "successful_transmission_rate",
+        "skill_retention_after_death",
+        "social_learning_fraction",
+        "improvement_depth",
+        "innovation_utility",
+    )
+
+
+class CulturalWorldExperiment(_Frozen):
+    """Autonomous cultural evolution model with 3-layer separation and causal interventions."""
+
+    name: _NAME
+    mode: Literal["reference", "exploratory"] = "exploratory"
+    substrate: Literal["cultural_world"]
+    seed: _SEED
+    world: CulturalWorldWorld = CulturalWorldWorld()
+    initialization: CulturalWorldInitialization = CulturalWorldInitialization()
+    dynamics: CulturalWorldDynamics = CulturalWorldDynamics()
+    runner: RunnerSpec = RunnerSpec(max_steps=5000, checkpoint_interval=500)
+    observations: CulturalWorldObservation = CulturalWorldObservation()
+
+    @model_validator(mode="after")
+    def _check(self) -> CulturalWorldExperiment:
+        if self.mode == "reference":
+            raise ValueError(
+                "cultural_world is an exploratory research model without a reference "
+                "implementation; use mode='exploratory'"
+            )
+        if self.initialization.count > self.dynamics.max_population:
+            raise ValueError("initial count exceeds max_population")
+        return self
+
+
 SearchExperiment.model_rebuild()
 
 
@@ -2281,7 +2421,8 @@ AnyExperiment = Annotated[
     | ConnectomeTaskExperiment
     | FlyEmbodiedExperiment
     | FlySwarmExperiment
-    | FlyWorldExperiment,
+    | FlyWorldExperiment
+    | CulturalWorldExperiment,
     Field(discriminator="substrate"),
 ]
 

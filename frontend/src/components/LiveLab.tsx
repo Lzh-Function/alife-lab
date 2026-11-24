@@ -419,6 +419,34 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
             <span className="small muted">{t("lab.push.note")}</span>
           </div>
         )}
+        {summary.substrate === "cultural_world" && (
+          <div className="toolbar" role="group" aria-label="Cultural interventions" data-testid="cultural-world-bar">
+            <button
+              type="button"
+              data-testid="cultural-erase-culture"
+              disabled={!live}
+              onClick={() => onIntervene("erase_culture", {})}
+            >
+              {t("cultural.act.erase_culture")}
+            </button>
+            <button
+              type="button"
+              data-testid="cultural-toggle-transmission"
+              disabled={!live}
+              onClick={() => onIntervene("set_transmission", {})}
+            >
+              {t("cultural.act.toggle_transmission")}
+            </button>
+            <button
+              type="button"
+              data-testid="cultural-shock-env"
+              disabled={!live}
+              onClick={() => onIntervene("shock_environment", { phase_shift: 0.5 })}
+            >
+              {t("cultural.act.shock_env")}
+            </button>
+          </div>
+        )}
         {error && <p className="error" role="alert">{t("common.error")}: {error}</p>}
         {summary.restorable && <p className="notice">{t("lab.restorable")}</p>}
         {!live && !summary.restorable && <p className="muted">{t("lab.not_live")}</p>}

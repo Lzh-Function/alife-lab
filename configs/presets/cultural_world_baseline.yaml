@@ -1,0 +1,19 @@
+preset:
+  id: cultural_world_baseline
+  scenario: cultural_world_default.yaml
+  title_key: preset.cultural_world_baseline.title
+  description_key: preset.cultural_world_baseline.description
+  overrides:
+    experiment:
+      name: Cultural World Baseline Group E
+      dynamics:
+        transmission_regime: vertical_horizontal
+        transmission:
+          vertical: true
+          horizontal: true
+          oblique: false
+          transmission_cost: 0.01
+  expected_observation: >-
+    Agents invent procedural material-processing skills from empty procedural memory and pass them
+    across generations and peers while exact conservation ledgers stay near zero.
+  negative_control: cultural_world_genetic_only

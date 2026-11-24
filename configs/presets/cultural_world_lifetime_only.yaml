@@ -1,0 +1,19 @@
+preset:
+  id: cultural_world_lifetime_only
+  scenario: cultural_world_default.yaml
+  title_key: preset.cultural_world_lifetime_only.title
+  description_key: preset.cultural_world_lifetime_only.description
+  overrides:
+    experiment:
+      name: Cultural World Lifetime Only Group B
+      dynamics:
+        lifetime_learning: true
+        transmission_regime: none
+        transmission:
+          vertical: false
+          horizontal: false
+          oblique: false
+  expected_observation: >-
+    Each individual acquires within-lifetime neural plasticity and self-invented skills, but
+    nothing transfers at birth or between peers, so skill_retention_after_death remains 0.
+  negative_control: cultural_world_genetic_only

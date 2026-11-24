@@ -77,6 +77,33 @@ export interface Inspection extends Omit<Partial<SearchInspection>, "region"> {
     history: { inputs: number[][]; hidden: number[][]; probs: number[][]; action: number[]; reward: number[] };
     learned_delta_norm: number;
   } | null;
+  // cultural_world
+  transmission?: { vertical: boolean; horizontal: boolean; oblique: boolean };
+  ledger_residuals?: Record<string, number>;
+  cultural_agent?: {
+    id: number;
+    parent: number;
+    birth_tick: number;
+    age: number;
+    energy: number;
+    inv_a: number;
+    inv_b: number;
+    learned_delta_norm: number;
+    private_best_val: number;
+    skills: Array<{
+      skill_id: number;
+      parent_skill_id: number;
+      revision: number;
+      depth: number;
+      inventor_id: number;
+      teacher_id: number;
+      mode: string;
+      target_resource: string;
+      ops: string[];
+      efficiency: number;
+      uses: number;
+    }>;
+  } | null;
   // protocell
   field?: { food: number; waste: number };
   protocell?: {
@@ -347,6 +374,75 @@ export function InspectorPanel({
                 </>
               ) : (
                 <p className="muted small">{t("inspector.none")}</p>
+              )}
+            </div>
+          )}
+          {data.substrate === "cultural_world" && (
+            <div data-testid="inspector-cultural-world">
+              {data.transmission && (
+                <p className="muted small mono">
+                  {t("inspector.cultural.channels")}:{" "}
+                  {[
+                    data.transmission.vertical ? "V" : "-",
+                    data.transmission.horizontal ? "H" : "-",
+                    data.transmission.oblique ? "O" : "-",
+                  ].join("/")}
+                </p>
+              )}
+              {data.cultural_agent ? (
+                <>
+                  <dl className="stats small">
+                    <dt>{t("inspector.cultural.id")}</dt>
+                    <dd className="mono">
+                      #{data.cultural_agent.id} ({t("inspector.cultural.parent")}{" "}
+                      {data.cultural_agent.parent >= 0 ? `#${data.cultural_agent.parent}` : "—"}) ·{" "}
+                      {t("inspector.cultural.age")} {data.cultural_agent.age}
+                    </dd>
+                    <dt>{t("inspector.cultural.energy")}</dt>
+                    <dd className="mono">{data.cultural_agent.energy.toFixed(3)}</dd>
+                    <dt>{t("inspector.cultural.inventory")}</dt>
+                    <dd className="mono">
+                      A={data.cultural_agent.inv_a.toFixed(3)} · B={data.cultural_agent.inv_b.toFixed(3)}
+                    </dd>
+                    <dt>{t("inspector.cultural.delta_w")}</dt>
+                    <dd className="mono">
+                      {data.cultural_agent.learned_delta_norm.toFixed(4)} (best={data.cultural_agent.private_best_val.toFixed(3)})
+                    </dd>
+                  </dl>
+                  <details open>
+                    <summary>
+                      {t("inspector.cultural.skills")} ({data.cultural_agent.skills.length})
+                    </summary>
+                    {data.cultural_agent.skills.length === 0 ? (
+                      <p className="muted small">{t("inspector.cultural.no_skills")}</p>
+                    ) : (
+                      <ul className="small mono" style={{ paddingLeft: "1.1rem", margin: "0.35rem 0" }}>
+                        {data.cultural_agent.skills.map((s) => (
+                          <li key={s.skill_id}>
+                            #{s.skill_id} [{s.mode}
+                            {s.teacher_id >= 0 ? ` <- #${s.teacher_id}` : ` inv=#${s.inventor_id}`}
+                            ] d={s.depth} rev={s.revision} {s.target_resource} [{s.ops.join(" -> ")}] eff={s.efficiency.toFixed(2)} uses={s.uses}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </details>
+                </>
+              ) : (
+                <p className="muted small">{t("inspector.none")}</p>
+              )}
+              {data.ledger_residuals && (
+                <details>
+                  <summary>{t("inspector.cultural.ledger")}</summary>
+                  <dl className="stats small mono">
+                    {Object.entries(data.ledger_residuals).map(([k, v]) => (
+                      <span key={k} style={{ display: "contents" }}>
+                        <dt>{k}</dt>
+                        <dd>{v.toExponential(2)}</dd>
+                      </span>
+                    ))}
+                  </dl>
+                </details>
               )}
             </div>
           )}

@@ -1,0 +1,75 @@
+schema_version: 1
+experiment:
+  name: Cultural World Baseline Group E
+  mode: exploratory
+  substrate: cultural_world
+  seed: 42
+  world:
+    width: 64.0
+    height: 64.0
+    boundary: periodic
+    resolution: 32
+    environment_regime: seasonal
+    regime_period: 200
+  initialization:
+    count: 80
+  dynamics:
+    clock_unit: tick
+    numeric_policy: float64_numpy
+    genetic_evolution: true
+    lifetime_learning: true
+    transmission_regime: custom
+    resources:
+      food_capacity: 1.0
+      food_regrowth: 0.015
+      material_a_capacity: 0.8
+      material_a_regrowth: 0.012
+      material_b_capacity: 0.8
+      material_b_regrowth: 0.012
+      food_decay: 0.002
+      material_decay: 0.001
+    transmission:
+      vertical: true
+      horizontal: true
+      oblique: false
+      observation_range: 5.0
+      transmission_cost: 0.01
+      error_probability: 0.05
+      base_success_prob: 0.6
+    technology:
+      allow_invention: true
+      allow_improvement: true
+      max_program_length: 4
+      max_skills_per_agent: 4
+      invention_prob: 0.015
+      skill_energy_cost: 0.02
+      forbid_preinstalled_recipes: true
+    controller:
+      kind: mlp
+      hidden: 8
+      learning_rate: 0.04
+      mutation_sigma: 0.08
+      temperature: 1.0
+    initial_energy: 5.0
+    metabolism: 0.045
+    move_cost: 0.015
+    reproduce_threshold: 9.5
+    max_age: 300
+    max_population: 400
+  runner:
+    max_steps: 5000
+    checkpoint_interval: 500
+  observations:
+    metrics:
+      - population
+      - births
+      - deaths
+      - mean_energy
+      - resource_ledger_residual
+      - mean_skills_per_agent
+      - knowledge_diversity
+      - successful_transmission_rate
+      - skill_retention_after_death
+      - social_learning_fraction
+      - improvement_depth
+      - innovation_utility

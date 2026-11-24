@@ -1,0 +1,19 @@
+preset:
+  id: cultural_world_vertical_only
+  scenario: cultural_world_default.yaml
+  title_key: preset.cultural_world_vertical_only.title
+  description_key: preset.cultural_world_vertical_only.description
+  overrides:
+    experiment:
+      name: Cultural World Vertical Only Group C
+      dynamics:
+        lifetime_learning: true
+        transmission_regime: vertical_only
+        transmission:
+          vertical: true
+          horizontal: false
+          oblique: false
+  expected_observation: >-
+    Skills transmit only from parent to offspring at birth without peer horizontal or oblique
+    spreading, allowing comparison against peer-enabled transmission regimes.
+  negative_control: cultural_world_lifetime_only

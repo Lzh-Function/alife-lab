@@ -1,0 +1,19 @@
+schema_version: 1
+sweep:
+  name: Cultural World Transmission Ablation
+  base_preset: cultural_world_baseline
+  seeds: [0, 1, 2, 3, 4]
+  factors:
+    - path: dynamics.transmission_regime
+      values: [none, vertical_only, vertical_horizontal, all]
+      labels: [no_transmission, vertical_only, vertical_horizontal, all_channels]
+  reference_condition: 0
+  endpoint:
+    metric: mean_energy
+    at: final
+  design: exploratory
+  hypothesis: >-
+    Enabling vertical and peer social transmission increases skill retention after inventor death
+    and shifts population survival or energy outcomes under conserved resource budgets compared to
+    lifetime-learning alone (regime=none).
+  profile_id: cpu_dev

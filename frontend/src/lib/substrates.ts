@@ -4,12 +4,12 @@
 import type { Frame } from "./api";
 import { popcount } from "./api";
 
-export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network" | "nca_train" | "nca" | "pd_nca" | "protocell" | "agent_world" | "lenia_mc" | "creature" | "search" | "connectome" | "connectome_sysid" | "connectome_task" | "fly_embodied" | "fly_swarm" | "fly_world";
+export type SubstrateId = "conway" | "boids" | "particle_life" | "bff" | "lenia" | "flow_lenia" | "gray_scott" | "physarum" | "reaction_network" | "nca_train" | "nca" | "pd_nca" | "protocell" | "agent_world" | "lenia_mc" | "creature" | "search" | "connectome" | "connectome_sysid" | "connectome_task" | "fly_embodied" | "fly_swarm" | "fly_world" | "cultural_world";
 
 /** Substrates rendered as continuous particles (vs. grids). */
 export const PARTICLE_SUBSTRATES = new Set(["boids", "particle_life"]);
 /** Substrates rendered as a continuous scalar field (codec field_u8). */
-export const FIELD_SUBSTRATES = new Set(["lenia", "flow_lenia", "gray_scott", "physarum", "reaction_network", "nca_train", "nca", "pd_nca", "protocell", "agent_world", "lenia_mc", "search", "connectome_sysid", "connectome_task"]);
+export const FIELD_SUBSTRATES = new Set(["lenia", "flow_lenia", "gray_scott", "physarum", "reaction_network", "nca_train", "nca", "pd_nca", "protocell", "agent_world", "lenia_mc", "search", "connectome_sysid", "connectome_task", "cultural_world"]);
 /** Non-spatial substrates whose display is a species x time image (rows = species). */
 export const ROW_DISPLAY_SUBSTRATES = new Set(["reaction_network"]);
 
@@ -188,6 +188,11 @@ export const TOOLS: Record<SubstrateId, ToolDescriptor> = {
     modes: ["off", "inspect"],
     radius: { min: 0, max: 0, step: 1, initial: 0 },
     noteKey: "lab.tool.fly_world_note",
+  },
+  cultural_world: {
+    modes: ["off", "inspect", "add_resource"],
+    radius: { min: 2, max: 16, step: 2, initial: 6 },
+    noteKey: "lab.tool.cultural_world_note",
   },
 };
 
@@ -615,6 +620,38 @@ export const FORM_FIELDS: Record<SubstrateId, FormField[]> = {
     { path: "max_population", labelKey: "form.flyworld.max_pop", kind: "int", min: 8, max: 64 },
     { path: "dynamics.mutation_rate", labelKey: "form.flyworld.mutation_rate", kind: "float", min: 0, max: 1, step: 0.02 },
     { path: "dynamics.signal_cost", labelKey: "form.flyworld.signal_cost", kind: "float", min: 0, max: 0.05, step: 0.001 },
+    ...RUNNER,
+  ],
+  cultural_world: [
+    { path: "seed", labelKey: "form.seed", kind: "int", min: 0 },
+    { path: "initialization.count", labelKey: "form.cultural_world.count", kind: "int", min: 4, max: 1000 },
+    {
+      path: "world.environment_regime",
+      labelKey: "form.cultural_world.env_regime",
+      kind: "select",
+      options: [
+        { value: "stationary", labelKey: "form.cultural_world.env_regime.stationary" },
+        { value: "seasonal", labelKey: "form.cultural_world.env_regime.seasonal" },
+        { value: "shifting_patches", labelKey: "form.cultural_world.env_regime.shifting_patches" },
+      ],
+    },
+    { path: "world.regime_period", labelKey: "form.cultural_world.regime_period", kind: "int", min: 20, max: 10000 },
+    {
+      path: "dynamics.transmission_regime",
+      labelKey: "form.cultural_world.tx_regime",
+      kind: "select",
+      options: [
+        { value: "custom", labelKey: "form.cultural_world.tx_regime.custom" },
+        { value: "none", labelKey: "form.cultural_world.tx_regime.none" },
+        { value: "vertical_only", labelKey: "form.cultural_world.tx_regime.vertical_only" },
+        { value: "vertical_horizontal", labelKey: "form.cultural_world.tx_regime.vertical_horizontal" },
+        { value: "all", labelKey: "form.cultural_world.tx_regime.all" },
+      ],
+    },
+    { path: "dynamics.transmission.transmission_cost", labelKey: "form.cultural_world.tx_cost", kind: "float", min: 0, max: 1, step: 0.005 },
+    { path: "dynamics.technology.invention_prob", labelKey: "form.cultural_world.invention_prob", kind: "float", min: 0, max: 0.5, step: 0.005 },
+    { path: "dynamics.controller.learning_rate", labelKey: "form.cultural_world.learning_rate", kind: "float", min: 0, max: 2, step: 0.01 },
+    { path: "dynamics.controller.mutation_sigma", labelKey: "form.cultural_world.mutation_sigma", kind: "float", min: 0, max: 2, step: 0.01 },
     ...RUNNER,
   ],
 };

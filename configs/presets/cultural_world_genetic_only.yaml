@@ -1,0 +1,22 @@
+preset:
+  id: cultural_world_genetic_only
+  scenario: cultural_world_default.yaml
+  title_key: preset.cultural_world_genetic_only.title
+  description_key: preset.cultural_world_genetic_only.description
+  overrides:
+    experiment:
+      name: Cultural World Genetic Only Group A
+      dynamics:
+        lifetime_learning: false
+        transmission_regime: none
+        transmission:
+          vertical: false
+          horizontal: false
+          oblique: false
+        technology:
+          allow_invention: false
+          allow_improvement: false
+  expected_observation: >-
+    Only inherited genotype weights adapt across generations; learned_delta_norm,
+    social_learning_fraction, and skill_retention_after_death remain 0.
+  negative_control: cultural_world_baseline

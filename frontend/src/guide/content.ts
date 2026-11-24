@@ -567,6 +567,29 @@ export const SUBSTRATE_GUIDE: Record<string, SubstrateGuide> = {
     canSay: "ハエの実測コネクトームを出発点にした人工生命モデルにおいて、外発スコアなしの自然繁殖から差分遺伝子がドリフトし、状況相関と受け手応答を持つ合図が観測された。",
     cannotSay: "「本物のショウジョウバエがこう進化する」。世代を重ねた個体はすでに本物のハエのモデルではなく、ハエ配線を出発点にした人工生命です。",
   },
+  cultural_world: {
+    slug: "cultural_world",
+    title: "文化進化ワールド（`cultural_world`：遺伝・寿命内学習・文化伝達の3層分離実験）",
+    category: "evo",
+    level: 2,
+    atlas: "E24",
+    oneLine: "「遺伝（DNA）」「一代限りの学習（ΔW）」「他者から学んで残る手順知識（技能DSL）」の3層を分け、保存則と因果介入で累積文化の条件を確かめる実験世界です。",
+    what:
+      "食料と2種類の素材（A・B）が湧き、個体は移動・採集・加工でエネルギーを得て増えます。新しい子は親の遺伝重みを受け継ぎますが、一生のうちの学習 ΔW と技能メモリは必ず空の状態で生まれます。そこに「親からの垂直伝達」「仲間からの水平伝達」「年長個体からの斜行伝達」をオン/オフでき、文化消去（遺伝と経験はそのままに技能だけゼロ化）で因果効果を測れます。",
+    watch: [
+      "個体色：グレー＝技能なし（naive）、金色＝自力で技能を発明した個体、マゼンタ＝他者から技能を学んだ個体（social learner）。",
+      "背景色：緑＝食料、赤茶＝素材 A、青紫＝素材 B。季節変動やパッチ移動モードでは時間とともに資源の分布が変わります。",
+      "発明者が死んだあとの技能保持率（skill_retention_after_death）：社会伝達なし（Group A/B）では 0 のままですが、伝達ありでは世代を越えて残るかを観察できます。",
+    ],
+    tryThis: [
+      "基本プリセット（Group E）を走らせたあと、上部の介入バーから「文化のみ消去」を押し、遺伝重み（|ΔW|・エネルギー）が保たれたまま手順知識だけが消えた後の回復を観察する。",
+      "比較用の Group A（遺伝のみ）・Group B（寿命内学習のみ）・Group C（垂直伝達のみ）を切り替え、技能数や多様性・平均エネルギーがどう変わるか比べる。",
+      "「環境ショック（季節位相シフト）」や資源追加ブラシで条件を揺さぶり、環境変化に対して文化伝達が有利か足を引っ張るかを確認する。",
+    ],
+    controls: "「遺伝のみ（Group A）」と「寿命内学習のみ（Group B）」を同じ seed（同じ環境・資源乱数ストリーム）で回すと、文化伝達だけの純粋な差を切り分けられます。",
+    canSay: "3層を分離し同一環境乱数と比較対照を置いた閉じた保存則の世界で、特定条件における文化伝達・死後保持・因果介入の効果や無効果を測定できた。",
+    cannotSay: "「人間社会の文化進化一般を証明した」。本モデルは小さな有限DSL手順と局所観測範囲に基づく人工生命実験です。",
+  },
 };
 
 // 設定パラメータのやさしい説明。キーは "<世界>:<path>"、全世界共通は "*:<path>"。
@@ -658,6 +681,14 @@ export const PARAM_HELP: Record<string, string> = {
   "search:asal.frames": "候補1つの動画から、採点のために何枚の場面を切り出すかです。",
   "search:runner.max_steps": "何世代まで探索を続けるかです。総評価回数は「1世代の候補数 × seed の数 × 世代数」になります。",
   "connectome:wiring": "脳の配線の種類です。「実測の配線（論文準拠）」は実際のコネクトーム、「配線をシャッフル（比較用）」は各細胞の結合数を保ったまま接続先をランダムに入れ替えた比較用の脳です。",
+  "cultural_world:initialization.count": "最初にワールドへ配置する個体数です。",
+  "cultural_world:world.environment_regime": "環境・資源の季節変化パターンです。stationary（定常）、seasonal（季節波）、shifting_patches（資源パッチが時間とともに移動）を選べます。",
+  "cultural_world:world.regime_period": "環境が1周する周期（tick）です。",
+  "cultural_world:dynamics.transmission_regime": "文化伝達のチャネル構成です。none（伝達なし：Group A/B）、vertical_only（親→子のみ：Group C）、vertical_horizontal（垂直＋仲間）、all（垂直＋水平＋斜行）。",
+  "cultural_world:dynamics.transmission.transmission_cost": "1回の模倣・伝達で学習者と教師が支払う代謝エネルギーコストです。",
+  "cultural_world:dynamics.technology.invention_prob": "1 tick ごとに新しい技能DSL手順を発明・改良し得る確率の上限です。",
+  "cultural_world:dynamics.controller.learning_rate": "一生のうちの政策勾配学習（ΔW）の学習率です（遺伝には引き継がれません）。",
+  "cultural_world:dynamics.controller.mutation_sigma": "子が遺伝する重み（W1/b1/W2/b2）に加わる突然変異の標準偏差です。",
 };
 
 // 計測値のやさしい説明。キーは計測値ID、または "<世界>:<ID>"（世界ごとに意味が違う場合）。
@@ -763,6 +794,14 @@ export const METRIC_HELP: Record<string, string> = {
   plastic_min_scale: "最も大きく弱まった KC→MBON シナプスの倍率です。記憶の深さの目安になります。",
   mean_v_mv: "すべての神経細胞の膜電位の平均値（ミリボルト）です。",
   time_ms: "脳シミュレーションの中で進んだ時間（ミリ秒）です。1 tick = 1 ms です。",
+  resource_ledger_residual: "全資源（食料・素材 A・素材 B）の保存則元帳と実存量の差の最大値です。0 に近いほど数値リーク・無からの生成がないことを示します。",
+  mean_skills_per_agent: "生存個体1体あたりが保持している文化伝達可能な技能スロット数の平均です。",
+  knowledge_diversity: "現在の生存個体が保持しているユニークな技能手順（DSL プログラム）の種類数です。",
+  successful_transmission_rate: "親・仲間からの技能伝達試行のうち、学習者が実際に獲得できた割合です。",
+  skill_retention_after_death: "技能の実行回数のうち、元の発明者がすでに死亡した後に別の個体が使って維持している割合（世代をまたぐ保持）です。",
+  social_learning_fraction: "技能の実行回数のうち、親や仲間から社会学習で受け継いだ技能が使われた割合です。",
+  improvement_depth: "現在生きている個体が持つ技能のうち、他者の手順を改良して積み上げた世代深さの最大値です。",
+  innovation_utility: "素材加工技能の1回あたり・素材1単位あたりの平均粗エネルギー獲得量です。",
 };
 
 export const BASICS: Array<{ title: string; body: string[] }> = [

@@ -29,6 +29,10 @@ from alife_lab.substrates.connectome.task_adapter import (
     ConnectomeTaskAdapter,
 )
 from alife_lab.substrates.creature.adapter import CREATURE_MANIFEST, CreatureAdapter
+from alife_lab.substrates.cultural_world.adapter import (
+    CULTURAL_WORLD_MANIFEST,
+    CulturalWorldAdapter,
+)
 from alife_lab.substrates.flow_lenia.flow_lenia import FLOW_LENIA_MANIFEST, FlowLeniaAdapter
 from alife_lab.substrates.gray_scott.gray_scott import GRAY_SCOTT_MANIFEST, GrayScottAdapter
 from alife_lab.substrates.lenia.lenia import LENIA_MANIFEST, LeniaAdapter
@@ -72,6 +76,7 @@ _REGISTRY: dict[str, tuple[PluginManifest, type[SubstrateAdapter]]] = {
     "fly_embodied": (FLY_EMBODIED_MANIFEST, FlyEmbodiedAdapter),
     "fly_swarm": (FLY_SWARM_MANIFEST, FlySwarmAdapter),
     "fly_world": (FLY_WORLD_MANIFEST, FlyWorldAdapter),
+    "cultural_world": (CULTURAL_WORLD_MANIFEST, CulturalWorldAdapter),
 }
 
 
