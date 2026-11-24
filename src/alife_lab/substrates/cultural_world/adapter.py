@@ -149,6 +149,94 @@ _METRICS = (
         1,
         "never null",
     ),
+    _M(
+        "tech_novelty",
+        "metric.tech_novelty",
+        "fraction",
+        "tick",
+        "Distinct (target_resource, ops) procedure signatures per living skill slot.",
+        "none",
+        "every tick",
+        1,
+        "never null",
+    ),
+    _M(
+        "tech_validity",
+        "metric.tech_validity",
+        "fraction",
+        "tick",
+        "Share of skill executions producing strictly positive net energy after skill_energy_cost.",
+        "none",
+        "every tick",
+        1,
+        "never null",
+    ),
+    _M(
+        "tech_utility",
+        "metric.tech_utility",
+        "energy/unit",
+        "tick",
+        "Mean net energy return per unit material after deducting skill_energy_cost.",
+        "none",
+        "every tick",
+        1,
+        "never null",
+    ),
+    _M(
+        "tech_transfer",
+        "metric.tech_transfer",
+        "fraction",
+        "tick",
+        "Share of skill executions using socially or artifact-transferred procedures.",
+        "none",
+        "every tick",
+        1,
+        "never null",
+    ),
+    _M(
+        "tech_improvement",
+        "metric.tech_improvement",
+        "efficiency",
+        "tick",
+        "Mean efficiency gain over ancestral root skill across refined/composed living skills.",
+        "none",
+        "every tick",
+        1,
+        "never null",
+    ),
+    _M(
+        "active_artifacts",
+        "metric.active_artifacts",
+        "objects",
+        "tick",
+        "Number of active physical externalized artifacts currently on the arena.",
+        "none",
+        "every tick",
+        1,
+        "never null",
+    ),
+    _M(
+        "externalized_learning_fraction",
+        "metric.externalized_learning_fraction",
+        "fraction",
+        "tick",
+        "Share of living skill slots acquired asynchronously from PlacedArtifact objects.",
+        "none",
+        "every tick",
+        1,
+        "never null",
+    ),
+    _M(
+        "compositional_skill_fraction",
+        "metric.compositional_skill_fraction",
+        "fraction",
+        "tick",
+        "Share of living skill slots formed by two-parent composition or combine/transform ops.",
+        "none",
+        "every tick",
+        1,
+        "never null",
+    ),
 )
 
 CULTURAL_WORLD_MANIFEST = PluginManifest(
@@ -171,6 +259,7 @@ CULTURAL_WORLD_MANIFEST = PluginManifest(
         supports_deterministic_cpu=True,
         intervention_types=(
             "erase_culture",
+            "destroy_objects",
             "set_transmission",
             "shock_environment",
             "add_resource",
@@ -233,6 +322,11 @@ class CulturalWorldAdapter:
         )
 
         a = state.agents
+        if state.artifacts:
+            w = max(64.0, math.ceil(float(a.x.max()))) if a.x.size else 64.0
+            h = max(64.0, math.ceil(float(a.y.max()))) if a.y.size else 64.0
+            codecs.draw_artifacts_overlay(img, state.artifacts, w, h, r, s)
+
         if a.n > 0:
             w = max(float(a.x.max()), 64.0) if a.x.size else 64.0
             h = max(float(a.y.max()), 64.0) if a.y.size else 64.0
@@ -259,7 +353,7 @@ class CulturalWorldAdapter:
             "height": r * s,
             "channels": 3,
             "scale": (
-                "food (green), material A/B; "
+                "food (green), material A/B, cyan=artifact; "
                 "agents: grey=naive, gold=inventor, magenta=social learner"
             ),
         }, data
@@ -288,12 +382,15 @@ class CulturalWorldAdapter:
                     {
                         **sl.to_json(),
                         "parent_skill_id": proc.parent_skill_id,
+                        "secondary_parent_id": proc.secondary_parent_id,
                         "revision": proc.revision,
                         "depth": proc.depth,
                         "inventor_id": proc.inventor_id,
-                        "target_resource": "material_a"
-                        if proc.target_resource == 1
-                        else "material_b",
+                        "target_resource": (
+                            "dual_a_b"
+                            if proc.target_resource == 3
+                            else ("material_a" if proc.target_resource == 1 else "material_b")
+                        ),
                         "ops": list(proc.ops),
                         "efficiency": round(proc.efficiency, 3),
                         "phase": round(proc.phase, 3),
@@ -312,17 +409,41 @@ class CulturalWorldAdapter:
                 "skills": skills_detail,
             }
         v_on, h_on, o_on = resolve_transmission_flags(exp, state.tx_overrides)
+        ext_on = (
+            bool(state.tx_overrides["externalized"])
+            if "externalized" in state.tx_overrides
+            else (exp.dynamics.technology.allow_externalization and (v_on or h_on or o_on))
+        )
         residuals = ledger_residuals(
             state.eco,
-            float(a.inv_a.sum()) if a.n else 0.0,
-            float(a.inv_b.sum()) if a.n else 0.0,
+            (float(a.inv_a.sum()) if a.n else 0.0) + sum(art.mass_a for art in state.artifacts),
+            (float(a.inv_b.sum()) if a.n else 0.0) + sum(art.mass_b for art in state.artifacts),
         )
+        nearby_artifacts = []
+        for art in state.artifacts:
+            adx = (art.x - x + 0.5 * w) % w - 0.5 * w
+            ady = (art.y - y + 0.5 * h) % h - 0.5 * h
+            if adx * adx + ady * ady <= exp.dynamics.transmission.observation_range**2:
+                aproc = state.registry.procedures.get(art.skill_id)
+                item = art.to_json()
+                if aproc is not None:
+                    item["ops"] = list(aproc.ops)
+                    item["efficiency"] = round(aproc.efficiency, 3)
+                    item["target_resource"] = (
+                        "dual_a_b"
+                        if aproc.target_resource == 3
+                        else ("material_a" if aproc.target_resource == 1 else "material_b")
+                    )
+                nearby_artifacts.append(item)
         return {
             "substrate": "cultural_world",
             "tick": state.tick,
             "query": {"x": x, "y": y},
             "population": a.n,
             "transmission": {"vertical": v_on, "horizontal": h_on, "oblique": o_on},
+            "externalized_enabled": ext_on,
+            "active_artifacts": len(state.artifacts),
+            "nearby_artifacts": nearby_artifacts[:8],
             "ledger_residuals": {k: round(float(v), 12) for k, v in residuals.items()},
             "recent_transmissions": state.registry.transmissions[-8:],
             "cultural_agent": agent_info,
@@ -338,6 +459,7 @@ class CulturalWorldAdapter:
             and np.array_equal(a.eco.food, b.eco.food)
             and np.array_equal(a.eco.material_a, b.eco.material_a)
             and a.agents.skills == b.agents.skills
+            and a.artifacts == b.artifacts
         )
         return {
             "metric": "population_difference",

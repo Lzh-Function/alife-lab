@@ -40,6 +40,8 @@ ALWAYS_COMPUTED = {
     "creature": set(),
     "search": set(),
     "connectome": set(),
+    "cultural_world": {"population"},
+    "worm_embodied": set(),
 }
 UNIT_NOTE = (
     "Unit of analysis: one independently seeded run per value. Time points within a run are not "
@@ -61,9 +63,9 @@ def _set_path(body: dict[str, Any], path: str, value: Any) -> None:
     if "." not in path:
         body[path] = value
         return
-    section, key = path.split(".", 1)
+    section, rest = path.split(".", 1)
     sub = dict(body.get(section) or {})
-    sub[key] = value
+    _set_path(sub, rest, value)
     body[section] = sub
 
 

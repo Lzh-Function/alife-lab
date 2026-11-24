@@ -209,7 +209,7 @@ export function initialTool(substrate: string): ToolState {
 export interface FormField {
   path: string; // dotted path under experiment.*
   labelKey: string;
-  kind: "int" | "float" | "select" | "textlist"; // textlist: "a; b" <-> ["a", "b"]
+  kind: "int" | "float" | "select" | "textlist" | "bool"; // textlist: "a; b" <-> ["a", "b"]
   min?: number;
   max?: number;
   step?: number;
@@ -655,6 +655,9 @@ export const FORM_FIELDS: Record<SubstrateId, FormField[]> = {
     },
     { path: "dynamics.transmission.transmission_cost", labelKey: "form.cultural_world.tx_cost", kind: "float", min: 0, max: 1, step: 0.005 },
     { path: "dynamics.technology.invention_prob", labelKey: "form.cultural_world.invention_prob", kind: "float", min: 0, max: 0.5, step: 0.005 },
+    { path: "dynamics.technology.allow_composition", labelKey: "form.cultural_world.allow_composition", kind: "bool" },
+    { path: "dynamics.technology.allow_externalization", labelKey: "form.cultural_world.allow_externalization", kind: "bool" },
+    { path: "dynamics.technology.artifact_decay_ticks", labelKey: "form.cultural_world.artifact_decay", kind: "int", min: 10, max: 5000 },
     { path: "dynamics.controller.learning_rate", labelKey: "form.cultural_world.learning_rate", kind: "float", min: 0, max: 2, step: 0.01 },
     { path: "dynamics.controller.mutation_sigma", labelKey: "form.cultural_world.mutation_sigma", kind: "float", min: 0, max: 2, step: 0.01 },
     ...RUNNER,

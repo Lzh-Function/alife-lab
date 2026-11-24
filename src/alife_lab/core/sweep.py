@@ -16,7 +16,7 @@ from alife_lab.core.hashing import sha256_json
 
 MAX_SWEEP_RUNS = 200
 _PATH = (
-    r"^((dynamics|world|initialization|runner|observations|soup)\.[a-z_]{1,64}"
+    r"^((dynamics|world|initialization|runner|observations|soup)(\.[a-z_]{1,64}){1,2}"
     r"|wiring|silenced_ports|silenced_cell_types)$"
 )
 Scalar = float | int | str | bool

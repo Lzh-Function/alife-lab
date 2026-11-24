@@ -73,3 +73,11 @@ experiment:
       - social_learning_fraction
       - improvement_depth
       - innovation_utility
+      - tech_novelty
+      - tech_validity
+      - tech_utility
+      - tech_transfer
+      - tech_improvement
+      - active_artifacts
+      - externalized_learning_fraction
+      - compositional_skill_fraction

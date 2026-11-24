@@ -1,0 +1,19 @@
+schema_version: 1
+sweep:
+  name: Cultural World P4 Composition Ablation
+  base_preset: cultural_world_compositional
+  seeds: [0, 1, 2, 3, 4]
+  factors:
+    - path: dynamics.technology.allow_composition
+      values: [true, false]
+      labels: [compositional, no_composition]
+  reference_condition: 1
+  endpoint:
+    metric: tech_improvement
+    at: final
+  design: exploratory
+  hypothesis: >-
+    Enabling two-skill composition and order-sensitive combine/transform operators produces deeper
+    compositional skill trees, positive ancestral efficiency improvement, and higher net utility
+    than identical ecological and social-transmission conditions with composition disabled.
+  profile_id: cpu_dev

@@ -326,14 +326,19 @@ export interface DiscoverySummary {
 
 export interface AssayCheck {
   id: string;
+  kind?: string;
   purpose: string;
   spec: Record<string, unknown>;
+  ctrl_spec?: Record<string, unknown>;
   steps: number;
+  midpoint?: number;
+  followup?: number;
   rule: Record<string, unknown>;
 }
 
 export interface CheckResult {
   id: string;
+  summary_text?: string;
   viable_fraction?: number;
   mean_speed?: number;
   score?: number; // CLIP checks

@@ -2301,10 +2301,15 @@ class CulturalWorldTransmission(_Frozen):
 class CulturalWorldTechnology(_Frozen):
     allow_invention: bool = True
     allow_improvement: bool = True
+    allow_composition: bool = False
+    allow_externalization: bool = False
     max_program_length: Annotated[int, Field(ge=1, le=12)] = 4
     max_skills_per_agent: Annotated[int, Field(ge=1, le=16)] = 4
     invention_prob: Annotated[float, Field(ge=0.0, le=0.5)] = 0.015
     skill_energy_cost: Annotated[float, Field(ge=0.0, le=1.0)] = 0.02
+    artifact_material_cost: Annotated[float, Field(ge=0.0, le=5.0)] = 0.25
+    artifact_decay_ticks: Annotated[int, Field(ge=10, le=10_000)] = 250
+    max_artifacts: Annotated[int, Field(ge=0, le=2000)] = 256
     forbid_preinstalled_recipes: bool = True
 
 
@@ -2356,6 +2361,14 @@ CulturalWorldMetric = Literal[
     "social_learning_fraction",
     "improvement_depth",
     "innovation_utility",
+    "tech_novelty",
+    "tech_validity",
+    "tech_utility",
+    "tech_transfer",
+    "tech_improvement",
+    "active_artifacts",
+    "externalized_learning_fraction",
+    "compositional_skill_fraction",
 ]
 
 
@@ -2373,6 +2386,14 @@ class CulturalWorldObservation(_Frozen):
         "social_learning_fraction",
         "improvement_depth",
         "innovation_utility",
+        "tech_novelty",
+        "tech_validity",
+        "tech_utility",
+        "tech_transfer",
+        "tech_improvement",
+        "active_artifacts",
+        "externalized_learning_fraction",
+        "compositional_skill_fraction",
     )
 
 

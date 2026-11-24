@@ -72,6 +72,9 @@ function CheckRow({ d, check, index }: { d: DiscoveryDetail; check: DiscoveryDet
   const latest = d.assays[d.assays.length - 1];
   const derivedFrom = (check as { from?: string }).from;
   const clipPlan = d.claim_kind === "clip_prompt_specific";
+  const culturalPlan = d.claim_kind === "cumulative_culture";
+  const checkPrefix = clipPlan ? "discovery.check_clip" : culturalPlan ? "discovery.check_cultural" : "discovery.check";
+  const rulePrefix = clipPlan ? "discovery.rule_clip" : culturalPlan ? "discovery.rule_cultural" : "discovery.rule";
   const res = latest?.result?.results[derivedFrom ?? check.id];
   const verdict = latest?.result?.judgement.verdicts[check.id];
   const world = check.spec ? (check.spec.experiment as { world: { width?: number; height?: number; size?: number } }).world : null;
@@ -83,22 +86,24 @@ function CheckRow({ d, check, index }: { d: DiscoveryDetail; check: DiscoveryDet
   return (
     <tr data-testid={`check-${check.id}`}>
       <td>
-        {index + 1}. <strong>{t(`${clipPlan ? "discovery.check_clip" : "discovery.check"}.${check.id}`)}</strong>
+        {index + 1}. <strong>{t(`${checkPrefix}.${check.id}`)}</strong>
         {world && (
           <div className="small muted">
             {size} · {check.steps} tick
           </div>
         )}
       </td>
-      <td className="small">{t(`${clipPlan ? "discovery.rule_clip" : "discovery.rule"}.${check.id}`)}</td>
+      <td className="small">{t(`${rulePrefix}.${check.id}`)}</td>
       <td className="small mono">
         {res?.error
           ? res.error
-          : res?.score !== undefined
-            ? `${t("discovery.clip_score")} ${res.score.toFixed(4)} · ${t("discovery.blank")} ${res.blank!.toFixed(4)} · "${res.max_control_prompt}" ${res.max_control!.toFixed(4)}`
-            : res
-              ? `${t("discovery.viable")} ${(res.viable_fraction! * 100).toFixed(0)}% · ${t("search.speed")} ${res.mean_speed!.toFixed(4)}`
-              : "—"}
+          : res?.summary_text
+            ? res.summary_text
+            : res?.score !== undefined
+              ? `${t("discovery.clip_score")} ${res.score.toFixed(4)} · ${t("discovery.blank")} ${res.blank!.toFixed(4)} · "${res.max_control_prompt}" ${res.max_control!.toFixed(4)}`
+              : res && res.mean_speed !== undefined
+                ? `${t("discovery.viable")} ${(res.viable_fraction! * 100).toFixed(0)}% · ${t("search.speed")} ${res.mean_speed.toFixed(4)}`
+                : "—"}
       </td>
       <td data-testid={`verdict-${check.id}`}>
         {verdict ? (verdict.passed === null ? t("discovery.verdict.na") : verdict.passed ? "✓ " + t("discovery.verdict.pass") : "✗ " + t("discovery.verdict.fail")) : "—"}
@@ -162,8 +167,12 @@ export function DiscoveryDetailView({ id }: { id: string }) {
         <dl className="stats small">
           <dt>{t("discovery.source")}</dt>
           <dd>
-            <a href={`#/lab/${d.source.run_id}`}>{d.source.run_id}</a> · {t("search.generation")} {d.source.generation} · #{d.source.candidate_index} ({d.source.algorithm}) ·{" "}
-            <a href={`#/lineage/${d.source.run_id}`}>🌳 {t("lineage.open")}</a>
+            <a href={`#/lab/${d.source.run_id}`}>{d.source.run_id}</a> · {t("search.generation")} {d.source.generation} · #{d.source.candidate_index} ({d.source.algorithm})
+            {d.substrate === "search" && (
+              <>
+                {" "}· <a href={`#/lineage/${d.source.run_id}`}>🌳 {t("lineage.open")}</a>
+              </>
+            )}
           </dd>
           {Object.keys(d.source.params ?? {}).length <= 8 &&
             Object.entries(d.source.params ?? {}).map(([k, v]) => (
@@ -172,10 +181,25 @@ export function DiscoveryDetailView({ id }: { id: string }) {
                 <dd className="mono">{Number(v).toPrecision(4)}</dd>
               </div>
             ))}
-          <dt>{t("search.score")}</dt>
-          <dd className="mono">{d.recorded.score?.toFixed(4)}</dd>
-          <dt>{t("search.speed")}</dt>
-          <dd className="mono">{d.recorded.speed?.toFixed(4)}</dd>
+          {d.claim_kind === "cumulative_culture" ? (
+            <>
+              <dt>{t("metric.improvement_depth")}</dt>
+              <dd className="mono">{d.recorded.improvement_depth?.toFixed(2) ?? "—"}</dd>
+              <dt>{t("metric.skill_retention_after_death")}</dt>
+              <dd className="mono">{d.recorded.skill_retention_after_death?.toFixed(3) ?? "—"}</dd>
+              <dt>{t("metric.tech_utility")}</dt>
+              <dd className="mono">{d.recorded.tech_utility?.toFixed(3) ?? "—"}</dd>
+              <dt>{t("metric.active_artifacts")}</dt>
+              <dd className="mono">{d.recorded.active_artifacts?.toFixed(0) ?? "—"}</dd>
+            </>
+          ) : (
+            <>
+              <dt>{t("search.score")}</dt>
+              <dd className="mono">{d.recorded.score?.toFixed(4)}</dd>
+              <dt>{t("search.speed")}</dt>
+              <dd className="mono">{d.recorded.speed?.toFixed(4)}</dd>
+            </>
+          )}
           <dt>{t("discovery.spec_hash")}</dt>
           <dd className="mono small">{d.candidate_spec_hash.slice(0, 16)}…</dd>
         </dl>
@@ -237,7 +261,9 @@ export function DiscoveryDetailView({ id }: { id: string }) {
             </button>
           )}
         </div>
-        <p className="small muted">{t("discovery.levels_note")}</p>
+        <p className="small muted">
+          {t(d.claim_kind === "cumulative_culture" ? "discovery.levels_note_cultural" : "discovery.levels_note")}
+        </p>
       </div>
 
       <div className="panel">

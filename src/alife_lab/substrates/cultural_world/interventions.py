@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import numpy as np
@@ -23,9 +24,46 @@ def apply_intervention(
         state.agents.skills = [[] for _ in range(state.agents.n)]
         return state, {"erased_skill_slots": cleared_slots, "population": state.agents.n}
 
+    if kind == "destroy_objects":
+        # Destroy physical externalized artifacts while conserving all material mass back to field.
+        w, h = exp.world.width, exp.world.height
+        r = exp.world.resolution
+        has_area = "x" in payload and "y" in payload
+        cx = float(payload["x"]) if has_area else 0.0
+        cy = float(payload["y"]) if has_area else 0.0
+        rad2 = float(payload.get("radius", 6.0)) ** 2 if has_area else 0.0
+        kept = []
+        destroyed = 0
+        returned_a = 0.0
+        returned_b = 0.0
+        for art in state.artifacts:
+            if has_area:
+                dx = (art.x - cx + 0.5 * w) % w - 0.5 * w
+                dy = (art.y - cy + 0.5 * h) % h - 0.5 * h
+                remove = (dx * dx + dy * dy) <= rad2
+            else:
+                remove = True
+            if remove:
+                ci = math.floor(art.y / h * r) % r
+                cj = math.floor(art.x / w * r) % r
+                state.eco.material_a[ci, cj] += art.mass_a
+                state.eco.material_b[ci, cj] += art.mass_b
+                returned_a += art.mass_a
+                returned_b += art.mass_b
+                destroyed += 1
+            else:
+                kept.append(art)
+        state.artifacts = kept
+        return state, {
+            "destroyed_artifacts": destroyed,
+            "returned_mass_a": round(returned_a, 6),
+            "returned_mass_b": round(returned_b, 6),
+            "remaining_artifacts": len(kept),
+        }
+
     if kind == "set_transmission":
         updated: dict[str, bool] = {}
-        for ch in ("vertical", "horizontal", "oblique"):
+        for ch in ("vertical", "horizontal", "oblique", "externalized"):
             if ch in payload:
                 val = bool(payload[ch])
                 state.tx_overrides[ch] = val
@@ -35,7 +73,7 @@ def apply_intervention(
             mute = not any(
                 state.tx_overrides.get(c, True) for c in ("vertical", "horizontal", "oblique")
             )
-            for ch in ("vertical", "horizontal", "oblique"):
+            for ch in ("vertical", "horizontal", "oblique", "externalized"):
                 state.tx_overrides[ch] = mute
                 updated[ch] = mute
         return state, {"tx_overrides": dict(state.tx_overrides)}
@@ -58,11 +96,11 @@ def apply_intervention(
         res_kind = str(payload.get("kind", "food"))
         grid = state.eco.grid(res_kind)
         r = exp.world.resolution
-        cy = (np.arange(r) + 0.5) * h / r
-        cx = (np.arange(r) + 0.5) * w / r
-        dy = (cy[:, None] - y + 0.5 * h) % h - 0.5 * h
-        dx = (cx[None, :] - x + 0.5 * w) % w - 0.5 * w
-        mask = dx * dx + dy * dy <= radius * radius
+        cell_y = (np.arange(r) + 0.5) * h / r
+        cell_x = (np.arange(r) + 0.5) * w / r
+        grid_dy = (cell_y[:, None] - y + 0.5 * h) % h - 0.5 * h
+        grid_dx = (cell_x[None, :] - x + 0.5 * w) % w - 0.5 * w
+        mask = grid_dx * grid_dx + grid_dy * grid_dy <= radius * radius
         amount = float(payload.get("amount", 0.5))
         if amount < 0.0 or amount > 20.0:
             raise ValueError("amount must be within [0, 20]")

@@ -1,8 +1,8 @@
-# CulturalWorld (`cultural_world`) — Phase P0–P3 Benchmark & Integrity Report
+# CulturalWorld (`cultural_world`) — Phase P0–P5 Benchmark & Integrity Report
 
 > **Scientific mode:** `exploratory` only (`mode="reference"` is rejected at `ExperimentSpec` validation; no external biological or historical literature oracle is claimed).
 >
-> **Architecture:** [ADR 0050](../decisions/0050-cultural-world.md) · **Unified Roadmap:** [cultural_world_plan.md](../plans/cultural_world_plan.md)
+> **Architecture:** [ADR 0050](../decisions/0050-cultural-world.md) · [ADR 0052](../decisions/0052-cultural-world-p4-p5.md) · **Unified Roadmap:** [cultural_world_plan.md](../plans/cultural_world_plan.md)
 
 ## 1. Scope & Structural Invariants Verified
 
@@ -69,4 +69,64 @@ Paired checkpoints saved at `t=400` on Arm E (`seeds = 0..4`) were restored into
   1. **Single-shot `erase_culture` partially recovers when `N=400` and `invention_prob=0.015`:** at `t=450` (+50 ticks), `improvement_depth` drops sharply (`6.0 -> 3.6`), and at `t=800` `innovation_utility` (`1.14` vs `1.23`) and `skill_retention_after_death` (`0.27` vs `0.37`) stay lower, yet population (`400`) and raw skill count (`3.61`) recover via abundant de novo invention + horizontal spread. True irreversible hysteresis likely requires either rare foundational inventions (`invention_prob << 0.015`), bottlenecked population size, or multi-step prerequisite tech DAGs (planned for Phase P4).
   2. **`C_vertical_only` showed higher `knowledge_diversity` (`249.6`) than `D/E` (`92.2 / 93.2`):** without peer horizontal copying, isolated family lineages retain idiosyncratic variants rather than converging onto high-utility shared recipes.
   3. **`D_full_free` (`cost=0.0`) vs `E_baseline_costly` (`cost=0.01`)** showed higher `improvement_depth` (`10.2` vs `7.0`) in `D`, while `mean_energy` (`15.32` vs `13.65`) overlapped within 1 SD at `N=400` saturation (`max_population = 400` caps demographic separation in `D` vs `E`).
-  4. **Scope limitations (P0–P3 vs P4–P7):** Multi-agent prerequisite dependency trees (Phase P4), novelty/ASAL trajectory comparison against random/baseline controls (Phase P5), and Connectome × Culture neuro-symbolic hybrids (`S1–S7` / `fly_world` bridge in Stage 3–6 of `docs/plans/cultural_world_plan.md`) are not yet implemented.
+  4. **Scope boundary (P0–P5 vs P6–P7):** Compositional DSL + conserved `PlacedArtifact` external memory (P4) and the pre-registered 5-criterion E2/E3 cumulative-culture assay & 2D phase diagram (P5) are now implemented and documented in §§5–8 below. Inter-agent atomic barter/division-of-labor (`P6`), GPU scaling benchmarks (`P7`), and Connectome × Culture neuro-symbolic hybrids remain planned in Stage 4–6 of [`docs/plans/cultural_world_plan.md`](../plans/cultural_world_plan.md).
+
+---
+
+## 5. Stage 3 / P4–P5 Extensions & Conservation Invariants
+
+Phase P4–P5 (`docs/decisions/0052-cultural-world-p4-p5.md`) extends `cultural_world` opt-in (`allow_composition=False`, `allow_externalization=False` by default so P0–P3 hashes and behaviors remain invariant; both enabled in `cultural_world_compositional`):
+
+- **Safe order-sensitive 10-op DSL (`src/alife_lab/substrates/cultural_world/technology.py`):** extends P3's 6 ops with `combine`, `transform`, `place_object`, `use_object`. No `eval`/`exec` and no fixed tech tree; `evaluate_pipeline` rewards valid operator ordering (`process_a + process_b` before `combine`/`transform` before `extract`/`store`) and penalizes misordered ops.
+- **Dual-parent Knowledge DAG (`secondary_parent_id`, `root_efficiency`):** `compose_skills` synthesizes two owned skills into a child procedure with `depth = max(d_a, d_b) + 1`.
+- **Conserved `PlacedArtifact` external memory:** placing an artifact debits `artifact_material_cost` equally from local `material_a`/`material_b` cells; decaying after `artifact_decay_ticks` or clearing via `destroy_objects` returns exact mass to the local cell (`resource_ledger_residual <= 1e-9`). Nearby artifacts boost same-target execution by `+18%` and allow asynchronous acquisition after creator death (`externalized_learning_fraction`).
+- **8 new P4 metrics:** `tech_novelty`, `tech_validity`, `tech_utility` (net after `skill_energy_cost`), `tech_transfer`, `tech_improvement` (vs `root_efficiency`), `active_artifacts`, `externalized_learning_fraction`, `compositional_skill_fraction`.
+
+---
+
+## 6. P5 5-Criterion Pre-Registered Assay (`cultural_world_compositional` vs `cultural_world_no_composition`)
+
+Commands run (`5` independent seeds from `SeedSequence([seed, 5])`, `600` ticks/check):
+- `uv run --no-sync alife cultural assay cultural_world_compositional --seeds 5 --steps 600 --json`
+- `uv run --no-sync alife cultural assay cultural_world_no_composition --seeds 5 --steps 600 --json`
+
+| Pre-Registered Check | `cultural_world_compositional` (`84.711 s` wall) | `cultural_world_no_composition` Control (`66.283 s` wall) |
+|---|---|---|
+| 1. `post_inventor_retention` | **PASS** · `viable=100%`, `deaths=579.4`, `ret=0.542` | **PASS** · `viable=100%`, `deaths=512.2`, `ret=0.360` |
+| 2. `compositional_refinement` | **PASS** · `depth=9.00 vs 10.20 (Cliff's δ=-0.44)`, `net_util=4.969 vs 2.598 (Cliff's δ=+1.00)`, `comp=0.999` | **FAIL** · `depth=10.20 vs 10.20 (δ=0.00)`, `net_util=2.598 vs 2.598 (δ=0.00)`, `comp=0.000` |
+| 3. `transmission_ablation` (vs `none`) | **PASS** · `ret=0.542 vs 0.000`, `net_util=4.969 vs 1.364`, `E=17.58 vs 5.41` | **PASS** · `ret=0.360 vs 0.000`, `net_util=2.598 vs 1.400`, `E=5.32 vs 4.78` |
+| 4. `erase_culture_causal` (`+60` / mute) | **PASS** · `d60=7.20 vs wiped=5.40`, `mute net_util=4.969 vs 3.751`, `E=17.58 vs 3.84` | **PASS** · `d60=7.60 vs wiped=3.60`, `mute net_util=2.598 vs 2.099`, `E=5.32 vs 3.47` |
+| 5. `heldout_transfer` (period×0.65 + shock) | **PASS** · `viable=100%`, `ret=0.485`, `net_util=4.778 vs 1.341` | **PASS** · `viable=100%`, `ret=0.355`, `net_util=2.636 vs 1.395` |
+| **Overall Verdict & Evidence Level** | **`validated` (`E3`)** | **`rejected` (`E1`)** |
+
+**Notable empirical finding on Check 2:** Single-parent chain mutation in `cultural_world_no_composition` reaches slightly deeper linear revision chains (`10.20` vs `9.00`, `δ = -0.44`), because two-parent composition synthesizes shorter specialized paths cleanly (`max(d_a, d_b) + 1`), yet compositional synergy nearly doubles net energetic return per material unit (`tech_utility = 4.969` vs `2.598`, **`Cliff's δ = +1.00`**) and raises mean agent energy (`17.58` vs `5.32`).
+
+---
+
+## 7. H6 Externalized Artifact Recovery Benchmark (5 Seeds × Warmup 300 -> +120 Ticks)
+
+Measured on `seeds = 0..4` (`alife-lab` single CPU process): peak RSS **`107.54 MiB`**, `cultural_world_compositional` step throughput **`2.504 ms/tick`** (`300`-tick warmup), and **maximum `resource_ledger_residual = 0.0`** across all sampled ticks and interventions (`<= 1e-9`).
+
+| Arm at `t=300` -> `t=420` | `ext_learn` Frac. | `improvement_depth` | `tech_utility` | `mean_energy` | `active_artifacts` | `ret` After Death |
+|---|---:|---:|---:|---:|---:|---:|
+| **`ext_intact`** | `0.3041 ± 0.0323` | `7.80 ± 1.72` | `4.526 ± 0.154` | `12.74 ± 0.33` | `96.8` | `0.359` |
+| **`ext_keep_artifacts` (`erase_culture` only)** | **`0.2848 ± 0.0350`** | **`7.80 ± 0.75`** | **`4.367 ± 0.177`** | **`12.07 ± 0.50`** | **`101.8`** | **`0.370`** |
+| **`ext_erase_and_destroy` (`+destroy_objects`)** | `0.0788 ± 0.0076` | `6.80 ± 1.17` | `3.581 ± 0.101` | `8.49 ± 0.42` | `33.2` | `0.213` |
+| **`no_ext_erase` (`no_externalization`)** | `0.0000 ± 0.0000` | `7.20 ± 0.75` | `3.360 ± 0.126` | `7.25 ± 0.54` | `0.0` | `0.208` |
+
+Paired `Cliff's δ` (`ext_keep_artifacts` vs `ext_erase_and_destroy` / vs `no_ext_erase`): `ext_learn = +1.00 / +1.00`, `tech_utility = +1.00 / +1.00`, `mean_energy = +1.00 / +1.00`, `improvement_depth = +0.44 / +0.36`. Physical `PlacedArtifact` external storage buffers populations against abrupt agent-memory erasure (`E=12.07` vs `8.49` / `7.25`).
+
+---
+
+## 8. 2D P5 Phase Diagram (`regime_period` × `transmission_cost`, 3 Seeds × 500 Ticks)
+
+Command: `uv run --no-sync alife cultural phase-diagram cultural_world_compositional --periods 80,200,500 --costs 0.0,0.015,0.04 --seeds 0,1,2 --steps 500 --json` (`55.95 s` wall).
+
+| `regime_period` | `tx_cost = 0.000` (`depth / ret / util / E`) | `tx_cost = 0.015` (`depth / ret / util / E`) | `tx_cost = 0.040` (`depth / ret / util / E`) |
+|---:|---|---|---|
+| **`80`** (fast) | `6.67 / 0.451 / 4.855 / 14.93` | `8.33 / 0.495 / 4.844 / 12.83` | `7.33 / 0.511 / 4.778 / 9.65` |
+| **`200`** (mid) | `9.67 / 0.480 / 4.756 / 15.31` | `7.67 / 0.454 / 4.817 / 12.92` | `7.00 / 0.450 / 4.808 / 9.16` |
+| **`500`** (slow) | `16.33 / 0.167 / 4.840 / 13.63` | `17.67 / 0.115 / 4.838 / 11.06` | `16.67 / 0.130 / 4.755 / 5.61` |
+
+- Higher `transmission_cost` monotonically reduces equilibrium `mean_energy` across every period (`15.31 -> 12.92 -> 9.16` at `period=200`; `13.63 -> 11.06 -> 5.61` at `period=500`) while `compositional_skill_fraction` remains `>= 0.9968`.
+- **H5 regime trade-off observed:** Slower turnover (`period=500`) accumulates deeper refinement chains (`16.3–17.7` vs `6.7–9.7`), yet shows lower `post-inventor retention` (`0.12–0.17` vs `0.45–0.51`) as fewer environmental phase resets prompt broad cross-lineage horizontal sharing compared with faster cycling (`period=80–200`).

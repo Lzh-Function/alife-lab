@@ -1858,6 +1858,82 @@ def cmd_connectome(args: argparse.Namespace) -> int:
     return 2
 
 
+def _load_cultural_spec(target: str) -> Any:
+    import yaml
+
+    from alife_lab.core.spec import CulturalWorldExperiment, ExperimentSpec
+    from alife_lab.service.catalog import load_presets
+    from alife_lab.service.settings import load_settings
+
+    p = Path(target)
+    if p.is_file():
+        spec = ExperimentSpec.model_validate(yaml.safe_load(p.read_text(encoding="utf-8")))
+    else:
+        presets = load_presets(load_settings().configs_dir)
+        if target not in presets:
+            raise ValueError(f"unknown cultural preset or file {target!r}")
+        spec = presets[target].spec
+    if not isinstance(spec.experiment, CulturalWorldExperiment):
+        raise ValueError(f"{target!r} is not a cultural_world experiment")
+    return spec
+
+
+def cmd_cultural(args: argparse.Namespace) -> int:
+    from alife_lab.evolution.cultural_assays import (
+        run_cultural_assay,
+        run_cultural_phase_diagram,
+    )
+
+    try:
+        spec = _load_cultural_spec(args.preset)
+        if args.cultural_cmd == "assay":
+            rep = run_cultural_assay(spec, n_seeds=args.seeds, steps=args.steps)
+            if args.json:
+                _print_json(rep)
+            else:
+                j = rep["judgement"]
+                print(
+                    f"cultural assay {rep['preset_name']}: status={j['status']} "
+                    f"evidence={j['evidence_level']} seeds={len(rep['seeds'])} "
+                    f"steps={rep['steps']} wall={rep['wall_seconds']:.2f}s"
+                )
+                for cid, verdict in j["verdicts"].items():
+                    mark = "PASS" if verdict["passed"] else "FAIL"
+                    print(f"  [{mark}] {cid:26s} {verdict['reason']}")
+            return 0
+
+        if args.cultural_cmd == "phase-diagram":
+            periods = tuple(int(x) for x in args.periods.split(",") if x.strip())
+            costs = tuple(float(x) for x in args.costs.split(",") if x.strip())
+            seeds = tuple(int(x) for x in args.seeds.split(",") if x.strip())
+            rep = run_cultural_phase_diagram(
+                spec,
+                regime_periods=periods,
+                tx_costs=costs,
+                seeds=seeds,
+                steps=args.steps,
+            )
+            if args.json:
+                _print_json(rep)
+            else:
+                print(
+                    f"cultural phase-diagram {rep['preset_name']} "
+                    f"seeds={rep['seeds']} steps={rep['steps']} wall={rep['wall_seconds']:.2f}s"
+                )
+                for c in rep["cells"]:
+                    print(
+                        f"  period={c['regime_period']:4d} cost={c['transmission_cost']:.3f} | "
+                        f"viable={c['viable_fraction']:.2f} depth={c['mean_depth']:.2f} "
+                        f"ret={c['mean_retention']:.3f} util={c['mean_net_utility']:.3f} "
+                        f"comp={c['mean_comp_fraction']:.3f} E={c['mean_energy']:.2f}"
+                    )
+            return 0
+    except (ValueError, FileNotFoundError) as exc:
+        print(f"cultural error: {exc}", file=sys.stderr)
+        return 1
+    return 2
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="alife",
@@ -2251,6 +2327,25 @@ def build_parser() -> argparse.ArgumentParser:
     cworm.add_argument("--json", action="store_true")
 
     p.set_defaults(func=cmd_connectome)
+
+    p = sub.add_parser("cultural", help="run P4/P5 cumulative-culture assays and phase diagrams")
+    culsub = p.add_subparsers(dest="cultural_cmd", required=True)
+
+    ca = culsub.add_parser("assay", help="run 5-criterion cumulative-culture assay (E1/E2/E3)")
+    ca.add_argument("preset", nargs="?", default="cultural_world_compositional")
+    ca.add_argument("--seeds", type=int, default=5)
+    ca.add_argument("--steps", type=int, default=600)
+    ca.add_argument("--json", action="store_true")
+
+    cpd = culsub.add_parser("phase-diagram", help="sweep (regime_period x transmission_cost)")
+    cpd.add_argument("preset", nargs="?", default="cultural_world_compositional")
+    cpd.add_argument("--periods", default="80,200,500")
+    cpd.add_argument("--costs", default="0.0,0.015,0.04")
+    cpd.add_argument("--seeds", default="0,1,2")
+    cpd.add_argument("--steps", type=int, default=500)
+    cpd.add_argument("--json", action="store_true")
+
+    p.set_defaults(func=cmd_cultural)
     return parser
 
 

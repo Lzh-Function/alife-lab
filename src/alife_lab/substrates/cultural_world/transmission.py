@@ -91,6 +91,8 @@ def _receive_skill(
             max_len=exp.dynamics.technology.max_program_length,
             rng_tech=rng_transmit,
             preserve_phase=True,
+            allow_composition=exp.dynamics.technology.allow_composition,
+            allow_externalization=exp.dynamics.technology.allow_externalization,
         )
         registry.register(acquired_proc)
         next_skill_id += 1

@@ -1,0 +1,33 @@
+preset:
+  id: cultural_world_compositional
+  scenario: cultural_world_default.yaml
+  title_key: preset.cultural_world_compositional.title
+  description_key: preset.cultural_world_compositional.description
+  overrides:
+    experiment:
+      name: Cultural World Compositional P4 P5
+      world:
+        environment_regime: shifting_patches
+        regime_period: 200
+      dynamics:
+        transmission_regime: all
+        transmission:
+          vertical: true
+          horizontal: true
+          oblique: true
+          transmission_cost: 0.01
+        technology:
+          allow_invention: true
+          allow_improvement: true
+          allow_composition: true
+          allow_externalization: true
+          max_program_length: 8
+          max_skills_per_agent: 5
+          invention_prob: 0.025
+          artifact_material_cost: 0.25
+          artifact_decay_ticks: 250
+        max_age: 220
+  expected_observation: >-
+    Agents compose single-resource skills via combine/transform into higher-utility dual workflows
+    and place externalized artifacts on the arena that sustain skills across cohort turnover.
+  negative_control: cultural_world_no_composition

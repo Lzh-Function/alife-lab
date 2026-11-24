@@ -1,6 +1,6 @@
 # 累積文化・原始社会ワールド（`cultural_world`）＆ 統合発展ロードマップ計画書
 
-- **状態:** **Stage 1（`cultural_world` P0〜P3）着手・実装中（2026-11-24）**。既存の 23 基質・128 プリセット（`conway`〜`fly_world`、コネクトーム F0〜F12d）の再現性は一切壊さず、独立トラックとして追加する。
+- **状態:** **Stage 3（`cultural_world` P4〜P5）実装・検証完了（2026-11-24）**（Stage 1 `cultural_world` P0〜P3、Stage 2 `connectome` S1 ＋実活動データ照合に続き、次は **Stage 4: S2〜S4 ＆ F13a–c**）。既存の 23+ 基質・全プリセットの再現性は一切壊さず、独立トラックとして維持されている。
 - **提案する基質名:** `cultural_world`（`mode: exploratory` 専用）
 - **科学的位置付け:** 探索的研究（exploratory）。現代文明のゲーム的再現や人間級知能・言語の自然発生を保証するものではない。「限られた初期能力の個体群から、知識の保持・改良・伝達がどのような環境・コスト条件で成立するか」を因果介入付きで検証する計算実験基盤である。
 - **統合ロードマップ:** 本計画（トラック B：`cultural_world` P0〜P7）と [`docs/plans/connectome_plan.md`](connectome_plan.md) の他生物展開（トラック A：S1〜S7・F13）を、下記の 6 段階で縦割り進行する。
@@ -13,10 +13,10 @@
 
 | ステージ | トラック | 内容 | 主な完了条件・承認ゲート |
 |---|---|---|---|
-| **Stage 1（現在）** | B: `cultural_world` **P0〜P3** | ADR 0050 確定 → 複数資源生態系（収支厳密保存）・3 層状態分離（遺伝／生涯／文化）・観察/模倣/教示・`erase_culture` 因果介入・A〜E 群比較スイープ | CPU テスト完結、A〜E 群＋介入結果の正直な実測記録（肯定・否定両方） |
-| **Stage 2** | A: コネクトーム **S1** | 線虫 *C. elegans*（302 細胞）：非発火電位 `MODEL_GRADED` とギャップ結合 `SYNAPSE_GAP_JUNCTION` を計算エンジンへ実装 ＋ 這う体 ＋ 実活動比較 | 既存 FlyWire のビット一致無影響確認。**実データ取得前に URL・容量を提示して承認取得** |
-| **Stage 3** | B: `cultural_world` **P4〜P5** | 許可リスト方式の安全 DSL による構成的技術（固定ツリー禁止）・設置物体を通じた知識の外在化・累積文化 5 基準アッセイ・Discovery Ledger E2/E3 連携・相図スイープ | `no_composition` 対照、発明者死亡後存続＋held-out 転移検証 |
-| **Stage 4** | A: **S2〜S4 ＆ F13a–c** | ハエ幼虫（3k）・ゴカイ幼生（9k）・ホヤ幼生（180）の種パック ＋ 異種比較統計 ＋ 異種間キメラ（交配・脳移植・キノコ体移植） | **実データ取得前に承認取得**。キメラは由来割合・シャッフル対照を明示 |
+| **Stage 1（完了）** | B: `cultural_world` **P0〜P3** | ADR 0050 確定 → 複数資源生態系（収支厳密保存）・3 層状態分離（遺伝／生涯／文化）・観察/模倣/教示・`erase_culture` 因果介入・A〜E 群比較スイープ | CPU テスト完結、A〜E 群＋介入結果の実測記録完了（[fidelity report](../reference_fidelity/cultural_world.md)） |
+| **Stage 2（完了）** | A: コネクトーム **S1** | 線虫 *C. elegans*（302 細胞）：非発火電位 `MODEL_GRADED` とギャップ結合 `SYNAPSE_GAP_JUNCTION` ＋ 這う体 ＋ 実 GCaMP 活動照合 | FlyWire 無影響確認・5匹/154s・79〜111一致細胞で `spatial_r2`・`rollout_r2` 有意優位を検証済 |
+| **Stage 3（完了）** | B: `cultural_world` **P4〜P5** | ADR 0052・許可リスト 10 演算子安全 DSL 構成的技術・保存則 `PlacedArtifact` 外在化・累積文化 5 基準アッセイ・Discovery Ledger E2/E3 連携・2 次元相図スイープ | `cultural_world_compositional` E3 合格 vs `no_composition` E1 棄却、H6 回復 δ=+1.00、保存誤差 `0.0` を検証済 |
+| **Stage 4（次）** | A: **S2〜S4 ＆ F13a–c** | ハエ幼虫（3k）・ゴカイ幼生（9k）・ホヤ幼生（180）の種パック ＋ 異種比較統計 ＋ 異種間キメラ（交配・脳移植・キノコ体移植） | **実データ取得前に承認取得**。キメラは由来割合・シャッフル対照を明示 |
 | **Stage 5** | B: `cultural_world` **P6〜P7** | 相互依存資源の原子的交換・分業/専門化・`forbid_exchange` 介入・文化系統 DAG ＆ 取引ネットワーク UI・CPU/GPU スケーリング実測 | 取引の資源保存・原子性、独立 run 単位での相補分業検証 |
 | **Stage 6** | A: 大型皮質 **S5〜S7** | マウス視覚野 MICrONS（約 20 万細胞・5.2 億シナプス・7.5 万活動記録）＆ ヒト皮質 H01 比較（S7 ゼブラフィッシュは公式公開待ち） | **大容量取得・VRAM 配置を事前見積もりして承認取得** |
 

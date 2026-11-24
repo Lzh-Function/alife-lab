@@ -25,6 +25,7 @@ function fieldsFor(substrate: string): FormField[] {
 }
 
 function defaultTpsFor(substrate: string): number {
+  if (substrate === "cultural_world") return 20;
   if (substrate === "fly_embodied" || substrate === "fly_swarm") return 1000;
   if (substrate === "worm_embodied") return 30;
   if (substrate === "fly_world") return 60;
@@ -319,6 +320,13 @@ export function Catalog({ onOpen }: { onOpen: (runId: string) => void }) {
                             .filter(Boolean),
                         )
                       }
+                    />
+                  ) : f.kind === "bool" ? (
+                    <input
+                      type="checkbox"
+                      data-testid={`field-${f.path}`}
+                      checked={Boolean(form.values[f.path])}
+                      onChange={(e) => setValue(f.path, e.target.checked)}
                     />
                   ) : (
                     <input

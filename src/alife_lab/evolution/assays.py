@@ -27,14 +27,19 @@ from typing import Any
 import numpy as np
 
 from alife_lab.core.hashing import sha256_json
-from alife_lab.core.spec import ExperimentSpec, SearchExperiment
+from alife_lab.core.spec import CulturalWorldExperiment, ExperimentSpec, SearchExperiment
 
 PLAN_VERSION = 1
 PASS_VIABLE = 0.8  # fraction of seeds that must be viable
 REPRODUCE_TOL = 0.05  # relative speed tolerance vs. the recorded search value
 LARGER_TOL = 0.10  # relative speed tolerance vs. the reproduce check
 FASTER_MARGIN = 0.05  # candidate must be >= 5 % faster than the base parameters
-CLAIM_KINDS = ("moving_localized", "faster_than_base", "clip_prompt_specific")
+CLAIM_KINDS = (
+    "moving_localized",
+    "faster_than_base",
+    "clip_prompt_specific",
+    "cumulative_culture",
+)
 
 
 def _seeds(search: SearchExperiment, count: int) -> list[int]:
@@ -55,13 +60,21 @@ def _with(spec_json: dict[str, Any], **changes: Any) -> dict[str, Any]:
 
 
 def make_plan(
-    search: SearchExperiment,
+    search: SearchExperiment | CulturalWorldExperiment,
     candidate_spec: dict[str, Any],
     recorded: dict[str, float],
     claim_kind: str,
 ) -> dict[str, Any]:
     if claim_kind not in CLAIM_KINDS:
         raise ValueError(f"unknown claim kind {claim_kind!r}")
+    if claim_kind == "cumulative_culture":
+        if not isinstance(search, CulturalWorldExperiment):
+            raise ValueError("claim cumulative_culture requires a CulturalWorldExperiment")
+        from alife_lab.evolution import cultural_assays
+
+        return cultural_assays.make_plan(search, candidate_spec, recorded)
+    if not isinstance(search, SearchExperiment):
+        raise ValueError(f"claim {claim_kind!r} requires a SearchExperiment")
     if claim_kind == "clip_prompt_specific":
         from alife_lab.evolution import assays_clip
 
@@ -149,6 +162,10 @@ def run_check(check: dict[str, Any], seeds: list[int], max_alive: float) -> dict
         from alife_lab.evolution import assays_clip
 
         return assays_clip.run_check(check, seeds)
+    if check.get("kind") == "cultural":
+        from alife_lab.evolution import cultural_assays
+
+        return cultural_assays.run_check(check, seeds)
 
     t0 = time.perf_counter()
     rows = []
@@ -175,6 +192,10 @@ def judge(plan: dict[str, Any], results: dict[str, dict[str, Any]]) -> dict[str,
         from alife_lab.evolution import assays_clip
 
         return assays_clip.judge(plan, results)
+    if plan["claim_kind"] == "cumulative_culture":
+        from alife_lab.evolution import cultural_assays
+
+        return cultural_assays.judge(plan, results)
     verdicts: dict[str, dict[str, Any]] = {}
     for check in plan["checks"]:
         cid = check["id"]

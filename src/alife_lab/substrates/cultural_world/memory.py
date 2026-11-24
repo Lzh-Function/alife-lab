@@ -12,14 +12,14 @@ from typing import Any
 
 import numpy as np
 
-ALLOWED_OPS: tuple[str, ...] = (
-    "locate",
-    "gather",
-    "process_a",
-    "process_b",
-    "extract",
-    "store",
+from alife_lab.substrates.cultural_world.technology import (
+    ALLOWED_OPS,
+    COMPOSITION_OPS,
+    EXTERNAL_OPS,
+    P3_BASE_OPS,
+    evaluate_pipeline,
 )
+
 MAX_EVENT_LOG = 512
 
 
@@ -33,19 +33,25 @@ class SkillProcedure:
     inventor_id: int
     origin_tick: int
     depth: int
-    target_resource: int  # 1 = material_a, 2 = material_b
+    target_resource: int  # 1 = material_a, 2 = material_b, 3 = dual (a + b)
     ops: tuple[str, ...]
     phase: float  # tuned environmental regime phase in [0, 1)
-    efficiency: float  # intrinsic craft multiplier [0.5, 2.6]
+    efficiency: float  # intrinsic craft multiplier [0.5, 3.6]
+    secondary_parent_id: int = -1
+    root_efficiency: float = 0.0
 
     def __post_init__(self) -> None:
         if any(op not in ALLOWED_OPS for op in self.ops):
             raise ValueError(f"disallowed operation in skill ops {self.ops!r}")
 
+    def effective_root_efficiency(self) -> float:
+        return self.root_efficiency if self.root_efficiency > 0.0 else self.efficiency
+
     def to_json(self) -> dict[str, Any]:
         return {
             "skill_id": self.skill_id,
             "parent_skill_id": self.parent_skill_id,
+            "secondary_parent_id": self.secondary_parent_id,
             "revision": self.revision,
             "inventor_id": self.inventor_id,
             "origin_tick": self.origin_tick,
@@ -54,13 +60,16 @@ class SkillProcedure:
             "ops": list(self.ops),
             "phase": self.phase,
             "efficiency": self.efficiency,
+            "root_efficiency": self.effective_root_efficiency(),
         }
 
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> SkillProcedure:
+        eff = float(data["efficiency"])
         return cls(
             skill_id=int(data["skill_id"]),
             parent_skill_id=int(data["parent_skill_id"]),
+            secondary_parent_id=int(data.get("secondary_parent_id", -1)),
             revision=int(data["revision"]),
             inventor_id=int(data["inventor_id"]),
             origin_tick=int(data["origin_tick"]),
@@ -68,7 +77,8 @@ class SkillProcedure:
             target_resource=int(data["target_resource"]),
             ops=tuple(str(op) for op in data["ops"]),
             phase=float(data["phase"]),
-            efficiency=float(data["efficiency"]),
+            efficiency=eff,
+            root_efficiency=float(data.get("root_efficiency", eff)),
         )
 
 
@@ -166,22 +176,19 @@ class SkillRegistry:
         )
 
 
+def _ops_pool(allow_composition: bool, allow_externalization: bool) -> tuple[str, ...]:
+    pool = list(P3_BASE_OPS)
+    if allow_composition:
+        pool.extend(COMPOSITION_OPS)
+    if allow_externalization:
+        pool.extend(EXTERNAL_OPS)
+    return tuple(pool)
+
+
 def _ops_efficiency(ops: tuple[str, ...], target_resource: int) -> float:
-    """Intrinsic efficiency of an operation sequence (rewards coherent target pipelines)."""
-    proc_op = "process_a" if target_resource == 1 else "process_b"
-    score = 0.65
-    if proc_op in ops:
-        score += 0.35
-    if "extract" in ops:
-        score += 0.30
-    if "locate" in ops or "gather" in ops:
-        score += 0.15
-    if "store" in ops:
-        score += 0.15
-    # Diversity of distinct valid ops without bloat:
-    unique_bonus = 0.12 * len(set(ops))
-    bloat_penalty = 0.08 * max(0, len(ops) - len(set(ops)))
-    return float(max(0.5, min(2.6, score + unique_bonus - bloat_penalty)))
+    """Intrinsic efficiency of an operation sequence (order-sensitive pipeline)."""
+    eff, _, _ = evaluate_pipeline(ops, target_resource)
+    return eff
 
 
 def evaluate_skill_utility(proc: SkillProcedure, env_phase: float) -> float:
@@ -199,16 +206,20 @@ def invent_skill(
     env_phase: float,
     max_len: int,
     rng_tech: np.random.Generator,
+    allow_composition: bool = False,
+    allow_externalization: bool = False,
 ) -> SkillProcedure:
     """Synthesize a novel base procedure via individual trial and error (depth 0)."""
+    pool = _ops_pool(allow_composition, allow_externalization)
     length = int(rng_tech.integers(2, max(3, min(max_len, 4) + 1)))
-    ops_idx = rng_tech.integers(0, len(ALLOWED_OPS), size=length)
-    ops = tuple(ALLOWED_OPS[int(i)] for i in ops_idx)
+    ops_idx = rng_tech.integers(0, len(pool), size=length)
+    ops = tuple(pool[int(i)] for i in ops_idx)
     phase = float((env_phase + float(rng_tech.normal(0.0, 0.12))) % 1.0)
     eff = _ops_efficiency(ops, target_resource)
     return SkillProcedure(
         skill_id=skill_id,
         parent_skill_id=-1,
+        secondary_parent_id=-1,
         revision=0,
         inventor_id=inventor_id,
         origin_tick=tick,
@@ -217,6 +228,7 @@ def invent_skill(
         ops=ops,
         phase=phase,
         efficiency=eff,
+        root_efficiency=eff,
     )
 
 
@@ -230,28 +242,32 @@ def improve_skill(
     max_len: int,
     rng_tech: np.random.Generator,
     preserve_phase: bool = False,
+    allow_composition: bool = False,
+    allow_externalization: bool = False,
 ) -> SkillProcedure:
-    """Mutate/compose a parent procedure into a child revision (depth + 1)."""
+    """Mutate/refine a parent procedure into a child revision (depth + 1)."""
+    pool = _ops_pool(allow_composition, allow_externalization)
     ops_list = list(parent.ops)
-    proc_op = "process_a" if parent.target_resource == 1 else "process_b"
+    proc_op = "process_a" if parent.target_resource in (1, 3) else "process_b"
     roll = float(rng_tech.random())
     if roll < 0.45 and len(ops_list) < max_len:
-        # Insert missing high-value step if not present
-        candidates = [op for op in (proc_op, "extract", "store", "locate") if op not in ops_list]
-        op_new = (
-            candidates[0]
-            if candidates
-            else ALLOWED_OPS[int(rng_tech.integers(0, len(ALLOWED_OPS)))]
-        )
+        # Insert missing high-value step (preserving compositional ops only if allowed)
+        high_val = [proc_op, "extract", "store", "locate"]
+        if allow_composition and parent.target_resource == 3 and "combine" not in ops_list:
+            high_val.insert(0, "combine")
+        if allow_composition and "transform" not in ops_list:
+            high_val.append("transform")
+        candidates = [op for op in high_val if op not in ops_list and op in pool]
+        op_new = candidates[0] if candidates else pool[int(rng_tech.integers(0, len(pool)))]
         ops_list.append(op_new)
     elif roll < 0.80 and ops_list:
         pos = int(rng_tech.integers(0, len(ops_list)))
-        ops_list[pos] = ALLOWED_OPS[int(rng_tech.integers(0, len(ALLOWED_OPS)))]
+        ops_list[pos] = pool[int(rng_tech.integers(0, len(pool)))]
     elif len(ops_list) > 2:
         ops_list.pop(int(rng_tech.integers(0, len(ops_list))))
 
     ops = tuple(ops_list)
-    base_eff = _ops_efficiency(ops, parent.target_resource)
+    base_eff, is_comp, _ = evaluate_pipeline(ops, parent.target_resource)
     # Keep improvements bounded; preserve phase on exact/aligned refinement unless shifted.
     if preserve_phase:
         phase = float((parent.phase + float(rng_tech.normal(0.0, 0.04))) % 1.0)
@@ -259,10 +275,12 @@ def improve_skill(
         # Partial hill-climb toward current environmental phase + small noise
         diff = ((env_phase - parent.phase + 0.5) % 1.0) - 0.5
         phase = float((parent.phase + 0.35 * diff + float(rng_tech.normal(0.0, 0.03))) % 1.0)
-    eff = float(max(0.5, min(2.6, 0.45 * parent.efficiency + 0.55 * base_eff + 0.06)))
+    cap = 3.6 if is_comp else 2.6
+    eff = float(max(0.5, min(cap, 0.45 * parent.efficiency + 0.55 * base_eff + 0.06)))
     return SkillProcedure(
         skill_id=skill_id,
         parent_skill_id=parent.skill_id,
+        secondary_parent_id=-1,
         revision=parent.revision + 1,
         inventor_id=improver_id,
         origin_tick=tick,
@@ -271,4 +289,5 @@ def improve_skill(
         ops=ops,
         phase=phase,
         efficiency=eff,
+        root_efficiency=parent.effective_root_efficiency(),
     )

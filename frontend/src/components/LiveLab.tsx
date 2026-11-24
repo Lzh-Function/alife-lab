@@ -431,6 +431,14 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
             </button>
             <button
               type="button"
+              data-testid="cultural-destroy-objects"
+              disabled={!live}
+              onClick={() => onIntervene("destroy_objects", {})}
+            >
+              {t("cultural.act.destroy_objects")}
+            </button>
+            <button
+              type="button"
               data-testid="cultural-toggle-transmission"
               disabled={!live}
               onClick={() => onIntervene("set_transmission", {})}
@@ -444,6 +452,26 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
               onClick={() => onIntervene("shock_environment", { phase_shift: 0.5 })}
             >
               {t("cultural.act.shock_env")}
+            </button>
+            <button
+              type="button"
+              data-testid="cultural-register-discovery"
+              onClick={() =>
+                api
+                  .createDiscovery({
+                    run_id: runId,
+                    candidate: 0,
+                    tick: tick ?? summary?.clock.value,
+                    claim_kind: "cumulative_culture",
+                    title: `${summary?.name ?? runId} @ t=${tick ?? summary?.clock.value ?? 0}`,
+                  })
+                  .then((d) => {
+                    window.location.hash = `/discoveries/${d.id}`;
+                  })
+                  .catch((e) => setInspectError(e instanceof ApiError ? e.message : String(e)))
+              }
+            >
+              {t("cultural.act.register_discovery")}
             </button>
           </div>
         )}

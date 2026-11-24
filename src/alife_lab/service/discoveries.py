@@ -17,7 +17,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from alife_lab.core.hashing import canonical_json, sha256_json
-from alife_lab.core.spec import ExperimentSpec, SearchExperiment
+from alife_lab.core.spec import CulturalWorldExperiment, ExperimentSpec, SearchExperiment
 from alife_lab.evolution import assays
 
 if TYPE_CHECKING:
@@ -29,6 +29,12 @@ LIMITATIONS = [
     "Evidence from one objective (lenia_moving_localized v1) and one substrate implementation.",
     "The centroid speed is not a creature tracker; separate blobs share one centroid.",
     "No intervention (E3) or independent-implementation (E4) checks are part of this plan.",
+]
+CULTURAL_LIMITATIONS = [
+    "Evidence from one cultural_world parameter regime and pre-registered 5-criterion checks.",
+    "Finite arena and finite horizon cannot prove open-ended human or biological culture.",
+    "E3 uses paired erase_culture/destroy_objects/mute forks; "
+    "E4 independent reimplementation is outside this plan.",
 ]
 
 
@@ -88,36 +94,82 @@ class DiscoveryService:
         run = self.c.run_summary(run_id)
         spec = ExperimentSpec.model_validate(run["spec"])
         search = spec.experiment
-        if not isinstance(search, SearchExperiment):
-            raise ControllerError("discoveries are registered from search runs")
-        clip_search = search.asal is not None and search.dynamics.objective == "lenia_clip_target"
-        if (claim_kind == "clip_prompt_specific") != clip_search:
-            raise ControllerError(
-                "claim clip_prompt_specific is for CLIP target searches; moving_localized and "
-                "faster_than_base are for single-channel, non-CLIP Lenia searches"
-            )
         source_tick = int(run["clock"]["value"]) if tick is None else int(tick)
-        info = await self.c.inspect(run_id, {"candidate": int(candidate)}, source_tick)
-        cand = info.get("candidate")
-        if not cand or cand.get("spec") is None:
-            raise ControllerError("candidate has no valid target spec")
-        cand_spec = ExperimentSpec.model_validate(cand["spec"])
-        recorded = {k: cand[k] for k in ("score", "speed", "mass", "alive_fraction",
-                                          "viable_fraction") if k in cand}  # fmt: skip
-        plan = assays.make_plan(search, cand_spec.model_dump(mode="json"), recorded, claim_kind)
         did = "dsc_" + secrets.token_hex(8)
         now = time.time()
-        source_ref = {
-            "run_id": run_id,
-            "tick": source_tick,
-            "candidate_index": int(candidate),
-            "generation": cand.get("generation"),
-            "params": cand.get("params"),
-            "lineage": cand.get("lineage", []),
-            "search_spec_hash": spec.digest(),
-            "objective": search.dynamics.objective,
-            "algorithm": search.dynamics.algorithm,
-        }
+        if claim_kind == "cumulative_culture":
+            if not isinstance(search, CulturalWorldExperiment):
+                raise ControllerError("claim cumulative_culture requires a cultural_world run")
+            cand_spec = spec
+            m_data = self.c.metrics(run_id, since_tick=-1, max_points=1, until_tick=source_tick)
+            latest_vals = m_data["rows"][-1]["values"] if m_data["rows"] else {}
+            recorded: dict[str, float] = {
+                k: float(latest_vals[k])
+                for k in (
+                    "mean_energy",
+                    "skill_retention_after_death",
+                    "improvement_depth",
+                    "tech_utility",
+                    "active_artifacts",
+                )
+                if latest_vals.get(k) is not None
+            }
+            plan = assays.make_plan(search, cand_spec.model_dump(mode="json"), recorded, claim_kind)
+            source_ref: dict[str, Any] = {
+                "run_id": run_id,
+                "tick": source_tick,
+                "candidate_index": int(candidate),
+                "generation": source_tick,
+                "params": {
+                    "regime_period": float(search.world.regime_period),
+                    "transmission_cost": float(search.dynamics.transmission.transmission_cost),
+                    "invention_prob": float(search.dynamics.technology.invention_prob),
+                    "allow_composition": (
+                        1.0 if search.dynamics.technology.allow_composition else 0.0
+                    ),
+                    "allow_externalization": (
+                        1.0 if search.dynamics.technology.allow_externalization else 0.0
+                    ),
+                },
+                "lineage": [],
+                "search_spec_hash": spec.digest(),
+                "objective": "cumulative_culture",
+                "algorithm": "cultural_world",
+            }
+        else:
+            if not isinstance(search, SearchExperiment):
+                raise ControllerError("discoveries are registered from search runs")
+            clip_search = (
+                search.asal is not None and search.dynamics.objective == "lenia_clip_target"
+            )
+            if (claim_kind == "clip_prompt_specific") != clip_search:
+                raise ControllerError(
+                    "claim clip_prompt_specific is for CLIP target searches; "
+                    "moving_localized and faster_than_base are for single-channel, "
+                    "non-CLIP Lenia searches"
+                )
+            info = await self.c.inspect(run_id, {"candidate": int(candidate)}, source_tick)
+            cand = info.get("candidate")
+            if not cand or cand.get("spec") is None:
+                raise ControllerError("candidate has no valid target spec")
+            cand_spec = ExperimentSpec.model_validate(cand["spec"])
+            recorded = {
+                k: cand[k]
+                for k in ("score", "speed", "mass", "alive_fraction", "viable_fraction")
+                if k in cand
+            }
+            plan = assays.make_plan(search, cand_spec.model_dump(mode="json"), recorded, claim_kind)
+            source_ref = {
+                "run_id": run_id,
+                "tick": source_tick,
+                "candidate_index": int(candidate),
+                "generation": cand.get("generation"),
+                "params": cand.get("params"),
+                "lineage": cand.get("lineage", []),
+                "search_spec_hash": spec.digest(),
+                "objective": search.dynamics.objective,
+                "algorithm": search.dynamics.algorithm,
+            }
         self.c.db.execute(
             "INSERT INTO discoveries(id, title, claim_kind, substrate, source_run_id, "
             "source_tick, source_ref_json, candidate_spec_json, candidate_spec_hash, "
@@ -265,17 +317,20 @@ class DiscoveryService:
 
     def record(self, did: str) -> dict[str, Any]:
         """Discovery Record export: claim, candidate, provenance, plan, results, history."""
+        from alife_lab.evolution import cultural_assays
+
         d = self.get(did)
+        is_cultural = d["claim_kind"] == "cumulative_culture"
         return {
             "record_version": 1,
             "discovery": {k: d[k] for k in ("id", "title", "claim_kind", "substrate", "status",
                                             "evidence_level", "created_at", "updated_at")},
-            "claim": assays.__doc__,
+            "claim": cultural_assays.__doc__ if is_cultural else assays.__doc__,
             "candidate": {"spec": d["candidate_spec"], "spec_sha256": d["candidate_spec_hash"],
                           "recorded": d["recorded"]},
             "provenance": {"source": d["source"],
                            "source_run": self.c.provenance(d["source_run_id"])},
             "assays": d["assays"],
             "history": d["events"],
-            "limitations": LIMITATIONS,
+            "limitations": CULTURAL_LIMITATIONS if is_cultural else LIMITATIONS,
         }  # fmt: skip

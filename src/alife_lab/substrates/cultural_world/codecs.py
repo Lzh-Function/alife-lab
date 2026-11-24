@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import numpy as np
@@ -11,15 +12,34 @@ from alife_lab.substrates.cultural_world.agents import CulturalAgents
 from alife_lab.substrates.cultural_world.ecology import ResourceField, ResourceLedger
 from alife_lab.substrates.cultural_world.memory import SkillRegistry, SkillSlot
 from alife_lab.substrates.cultural_world.model import RNG_NAMES, CulturalWorldState
+from alife_lab.substrates.cultural_world.technology import PlacedArtifact
 
-SERIALIZE_VERSION = 1
+SERIALIZE_VERSION = 2
 RENDER_SCALE = 8
+
+
+def draw_artifacts_overlay(
+    img: np.ndarray[Any, np.dtype[np.float32]],
+    artifacts: list[PlacedArtifact],
+    w: float,
+    h: float,
+    r: int,
+    s: int,
+) -> None:
+    """Draw physical externalized artifacts as crisp cyan 3x3 markers."""
+    size = r * s
+    for art in artifacts:
+        px = math.floor(art.x / w * size) % size
+        py = math.floor(art.y / h * size) % size
+        y0, y1 = max(0, py - 1), min(size, py + 2)
+        x0, x1 = max(0, px - 1), min(size, px + 2)
+        img[y0:y1, x0:x1] = (0.15, 0.95, 0.98)
 
 
 def render_frame(
     state: CulturalWorldState, exp: CulturalWorldExperiment
 ) -> tuple[dict[str, Any], bytes]:
-    """Render 3-channel resource map + culturally color-coded agents into ``field_u8``."""
+    """Render 3-channel resource map, placed artifacts, and agents into ``field_u8``."""
     s = RENDER_SCALE
     r = exp.world.resolution
     w, h = exp.world.width, exp.world.height
@@ -34,6 +54,9 @@ def render_frame(
     img[..., 1] = np.kron(food_norm * 0.55 + mata_norm * 0.15, np.ones((s, s)))
     img[..., 2] = np.kron(matb_norm * 0.55, np.ones((s, s)))
 
+    if state.artifacts:
+        draw_artifacts_overlay(img, state.artifacts, w, h, r, s)
+
     a = state.agents
     if a.n > 0:
         px = np.floor(a.x / w * r * s).astype(np.int64) % (r * s)
@@ -43,9 +66,9 @@ def render_frame(
             if not slots:
                 col = (0.75, 0.78, 0.82)  # grey: no acquired skills yet
             elif any(sl.teacher_id >= 0 for sl in slots):
-                col = (0.95, 0.35, 0.90)  # magenta: socially learned skill holder
+                col = (0.95, 0.35, 0.90)  # magenta: socially/artifact learned skill holder
             else:
-                col = (0.98, 0.72, 0.18)  # amber: self-invented/improved skill holder
+                col = (0.98, 0.72, 0.18)  # amber: self-invented/composed skill holder
             y0, y1 = max(0, int(py[k]) - 1), min(r * s, int(py[k]) + 2)
             x0, x1 = max(0, int(px[k]) - 1), min(r * s, int(px[k]) + 2)
             img[y0:y1, x0:x1] = col
@@ -57,7 +80,7 @@ def render_frame(
         "height": r * s,
         "channels": 3,
         "scale": (
-            "food (green), material A/B (amber/blue); "
+            "food (green), material A/B (amber/blue), cyan=artifact; "
             "agents: grey=naive, gold=inventor, magenta=social learner"
         ),
     }
@@ -91,6 +114,13 @@ def serialize_state(state: CulturalWorldState) -> dict[str, Any]:
             "utility_count": int(state.utility_count),
             "env_phase_offset": float(state.env_phase_offset),
             "tx_overrides": dict(state.tx_overrides),
+            "artifacts": [art.to_json() for art in state.artifacts],
+            "next_artifact_id": int(state.next_artifact_id),
+            "valid_skill_uses": int(state.valid_skill_uses),
+            "net_utility_sum": float(state.net_utility_sum),
+            "externalized_learns": int(state.externalized_learns),
+            "externalized_uses": int(state.externalized_uses),
+            "compositions_created": int(state.compositions_created),
             "ledger": state.eco.ledger.to_json(),
             "registry": state.registry.to_json(),
             "skills": [[sl.to_json() for sl in s_list] for s_list in state.agents.skills],
@@ -101,7 +131,7 @@ def serialize_state(state: CulturalWorldState) -> dict[str, Any]:
 
 def deserialize_state(payload: dict[str, Any], exp: CulturalWorldExperiment) -> CulturalWorldState:
     meta = payload["meta"]
-    if meta["serialize_version"] != SERIALIZE_VERSION:
+    if meta["serialize_version"] not in (1, SERIALIZE_VERSION):
         raise ValueError("incompatible cultural_world checkpoint serialize_version")
     arr = payload["arrays"]
     fields = {
@@ -148,4 +178,11 @@ def deserialize_state(payload: dict[str, Any], exp: CulturalWorldExperiment) -> 
         utility_count=int(meta["utility_count"]),
         env_phase_offset=float(meta["env_phase_offset"]),
         tx_overrides={str(k): bool(v) for k, v in meta.get("tx_overrides", {}).items()},
+        artifacts=[PlacedArtifact.from_json(d) for d in meta.get("artifacts", [])],
+        next_artifact_id=int(meta.get("next_artifact_id", 1)),
+        valid_skill_uses=int(meta.get("valid_skill_uses", 0)),
+        net_utility_sum=float(meta.get("net_utility_sum", 0.0)),
+        externalized_learns=int(meta.get("externalized_learns", 0)),
+        externalized_uses=int(meta.get("externalized_uses", 0)),
+        compositions_created=int(meta.get("compositions_created", 0)),
     )

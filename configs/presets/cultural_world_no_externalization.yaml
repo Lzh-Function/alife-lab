@@ -1,0 +1,33 @@
+preset:
+  id: cultural_world_no_externalization
+  scenario: cultural_world_default.yaml
+  title_key: preset.cultural_world_no_externalization.title
+  description_key: preset.cultural_world_no_externalization.description
+  overrides:
+    experiment:
+      name: Cultural World No-Externalization H6 Control
+      world:
+        environment_regime: shifting_patches
+        regime_period: 200
+      dynamics:
+        transmission_regime: all
+        transmission:
+          vertical: true
+          horizontal: true
+          oblique: true
+          transmission_cost: 0.01
+        technology:
+          allow_invention: true
+          allow_improvement: true
+          allow_composition: true
+          allow_externalization: false
+          max_program_length: 8
+          max_skills_per_agent: 5
+          invention_prob: 0.025
+          artifact_material_cost: 0.25
+          artifact_decay_ticks: 250
+        max_age: 220
+  expected_observation: >-
+    H6 control keeping compositional synthesis enabled while preventing agents from storing skills
+    in external physical PlacedArtifact objects on the arena.
+  negative_control: cultural_world_compositional

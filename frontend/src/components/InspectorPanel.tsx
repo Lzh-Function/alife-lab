@@ -79,6 +79,20 @@ export interface Inspection extends Omit<Partial<SearchInspection>, "region"> {
   } | null;
   // cultural_world
   transmission?: { vertical: boolean; horizontal: boolean; oblique: boolean };
+  externalized_enabled?: boolean;
+  active_artifacts?: number;
+  nearby_artifacts?: Array<{
+    artifact_id: number;
+    creator_id: number;
+    skill_id: number;
+    target_resource?: string;
+    efficiency?: number;
+    ops?: string[];
+    mass_a: number;
+    mass_b: number;
+    remaining_ticks: number;
+    uses: number;
+  }>;
   ledger_residuals?: Record<string, number>;
   cultural_agent?: {
     id: number;
@@ -93,6 +107,7 @@ export interface Inspection extends Omit<Partial<SearchInspection>, "region"> {
     skills: Array<{
       skill_id: number;
       parent_skill_id: number;
+      secondary_parent_id?: number;
       revision: number;
       depth: number;
       inventor_id: number;
@@ -394,7 +409,9 @@ export function InspectorPanel({
                     data.transmission.vertical ? "V" : "-",
                     data.transmission.horizontal ? "H" : "-",
                     data.transmission.oblique ? "O" : "-",
+                    data.externalized_enabled ? "Ext" : "-",
                   ].join("/")}
+                  {data.active_artifacts !== undefined && ` · artifacts=${data.active_artifacts}`}
                 </p>
               )}
               {data.cultural_agent ? (
@@ -429,12 +446,31 @@ export function InspectorPanel({
                           <li key={s.skill_id}>
                             #{s.skill_id} [{s.mode}
                             {s.teacher_id >= 0 ? ` <- #${s.teacher_id}` : ` inv=#${s.inventor_id}`}
+                            {s.secondary_parent_id !== undefined && s.secondary_parent_id >= 0 ? ` + s#${s.secondary_parent_id}` : ""}
                             ] d={s.depth} rev={s.revision} {s.target_resource} [{s.ops.join(" -> ")}] eff={s.efficiency.toFixed(2)} uses={s.uses}
                           </li>
                         ))}
                       </ul>
                     )}
                   </details>
+                  {data.nearby_artifacts && (
+                    <details>
+                      <summary>
+                        {t("inspector.cultural.artifacts")} ({data.nearby_artifacts.length} / {data.active_artifacts ?? 0})
+                      </summary>
+                      {data.nearby_artifacts.length === 0 ? (
+                        <p className="muted small">{t("inspector.cultural.no_artifacts")}</p>
+                      ) : (
+                        <ul className="small mono" style={{ paddingLeft: "1.1rem", margin: "0.35rem 0" }}>
+                          {data.nearby_artifacts.map((art) => (
+                            <li key={art.artifact_id}>
+                              a#{art.artifact_id} by #{art.creator_id} s#{art.skill_id} [{art.ops?.join(" -> ") ?? "…"}] eff={art.efficiency?.toFixed(2) ?? "?"} m={art.mass_a.toFixed(2)}/{art.mass_b.toFixed(2)} ttl={art.remaining_ticks} uses={art.uses}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </details>
+                  )}
                 </>
               ) : (
                 <p className="muted small">{t("inspector.none")}</p>

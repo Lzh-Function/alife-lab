@@ -1,0 +1,21 @@
+schema_version: 1
+sweep:
+  name: Cultural World P5 Phase Diagram
+  base_preset: cultural_world_compositional
+  seeds: [0, 1, 2]
+  factors:
+    - path: world.regime_period
+      values: [80, 200, 500]
+      labels: [fast_80, mid_200, slow_500]
+    - path: dynamics.transmission.transmission_cost
+      values: [0.0, 0.015, 0.04]
+      labels: [free_cost, low_cost, high_cost]
+  reference_condition: 0
+  endpoint:
+    metric: skill_retention_after_death
+    at: final
+  design: exploratory
+  hypothesis: >-
+    Post-inventor cultural retention and net utility depend jointly on environmental turnover
+    period (regime_period) and metabolic transmission cost.
+  profile_id: cpu_dev
