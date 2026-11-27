@@ -1989,8 +1989,8 @@ def cmd_cultural(args: argparse.Namespace) -> int:
     )
 
     try:
-        spec = _load_cultural_spec(args.preset)
         if args.cultural_cmd == "assay":
+            spec = _load_cultural_spec(args.preset)
             rep = run_cultural_assay(spec, n_seeds=args.seeds, steps=args.steps)
             if args.json:
                 _print_json(rep)
@@ -2007,6 +2007,7 @@ def cmd_cultural(args: argparse.Namespace) -> int:
             return 0
 
         if args.cultural_cmd == "phase-diagram":
+            spec = _load_cultural_spec(args.preset)
             periods = tuple(int(x) for x in args.periods.split(",") if x.strip())
             costs = tuple(float(x) for x in args.costs.split(",") if x.strip())
             seeds = tuple(int(x) for x in args.seeds.split(",") if x.strip())
@@ -2031,6 +2032,69 @@ def cmd_cultural(args: argparse.Namespace) -> int:
                         f"ret={c['mean_retention']:.3f} util={c['mean_net_utility']:.3f} "
                         f"comp={c['mean_comp_fraction']:.3f} E={c['mean_energy']:.2f}"
                     )
+            return 0
+
+        if args.cultural_cmd == "social-assay":
+            from alife_lab.evolution.cultural_social_assay import run_h4_exchange_assay
+
+            spec = _load_cultural_spec(args.preset)
+            rep = run_h4_exchange_assay(spec, n_seeds=args.seeds, steps=args.steps)
+            if args.json:
+                _print_json(rep)
+            else:
+                print(
+                    f"cultural social-assay {rep['preset_name']}: "
+                    f"all_checks_passed={rep['all_checks_passed']} "
+                    f"seeds={len(rep['seeds'])} steps={rep['steps']} "
+                    f"wall={rep['wall_seconds']:.2f}s"
+                )
+                for arm_name, arm in rep["arms"].items():
+                    print(
+                        f"  {arm_name:24s} trades={arm['mean_trade_count']:6.1f} "
+                        f"vol={arm['mean_trade_volume']:6.2f} "
+                        f"spec={arm['mean_specialization_index']:.3f} "
+                        f"dol={arm['mean_division_of_labor_index']:.3f} "
+                        f"inter={arm['mean_interdependence_index']:.3f} "
+                        f"E={arm['mean_energy']:.2f}"
+                    )
+                for chk, ok in rep["checks"].items():
+                    print(f"  [{'PASS' if ok else 'FAIL'}] {chk}")
+            return 0
+
+        if args.cultural_cmd == "benchmark":
+            from alife_lab.evolution.cultural_social_assay import run_cultural_scaling_benchmark
+
+            pops = tuple(int(x) for x in args.populations.split(",") if x.strip())
+            skills = tuple(int(x) for x in args.skills.split(",") if x.strip())
+            if not pops or not skills:
+                raise ValueError("populations and skills must each contain at least one integer")
+            rep = run_cultural_scaling_benchmark(
+                populations=pops,
+                max_skills_grid=skills,
+                steps=args.steps,
+                seed=args.seed,
+                include_gpu=bool(args.include_gpu),
+            )
+            if args.json:
+                _print_json(rep)
+            else:
+                print(
+                    f"cultural benchmark steps={args.steps} seed={args.seed} "
+                    f"wall={rep['wall_seconds']:.2f}s"
+                )
+                for row in rep["grid"]:
+                    print(
+                        f"  pop={row['population']:4d} skills={row['max_skills']:2d} | "
+                        f"ms/tick={row['ms_per_tick']:6.2f} "
+                        f"agent_ticks/s={row['agent_ticks_per_sec']:9.1f} "
+                        f"rss={row['peak_rss_mib']:6.1f}MiB "
+                        f"res={row['max_ledger_residual']:.2e}"
+                    )
+                gp = rep["gpu_probe"]
+                print(
+                    f"  gpu_probe: available={gp['available']} backend={gp['backend']} "
+                    f"speedup={gp['speedup_vs_cpu']} diff={gp['max_abs_diff']} ({gp['note']})"
+                )
             return 0
     except (ValueError, FileNotFoundError) as exc:
         print(f"cultural error: {exc}", file=sys.stderr)
@@ -2460,7 +2524,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p.set_defaults(func=cmd_connectome)
 
-    p = sub.add_parser("cultural", help="run P4/P5 cumulative-culture assays and phase diagrams")
+    p = sub.add_parser(
+        "cultural",
+        help="run P4-P7 cumulative-culture assays, phase diagrams, social assays, and benchmarks",
+    )
     culsub = p.add_subparsers(dest="cultural_cmd", required=True)
 
     ca = culsub.add_parser("assay", help="run 5-criterion cumulative-culture assay (E1/E2/E3)")
@@ -2476,6 +2543,25 @@ def build_parser() -> argparse.ArgumentParser:
     cpd.add_argument("--seeds", default="0,1,2")
     cpd.add_argument("--steps", type=int, default=500)
     cpd.add_argument("--json", action="store_true")
+
+    csa = culsub.add_parser(
+        "social-assay", help="run P6 H4 atomic barter & division-of-labor assay"
+    )
+    csa.add_argument("preset", nargs="?", default="cultural_world_exchange")
+    csa.add_argument("--seeds", type=int, default=3)
+    csa.add_argument("--steps", type=int, default=400)
+    csa.add_argument("--json", action="store_true")
+
+    cbm = culsub.add_parser(
+        "benchmark",
+        help="run P7 CulturalWorld CPU scaling, hotspot breakdown & GPU MLP probe",
+    )
+    cbm.add_argument("--populations", default="80,200,400")
+    cbm.add_argument("--skills", default="2,4,8")
+    cbm.add_argument("--steps", type=int, default=100)
+    cbm.add_argument("--seed", type=int, default=1)
+    cbm.add_argument("--include-gpu", action="store_true")
+    cbm.add_argument("--json", action="store_true")
 
     p.set_defaults(func=cmd_cultural)
     return parser

@@ -1,6 +1,6 @@
 # 累積文化・原始社会ワールド（`cultural_world`）＆ 統合発展ロードマップ計画書
 
-- **状態:** **Stage 4（`connectome` S2〜S4 種パック・異種比較統計・F13a–c キメラ）実装・検証完了（2026-11-27）**（Stage 1 `cultural_world` P0〜P3、Stage 2 `connectome` S1 ＋実活動データ照合、Stage 3 `cultural_world` P4〜P5 に続き、次は **Stage 5: `cultural_world` P6〜P7**）。既存の 23+ 基質・全プリセットの再現性は一切壊さず、独立トラックとして維持されている。
+- **状態:** **Stage 5（`cultural_world` P6〜P7：原子的交換・分業・`forbid_exchange` 介入・DAG/取引ネットワーク UI・CPU/GPU スケーリング実測）実装・検証完了（2026-11-27）**（Stage 1 `cultural_world` P0〜P3、Stage 2 `connectome` S1 ＋実活動データ照合、Stage 3 `cultural_world` P4〜P5、Stage 4 `connectome` S2〜S4 ＆ F13a–c に続き、次は **Stage 6: 大型皮質 S5〜S7**）。既存の 23+ 基質・全プリセットの再現性は一切壊さず、独立トラックとして維持されている。
 - **提案する基質名:** `cultural_world`（`mode: exploratory` 専用）
 - **科学的位置付け:** 探索的研究（exploratory）。現代文明のゲーム的再現や人間級知能・言語の自然発生を保証するものではない。「限られた初期能力の個体群から、知識の保持・改良・伝達がどのような環境・コスト条件で成立するか」を因果介入付きで検証する計算実験基盤である。
 - **統合ロードマップ:** 本計画（トラック B：`cultural_world` P0〜P7）と [`docs/plans/connectome_plan.md`](connectome_plan.md) の他生物展開（トラック A：S1〜S7・F13）を、下記の 6 段階で縦割り進行する。
@@ -17,8 +17,8 @@
 | **Stage 2（完了）** | A: コネクトーム **S1** | 線虫 *C. elegans*（302 細胞）：非発火電位 `MODEL_GRADED` とギャップ結合 `SYNAPSE_GAP_JUNCTION` ＋ 這う体 ＋ 実 GCaMP 活動照合 | FlyWire 無影響確認・5匹/154s・79〜111一致細胞で `spatial_r2`・`rollout_r2` 有意優位を検証済 |
 | **Stage 3（完了）** | B: `cultural_world` **P4〜P5** | ADR 0052・許可リスト 10 演算子安全 DSL 構成的技術・保存則 `PlacedArtifact` 外在化・累積文化 5 基準アッセイ・Discovery Ledger E2/E3 連携・2 次元相図スイープ | `cultural_world_compositional` E3 合格 vs `no_composition` E1 棄却、H6 回復 δ=+1.00、保存誤差 `0.0` を検証済 |
 | **Stage 4（完了）** | A: **S2〜S4 ＆ F13a–c** | ハエ幼虫（2,956）・ゴカイ幼生（1,720 接続行列）・ホヤ幼生（205）の種パック ＋ 5 種異種比較統計 ＋ F13a 交配 / F13b 脳移植 / F13c 線虫＋ハエ幼虫キノコ体移植 | ADR 0053・実データ SHA-256 検証済・F13c 5/5 対照合格・CPU テスト完結（[fidelity report](../reference_fidelity/connectome_species_s2_s4_f13.md)） |
-| **Stage 5（次）** | B: `cultural_world` **P6〜P7** | 相互依存資源の原子的交換・分業/専門化・`forbid_exchange` 介入・文化系統 DAG ＆ 取引ネットワーク UI・CPU/GPU スケーリング実測 | 取引の資源保存・原子性、独立 run 単位での相補分業検証 |
-| **Stage 6** | A: 大型皮質 **S5〜S7** | マウス視覚野 MICrONS（約 20 万細胞・5.2 億シナプス・7.5 万活動記録）＆ ヒト皮質 H01 比較（S7 ゼブラフィッシュは公式公開待ち） | **大容量取得・VRAM 配置を事前見積もりして承認取得** |
+| **Stage 5（完了）** | B: `cultural_world` **P6〜P7** | 相互依存資源の原子的交換・分業/専門化・`forbid_exchange` 介入・文化系統 DAG ＆ 取引ネットワーク UI・CPU/GPU スケーリング実測 | ADR 0055 確定・H4 5 seed 7/7 検証合格（DoL `0.827` vs `0.000`/`0.552`）・RTX 5070 プローブ実測（`0.169×` のため CPU 既定維持）・[fidelity report](../reference_fidelity/cultural_world.md) 記録済 |
+| **Stage 6（次）** | A: 大型皮質 **S5〜S7** | マウス視覚野 MICrONS（約 20 万細胞・5.2 億シナプス・7.5 万活動記録）＆ ヒト皮質 H01 比較（S7 ゼブラフィッシュは公式公開待ち） | **大容量取得・VRAM 配置を事前見積もりして承認取得** |
 
 ---
 
@@ -117,8 +117,8 @@
 | **P3 社会伝達・介入** | `transmission.py`, `interventions.py`, `metrics.py`, GUI/CLI/Presets/Sweeps | 垂直/水平/斜め伝達、コスト・誤差、イベントログ、`erase_culture`/`set_transmission`/`shock_environment`、A〜E 群＆因果分岐検証 |
 | **P4 構成的技術** | `technology.py`（DSL 拡張＋外部物体） | `combine/transform/place_object`、5 分離指標（Novelty/Validity/Utility/Transfer/Improvement）、`no_composition` 対照 |
 | **P5 累積文化アッセイ** | `src/alife_lab/evolution/cultural_assays.py`, `discoveries.py` 連携 | 発明者死後存続・段階改良・伝達遮断・`erase_culture` 比較・未知環境転移の 5 基準自動アッセイ、相図スイープ |
-| **P6 社会構造・GUI 強化** | `social.py`、DAG/取引ネットワーク UI | 原子的交換、相互依存資源、専門化 vs 分業、`forbid_exchange` 対照、Cultural Lineage 切替表示 |
-| **P7 性能実測＆拡張** | ベンチマークスクリプト・必要時 GPU バッチ | 個体数 × 知識件数グリッド実測、ボトルネック箇所のみ GPU 化、統計的同値性検証 |
+| **P6 社会構造・GUI 強化（完了）** | `social.py`、`CulturalGraphPanel.tsx`、DAG/取引ネットワーク UI | 原子的交換、相互依存資源、専門化 vs 分業、`forbid_exchange` 対照、Cultural Lineage/Trade Network 切替表示（ADR 0055） |
+| **P7 性能実測＆拡張（完了）** | `cultural_social_assay.py`、CPU/GPU プローブ・Research Hub | 個体数 × 知識件数グリッド実測、6 段階ホットスポット計測、CUDA MLP 等価性＆速度検証（CPU 既定維持、ADR 0055） |
 
 ---
 

@@ -29,6 +29,11 @@ from alife_lab.substrates.cultural_world.memory import (
     improve_skill,
     invent_skill,
 )
+from alife_lab.substrates.cultural_world.social import (
+    TradeEvent,
+    apply_local_exchange,
+    specialization_multiplier,
+)
 from alife_lab.substrates.cultural_world.technology import (
     PlacedArtifact,
     compose_skills,
@@ -72,6 +77,15 @@ class CulturalWorldState:
     externalized_learns: int = 0
     externalized_uses: int = 0
     compositions_created: int = 0
+    # Stage 5 (P6): atomic barter, role specialization & division of labor
+    exchange_override: bool | None = None
+    trade_events: list[TradeEvent] = field(default_factory=list)
+    partner_pairs: dict[str, int] = field(default_factory=dict)
+    trade_count: int = 0
+    trade_volume: float = 0.0
+    repeat_trades: int = 0
+    agent_role_uses: dict[int, tuple[int, int, int]] = field(default_factory=dict)
+    agent_trades: dict[int, int] = field(default_factory=dict)
 
 
 def init_world(exp: CulturalWorldExperiment) -> CulturalWorldState:
@@ -231,13 +245,16 @@ def step_world(state: CulturalWorldState, exp: CulturalWorldExperiment) -> Cultu
 
     for i in skill_actor_indices:
         slots = a.skills[i]
+        aid = int(a.ids[i])
         best_slot: SkillSlot | None = None
         best_util = -1e9
         for sl in slots:
             proc = state.registry.procedures[sl.skill_id]
             avail = _available_for_skill(proc, float(a.inv_a[i]), float(a.inv_b[i]))
             if avail > 0.0:
-                u_val = evaluate_skill_utility(proc, env_phase)
+                u_val = evaluate_skill_utility(proc, env_phase) * specialization_multiplier(
+                    state, exp, aid, proc
+                )
                 if u_val > best_util:
                     best_util = u_val
                     best_slot = sl
@@ -270,6 +287,13 @@ def step_world(state: CulturalWorldState, exp: CulturalWorldExperiment) -> Cultu
             net_gain = gain - tech.skill_energy_cost
             a.energy[i] += max(0.0, net_gain)
             best_slot.uses += 1
+            ua, ub, ud = state.agent_role_uses.get(aid, (0, 0, 0))
+            if proc.target_resource == 1:
+                state.agent_role_uses[aid] = (ua + 1, ub, ud)
+            elif proc.target_resource == 2:
+                state.agent_role_uses[aid] = (ua, ub + 1, ud)
+            else:
+                state.agent_role_uses[aid] = (ua, ub, ud + 1)
             used_mask[i] = True
             state.skill_uses_total += 1
             if net_gain > 0.0:
@@ -342,16 +366,24 @@ def step_world(state: CulturalWorldState, exp: CulturalWorldExperiment) -> Cultu
                         allow_externalization=tech.allow_externalization,
                         rng_tech=rng_tech,
                     )
-                    comp_util = evaluate_skill_utility(composed, env_phase)
+                    comp_util = evaluate_skill_utility(
+                        composed, env_phase
+                    ) * specialization_multiplier(state, exp, aid, composed)
                     worst_slot = min(
                         slots,
-                        key=lambda sl: evaluate_skill_utility(
-                            state.registry.procedures[sl.skill_id], env_phase
+                        key=lambda sl: (
+                            evaluate_skill_utility(
+                                state.registry.procedures[sl.skill_id], env_phase
+                            )
+                            * specialization_multiplier(
+                                state, exp, aid, state.registry.procedures[sl.skill_id]
+                            )
                         ),
                     )
+                    worst_proc = state.registry.procedures[worst_slot.skill_id]
                     worst_u = evaluate_skill_utility(
-                        state.registry.procedures[worst_slot.skill_id], env_phase
-                    )
+                        worst_proc, env_phase
+                    ) * specialization_multiplier(state, exp, aid, worst_proc)
                     if len(slots) < tech.max_skills_per_agent or comp_util > worst_u:
                         state.registry.register(composed)
                         state.next_skill_id += 1
@@ -399,7 +431,10 @@ def step_world(state: CulturalWorldState, exp: CulturalWorldExperiment) -> Cultu
                     slots.append(new_slot)
                 else:
                     idx_r = slots.index(best_slot)
-                    if evaluate_skill_utility(refined, env_phase) > best_util:
+                    refined_util = evaluate_skill_utility(
+                        refined, env_phase
+                    ) * specialization_multiplier(state, exp, aid, refined)
+                    if refined_util > best_util:
                         slots[idx_r] = new_slot
 
         elif tech.allow_invention and a.energy[i] > tech.skill_energy_cost + 0.3:
@@ -469,6 +504,9 @@ def step_world(state: CulturalWorldState, exp: CulturalWorldExperiment) -> Cultu
     state.tx_successes += e_suc
     state.externalized_learns += e_lrn
 
+    # 4b. Atomic local barter (material_a <-> material_b) before metabolism
+    apply_local_exchange(state, exp)
+
     # 5. Metabolism, age increment, and lifetime REINFORCE learning on dw2 ONLY
     a.energy -= d.metabolism
     a.age += 1
@@ -483,7 +521,10 @@ def step_world(state: CulturalWorldState, exp: CulturalWorldExperiment) -> Cultu
         np.add.at(eco.material_a, (ci_d, cj_d), a.inv_a[dead_idx])
         np.add.at(eco.material_b, (ci_d, cj_d), a.inv_b[dead_idx])
         for aid in a.ids[dead_idx].tolist():
-            state.registry.mark_agent_died(int(aid), state.tick)
+            aid_i = int(aid)
+            state.registry.mark_agent_died(aid_i, state.tick)
+            state.agent_role_uses.pop(aid_i, None)
+            state.agent_trades.pop(aid_i, None)
         state.deaths += int(dead_idx.size)
         a = a.take(alive)
 

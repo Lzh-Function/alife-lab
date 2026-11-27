@@ -1032,7 +1032,7 @@ RESEARCH_TOOLS: tuple[ResearchToolSpec, ...] = (
             ),
         ),
     ),
-    # ---- Category 5: Cultural Evolution Assays & Phase Diagrams (P4-P5) ----
+    # ---- Category 5: Cultural Evolution Assays, Phase Diagrams & Benchmarks (P4-P7) ----
     _T(
         id="cultural_assay",
         category="cultural",
@@ -1090,6 +1090,47 @@ RESEARCH_TOOLS: tuple[ResearchToolSpec, ...] = (
             _P(
                 "steps", "int", 300, "research.param.steps", "--steps", min_value=60, max_value=2000
             ),
+        ),
+    ),
+    _T(
+        id="cultural_social_assay",
+        category="cultural",
+        title_key="research.tool.cultural_social.title",
+        description_key="research.tool.cultural_social.desc",
+        cli_command=("cultural", "social-assay"),
+        supports_json=True,
+        params=(
+            _P(
+                "preset",
+                "select",
+                "cultural_world_exchange",
+                "research.param.preset",
+                None,
+                choices=("cultural_world_exchange", "cultural_world_compositional"),
+                required=True,
+            ),
+            _P(
+                "seeds", "int", 3, "research.param.seed_count", "--seeds", min_value=1, max_value=10
+            ),
+            _P(
+                "steps", "int", 400, "research.param.steps", "--steps", min_value=80, max_value=1500
+            ),
+        ),
+    ),
+    _T(
+        id="cultural_benchmark",
+        category="cultural",
+        title_key="research.tool.cultural_benchmark.title",
+        description_key="research.tool.cultural_benchmark.desc",
+        cli_command=("cultural", "benchmark"),
+        supports_json=True,
+        gpu_optional=True,
+        params=(
+            _P("populations", "str", "80,200,400", "research.param.populations", "--populations"),
+            _P("skills", "str", "2,4,8", "research.param.skills", "--skills"),
+            _P("steps", "int", 100, "research.param.steps", "--steps", min_value=20, max_value=500),
+            _P("seed", "int", 1, "research.param.seed", "--seed", min_value=0, max_value=100000),
+            _P("include_gpu", "bool", False, "research.param.include_gpu", "--include-gpu"),
         ),
     ),
 )

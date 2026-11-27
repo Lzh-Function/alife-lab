@@ -7,6 +7,18 @@ import math
 from alife_lab.core.spec import CulturalWorldExperiment
 from alife_lab.substrates.cultural_world.ecology import max_ledger_residual
 from alife_lab.substrates.cultural_world.model import CulturalWorldState
+from alife_lab.substrates.cultural_world.social import compute_social_metrics
+
+_SOCIAL_METRIC_KEYS = frozenset(
+    {
+        "trade_count",
+        "trade_volume",
+        "specialization_index",
+        "division_of_labor_index",
+        "interdependence_index",
+        "repeat_partner_rate",
+    }
+)
 
 
 def compute_metrics(state: CulturalWorldState, exp: CulturalWorldExperiment) -> dict[str, float]:
@@ -110,4 +122,6 @@ def compute_metrics(state: CulturalWorldState, exp: CulturalWorldExperiment) -> 
         "externalized_learning_fraction": float(ext_frac),
         "compositional_skill_fraction": float(comp_frac),
     }
+    if wanted & _SOCIAL_METRIC_KEYS:
+        values.update(compute_social_metrics(state, exp))
     return {k: v for k, v in values.items() if k in wanted}

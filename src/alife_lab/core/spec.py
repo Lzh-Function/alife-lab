@@ -2334,6 +2334,16 @@ class CulturalWorldController(_Frozen):
     temperature: Annotated[float, Field(gt=0.0, le=50.0)] = 1.0
 
 
+class CulturalWorldSocial(_Frozen):
+    allow_exchange: bool = False
+    interdependent_resources: bool = False
+    exchange_range: Annotated[float, Field(ge=0.5, le=32.0)] = 5.5
+    exchange_lot: Annotated[float, Field(gt=0.0, le=5.0)] = 0.25
+    exchange_energy_cost: Annotated[float, Field(ge=0.0, le=1.0)] = 0.005
+    specialization_bonus: Annotated[float, Field(ge=0.0, le=2.0)] = 0.35
+    shuffle_roles_control: bool = False
+
+
 CulturalTransmissionRegime = Literal[
     "custom", "none", "vertical_only", "vertical_horizontal", "all"
 ]
@@ -2349,6 +2359,7 @@ class CulturalWorldDynamics(_Frozen):
     transmission: CulturalWorldTransmission = CulturalWorldTransmission()
     technology: CulturalWorldTechnology = CulturalWorldTechnology()
     controller: CulturalWorldController = CulturalWorldController()
+    social: CulturalWorldSocial = CulturalWorldSocial()
     initial_energy: Annotated[float, Field(gt=0.0, le=1000.0)] = 5.0
     metabolism: Annotated[float, Field(ge=0.0, le=10.0)] = 0.045
     move_cost: Annotated[float, Field(ge=0.0, le=10.0)] = 0.015
@@ -2382,6 +2393,12 @@ CulturalWorldMetric = Literal[
     "active_artifacts",
     "externalized_learning_fraction",
     "compositional_skill_fraction",
+    "trade_count",
+    "trade_volume",
+    "specialization_index",
+    "division_of_labor_index",
+    "interdependence_index",
+    "repeat_partner_rate",
 ]
 
 
@@ -2407,6 +2424,12 @@ class CulturalWorldObservation(_Frozen):
         "active_artifacts",
         "externalized_learning_fraction",
         "compositional_skill_fraction",
+        "trade_count",
+        "trade_volume",
+        "specialization_index",
+        "division_of_labor_index",
+        "interdependence_index",
+        "repeat_partner_rate",
     )
 
 

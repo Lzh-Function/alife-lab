@@ -18,6 +18,7 @@ import { BffDebugger, type BffTrace } from "./BffDebugger";
 import { AssayResult, type AssayResultData } from "./AssayResult";
 import { SpeciesChart } from "./SpeciesChart";
 import { ConnectomePanel } from "./ConnectomePanel";
+import { CulturalGraphPanel } from "./CulturalGraphPanel";
 
 const LIVE = new Set(["starting", "running", "pausing", "paused", "resuming"]);
 const MAX_ROWS = 600;
@@ -455,6 +456,14 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
             </button>
             <button
               type="button"
+              data-testid="cultural-forbid-exchange"
+              disabled={!live}
+              onClick={() => onIntervene("forbid_exchange", {})}
+            >
+              {t("cultural.act.forbid_exchange")}
+            </button>
+            <button
+              type="button"
               data-testid="cultural-register-discovery"
               onClick={() =>
                 api
@@ -570,6 +579,9 @@ export function LiveLab({ runId, onOpenComparison }: { runId: string; onOpenComp
             keys={["territory.sun", ...Array.from({ length: summary.spec.experiment.dynamics?.n_ncas ?? 0 }, (_, k) => `territory.nca_${k}`)]}
             titleKey="lab.territories"
           />
+        )}
+        {summary.substrate === "cultural_world" && (
+          <CulturalGraphPanel runId={runId} tick={tick ?? summary.clock.value} live={live} />
         )}
         {trace && <BffDebugger trace={trace} onClose={() => setTrace(null)} />}
         {assay && <AssayResult result={assay} onClose={() => setAssay(null)} />}

@@ -13,6 +13,12 @@ from alife_lab.substrates.base import Capabilities, MetricDefinition, PluginMani
 from alife_lab.substrates.cultural_world import codecs, interventions, metrics, model
 from alife_lab.substrates.cultural_world.ecology import ledger_residuals
 from alife_lab.substrates.cultural_world.model import CulturalWorldState
+from alife_lab.substrates.cultural_world.social import (
+    agent_role,
+    compute_social_metrics,
+    extract_cultural_graph,
+    resolve_exchange_enabled,
+)
 from alife_lab.substrates.cultural_world.transmission import resolve_transmission_flags
 
 _M = MetricDefinition
@@ -237,6 +243,75 @@ _METRICS = (
         1,
         "never null",
     ),
+    _M(
+        "trade_count",
+        "metric.trade_count",
+        "trades",
+        "tick",
+        "Cumulative count of atomic local barter trades executed.",
+        "none",
+        "every tick",
+        1,
+        "never null",
+    ),
+    _M(
+        "trade_volume",
+        "metric.trade_volume",
+        "mass",
+        "tick",
+        "Cumulative total material mass exchanged across atomic local barter trades.",
+        "none",
+        "every tick",
+        1,
+        "never null",
+    ),
+    _M(
+        "specialization_index",
+        "metric.specialization_index",
+        "index",
+        "tick",
+        "Mean individual concentration of A vs B skill executions across living agents.",
+        "none",
+        "every tick",
+        1,
+        "never null",
+    ),
+    _M(
+        "division_of_labor_index",
+        "metric.division_of_labor_index",
+        "index",
+        "tick",
+        (
+            "Composite index requiring both complementary A/B specialization diversity "
+            "and active bilateral trade."
+        ),
+        "none",
+        "every tick",
+        1,
+        "never null",
+    ),
+    _M(
+        "interdependence_index",
+        "metric.interdependence_index",
+        "index",
+        "tick",
+        "Active bilateral trade intensity, trader participation, and complementary role exchange.",
+        "none",
+        "every tick",
+        1,
+        "never null",
+    ),
+    _M(
+        "repeat_partner_rate",
+        "metric.repeat_partner_rate",
+        "fraction",
+        "tick",
+        "Share of executed trades conducted with a previously traded partner.",
+        "none",
+        "every tick",
+        1,
+        "never null",
+    ),
 )
 
 CULTURAL_WORLD_MANIFEST = PluginManifest(
@@ -261,6 +336,7 @@ CULTURAL_WORLD_MANIFEST = PluginManifest(
             "erase_culture",
             "destroy_objects",
             "set_transmission",
+            "forbid_exchange",
             "shock_environment",
             "add_resource",
         ),
@@ -396,8 +472,19 @@ class CulturalWorldAdapter:
                         "phase": round(proc.phase, 3),
                     }
                 )
+            aid_k = int(a.ids[k])
+            ua, ub, ud = state.agent_role_uses.get(aid_k, (0, 0, 0))
+            role_k = agent_role(
+                ua,
+                ub,
+                ud,
+                float(a.inv_a[k]),
+                float(a.inv_b[k]),
+                a.skills[k],
+                state.registry,
+            )
             agent_info = {
-                "id": int(a.ids[k]),
+                "id": aid_k,
                 "parent": int(a.parent[k]),
                 "birth_tick": int(a.birth[k]),
                 "age": int(a.age[k]),
@@ -406,6 +493,8 @@ class CulturalWorldAdapter:
                 "inv_b": round(float(a.inv_b[k]), 3),
                 "learned_delta_norm": round(float(np.linalg.norm(a.dw2[k])), 4),
                 "private_best_val": round(float(a.private_best_val[k]), 3),
+                "role": role_k,
+                "trades": int(state.agent_trades.get(aid_k, 0)),
                 "skills": skills_detail,
             }
         v_on, h_on, o_on = resolve_transmission_flags(exp, state.tx_overrides)
@@ -414,6 +503,17 @@ class CulturalWorldAdapter:
             if "externalized" in state.tx_overrides
             else (exp.dynamics.technology.allow_externalization and (v_on or h_on or o_on))
         )
+        exchange_on = resolve_exchange_enabled(state, exp)
+        social_vals = compute_social_metrics(state, exp)
+        social_summary = {
+            "trade_count": int(state.trade_count),
+            "trade_volume": round(float(social_vals["trade_volume"]), 4),
+            "specialization_index": round(float(social_vals["specialization_index"]), 4),
+            "division_of_labor_index": round(float(social_vals["division_of_labor_index"]), 4),
+            "interdependence_index": round(float(social_vals["interdependence_index"]), 4),
+            "repeat_partner_rate": round(float(social_vals["repeat_partner_rate"]), 4),
+            "exchange_enabled": bool(exchange_on),
+        }
         residuals = ledger_residuals(
             state.eco,
             (float(a.inv_a.sum()) if a.n else 0.0) + sum(art.mass_a for art in state.artifacts),
@@ -435,19 +535,24 @@ class CulturalWorldAdapter:
                         else ("material_a" if aproc.target_resource == 1 else "material_b")
                     )
                 nearby_artifacts.append(item)
-        return {
+        out: dict[str, Any] = {
             "substrate": "cultural_world",
             "tick": state.tick,
             "query": {"x": x, "y": y},
             "population": a.n,
             "transmission": {"vertical": v_on, "horizontal": h_on, "oblique": o_on},
             "externalized_enabled": ext_on,
+            "exchange_enabled": bool(exchange_on),
+            "social_summary": social_summary,
             "active_artifacts": len(state.artifacts),
             "nearby_artifacts": nearby_artifacts[:8],
             "ledger_residuals": {k: round(float(v), 12) for k, v in residuals.items()},
             "recent_transmissions": state.registry.transmissions[-8:],
             "cultural_agent": agent_info,
         }
+        if query.get("view") == "graph":
+            out["cultural_graph"] = extract_cultural_graph(state, exp)
+        return out
 
     def state_distance(self, a: CulturalWorldState, b: CulturalWorldState) -> dict[str, Any]:
         same_arrs = (
@@ -460,6 +565,9 @@ class CulturalWorldAdapter:
             and np.array_equal(a.eco.material_a, b.eco.material_a)
             and a.agents.skills == b.agents.skills
             and a.artifacts == b.artifacts
+            and a.trade_count == b.trade_count
+            and a.exchange_override == b.exchange_override
+            and a.agent_role_uses == b.agent_role_uses
         )
         return {
             "metric": "population_difference",

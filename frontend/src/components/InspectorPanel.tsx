@@ -80,6 +80,16 @@ export interface Inspection extends Omit<Partial<SearchInspection>, "region"> {
   // cultural_world
   transmission?: { vertical: boolean; horizontal: boolean; oblique: boolean };
   externalized_enabled?: boolean;
+  exchange_enabled?: boolean;
+  social_summary?: {
+    trade_count: number;
+    trade_volume: number;
+    specialization_index: number;
+    division_of_labor_index: number;
+    interdependence_index: number;
+    repeat_partner_rate: number;
+    exchange_enabled: boolean;
+  };
   active_artifacts?: number;
   nearby_artifacts?: Array<{
     artifact_id: number;
@@ -102,6 +112,8 @@ export interface Inspection extends Omit<Partial<SearchInspection>, "region"> {
     energy: number;
     inv_a: number;
     inv_b: number;
+    role?: "A" | "B" | "dual" | "generalist";
+    trades?: number;
     learned_delta_norm: number;
     private_best_val: number;
     skills: Array<{
@@ -449,7 +461,30 @@ export function InspectorPanel({
                     data.externalized_enabled ? "Ext" : "-",
                   ].join("/")}
                   {data.active_artifacts !== undefined && ` · artifacts=${data.active_artifacts}`}
+                  {(data.exchange_enabled !== undefined || data.social_summary !== undefined) &&
+                    ` · ${t("inspector.cultural.exchange")}=${(data.exchange_enabled ?? data.social_summary?.exchange_enabled) ? "ON" : "OFF"}`}
                 </p>
+              )}
+              {data.social_summary && (
+                <details open data-testid="inspector-cultural-social">
+                  <summary>{t("inspector.cultural.social_summary")}</summary>
+                  <dl className="stats small mono">
+                    <dt>{t("inspector.cultural.exchange")}</dt>
+                    <dd>{data.social_summary.exchange_enabled ? "ON" : "OFF"}</dd>
+                    <dt>{t("metric.trade_count")}</dt>
+                    <dd>{data.social_summary.trade_count}</dd>
+                    <dt>{t("metric.trade_volume")}</dt>
+                    <dd>{data.social_summary.trade_volume.toFixed(3)}</dd>
+                    <dt>{t("metric.specialization_index")}</dt>
+                    <dd>{data.social_summary.specialization_index.toFixed(3)}</dd>
+                    <dt>{t("metric.division_of_labor_index")}</dt>
+                    <dd>{data.social_summary.division_of_labor_index.toFixed(3)}</dd>
+                    <dt>{t("metric.interdependence_index")}</dt>
+                    <dd>{data.social_summary.interdependence_index.toFixed(3)}</dd>
+                    <dt>{t("metric.repeat_partner_rate")}</dt>
+                    <dd>{(data.social_summary.repeat_partner_rate * 100).toFixed(1)}%</dd>
+                  </dl>
+                </details>
               )}
               {data.cultural_agent ? (
                 <>
@@ -466,6 +501,16 @@ export function InspectorPanel({
                     <dd className="mono">
                       A={data.cultural_agent.inv_a.toFixed(3)} · B={data.cultural_agent.inv_b.toFixed(3)}
                     </dd>
+                    {(data.cultural_agent.role !== undefined || data.cultural_agent.trades !== undefined) && (
+                      <>
+                        <dt>
+                          {t("inspector.cultural.role")} / {t("inspector.cultural.trades")}
+                        </dt>
+                        <dd className="mono" data-testid="inspector-cultural-role-trades">
+                          {data.cultural_agent.role ?? "—"} · trades={data.cultural_agent.trades ?? 0}
+                        </dd>
+                      </>
+                    )}
                     <dt>{t("inspector.cultural.delta_w")}</dt>
                     <dd className="mono">
                       {data.cultural_agent.learned_delta_norm.toFixed(4)} (best={data.cultural_agent.private_best_val.toFixed(3)})

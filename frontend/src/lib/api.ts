@@ -1,4 +1,5 @@
 // Typed client for the ALife Lab REST API (same-origin).
+import type { Inspection } from "../components/InspectorPanel";
 
 export interface Envelope<T> {
   api_version: string;
@@ -448,6 +449,8 @@ export const api = {
       "GET",
       `/experiments/${id}/inspect?x=${x}&y=${y}&radius=${radius}${tick === undefined ? "" : `&tick=${tick}`}${mode ? `&mode=${mode}` : ""}`,
     ),
+  inspectCulturalGraph: (id: string) =>
+    request<CulturalGraphInspection>("GET", `/experiments/${id}/inspect?x=0&y=0&view=graph`),
   exportNca: (id: string) => request<{ spec: unknown; checkpoint: { id: string; tick: number } }>("POST", `/experiments/${id}/nca/export`, {}),
   exportFlyWorldReplay: (id: string, flyId?: number) =>
     request<{
@@ -821,4 +824,66 @@ export interface ConnectomeFrameHeader {
   regions: ConnectomeFrameRegion[];
   plasticity?: ConnectomePlasticitySummary;
   dropped_previews?: number;
+}
+
+export interface CulturalSocialSummary {
+  trade_count: number;
+  trade_volume: number;
+  specialization_index: number;
+  division_of_labor_index: number;
+  interdependence_index: number;
+  repeat_partner_rate: number;
+  exchange_enabled: boolean;
+}
+
+export interface CulturalKnowledgeNode {
+  skill_id: number;
+  parent_skill_id: number;
+  secondary_parent_id: number | null;
+  depth: number;
+  efficiency: number;
+  target_resource: string | number;
+  ops: string[];
+  inventor_id: number;
+  inventor_dead: boolean;
+  alive_holders: number;
+}
+
+export interface CulturalKnowledgeEdge {
+  source: number;
+  target: number;
+  kind: "refine" | "compose";
+}
+
+export interface CulturalTradeNode {
+  agent_id: number;
+  role: "A" | "B" | "dual" | "generalist";
+  energy: number;
+  inv_a: number;
+  inv_b: number;
+  trades: number;
+}
+
+export interface CulturalTradeEdge {
+  source: number;
+  target: number;
+  count: number;
+  volume: number;
+}
+
+export interface CulturalGraphData {
+  knowledge_dag: {
+    nodes: CulturalKnowledgeNode[];
+    edges: CulturalKnowledgeEdge[];
+  };
+  trade_network: {
+    nodes: CulturalTradeNode[];
+    edges: CulturalTradeEdge[];
+  };
+}
+
+export interface CulturalGraphInspection extends Inspection {
+  exchange_enabled: boolean;
+  social_summary: CulturalSocialSummary;
+  cultural_graph: CulturalGraphData;
 }

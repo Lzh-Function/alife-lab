@@ -50,7 +50,7 @@ def _wait_job(client: TestClient, job_id: str, timeout: float = 60.0) -> dict[st
 
 
 def test_build_tool_argv_allowlist_and_injection_guards() -> None:
-    assert len(RESEARCH_TOOLS) == 21
+    assert len(RESEARCH_TOOLS) == 23
     spec, argv, norm = build_tool_argv(
         "connectome_compare_species",
         {"datasets": "synthetic_ciona,synthetic_platynereis", "ticks": 30, "seed": 2},
@@ -60,6 +60,33 @@ def test_build_tool_argv_allowlist_and_injection_guards() -> None:
     assert "--json" in argv
     assert norm["ticks"] == 30
 
+    spec_sa, argv_sa, norm_sa = build_tool_argv(
+        "cultural_social_assay",
+        {"preset": "cultural_world_exchange", "seeds": 2, "steps": 200},
+    )
+    assert spec_sa.id == "cultural_social_assay"
+    assert argv_sa == [
+        "cultural",
+        "social-assay",
+        "cultural_world_exchange",
+        "--seeds",
+        "2",
+        "--steps",
+        "200",
+        "--json",
+    ]
+    assert norm_sa["seeds"] == 2
+
+    spec_bm, argv_bm, norm_bm = build_tool_argv(
+        "cultural_benchmark",
+        {"populations": "40,80", "skills": "2,4", "steps": 30, "seed": 1, "include_gpu": True},
+    )
+    assert spec_bm.id == "cultural_benchmark"
+    assert argv_bm[:2] == ["cultural", "benchmark"]
+    assert "--include-gpu" in argv_bm
+    assert "--json" in argv_bm
+    assert norm_bm["include_gpu"] is True
+
     with pytest.raises(ValueError, match="unknown research tool"):
         build_tool_argv("arbitrary_shell", {})
     with pytest.raises(ValueError, match="unexpected parameter"):
@@ -68,6 +95,8 @@ def test_build_tool_argv_allowlist_and_injection_guards() -> None:
         build_tool_argv("connectome_compare_species", {"datasets": "ciona; rm -rf /"})
     with pytest.raises(ValueError, match="disallowed characters"):
         build_tool_argv("connectome_compare_species", {"datasets": "$(whoami)"})
+    with pytest.raises(ValueError, match="disallowed characters"):
+        build_tool_argv("cultural_benchmark", {"populations": "80; ls"})
     with pytest.raises(ValueError, match="must be one of"):
         build_tool_argv("connectome_chimera", {"kind": "invalid_kind"})
     with pytest.raises(ValueError, match="must be <="):
@@ -104,7 +133,9 @@ def test_research_jobs_e2e_compare_species_chimera_and_phase_diagram(client: Tes
     cat = client.get("/api/v1/tools/research/catalog")
     assert cat.status_code == 200
     tools = cat.json()["data"]
-    assert len(tools) == 21
+    assert len(tools) == 23
+    tool_ids = {t["id"] for t in tools}
+    assert {"cultural_social_assay", "cultural_benchmark"}.issubset(tool_ids)
 
     # CSRF token required
     assert (
@@ -174,9 +205,55 @@ def test_research_jobs_e2e_compare_species_chimera_and_phase_diagram(client: Tes
     assert j3["status"] == "completed", j3
     assert len(j3["result"]["cells"]) == 4
 
-    # Job list includes all 3 jobs
+    # 4. Cultural P6 H4 social assay (fast offline params)
+    r4 = client.post(
+        "/api/v1/tools/research/jobs",
+        json={
+            "tool_id": "cultural_social_assay",
+            "params": {
+                "preset": "cultural_world_exchange",
+                "seeds": 1,
+                "steps": 140,
+            },
+        },
+        headers=H,
+    )
+    assert r4.status_code == 201, r4.text
+    j4 = _wait_job(client, r4.json()["data"]["id"])
+    assert j4["status"] == "completed", j4
+    assert j4["result"]["all_checks_passed"] is True
+    assert set(j4["result"]["arms"]) == {
+        "exchange_intact",
+        "no_exchange_control",
+        "role_shuffled_control",
+        "forbid_exchange_midpoint",
+    }
+
+    # 5. Cultural P7 scaling benchmark (small fast grid)
+    r5 = client.post(
+        "/api/v1/tools/research/jobs",
+        json={
+            "tool_id": "cultural_benchmark",
+            "params": {
+                "populations": "40",
+                "skills": "2",
+                "steps": 20,
+                "seed": 1,
+                "include_gpu": False,
+            },
+        },
+        headers=H,
+    )
+    assert r5.status_code == 201, r5.text
+    j5 = _wait_job(client, r5.json()["data"]["id"])
+    assert j5["status"] == "completed", j5
+    assert len(j5["result"]["grid"]) == 1
+    assert j5["result"]["grid"][0]["max_ledger_residual"] <= 1e-9
+    assert j5["result"]["gpu_probe"]["available"] is False
+
+    # Job list includes all 5 jobs
     listed = client.get("/api/v1/tools/research/jobs").json()["data"]
-    assert len(listed) >= 3
+    assert len(listed) >= 5
 
 
 def test_backup_create_verify_and_test_restore_api(client: TestClient) -> None:

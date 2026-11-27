@@ -67,6 +67,18 @@ class ResourceField:
         raise ValueError(f"unknown resource kind {kind!r}")
 
 
+def _biome_masks(r: int) -> tuple[F64, F64]:
+    """Segregated west (material_a, x≈0.25) and east (material_b, x≈0.75) biome masks."""
+    _, xx = np.meshgrid(
+        np.linspace(0.0, 1.0, r, endpoint=False),
+        np.linspace(0.0, 1.0, r, endpoint=False),
+        indexing="ij",
+    )
+    west = 0.03 + 0.97 * np.maximum(0.0, np.cos(2.0 * math.pi * (xx - 0.25)))
+    east = 0.03 + 0.97 * np.maximum(0.0, np.cos(2.0 * math.pi * (xx - 0.75)))
+    return west, east
+
+
 def init_ecology(exp: CulturalWorldExperiment, rng_env: np.random.Generator) -> ResourceField:
     r = exp.world.resolution
     res = exp.dynamics.resources
@@ -76,11 +88,20 @@ def init_ecology(exp: CulturalWorldExperiment, rng_env: np.random.Generator) -> 
         indexing="ij",
     )
     noise_f = 0.85 + 0.3 * rng_env.random((r, r))
-    patch_a = 0.5 + 0.5 * np.cos(2.0 * math.pi * (xx - 0.25)) * np.cos(2.0 * math.pi * (yy - 0.25))
-    patch_b = 0.5 + 0.5 * np.cos(2.0 * math.pi * (xx - 0.75)) * np.cos(2.0 * math.pi * (yy - 0.75))
+    if exp.dynamics.social.interdependent_resources:
+        patch_a, patch_b = _biome_masks(r)
+        scale_m = 0.80
+    else:
+        patch_a = 0.5 + 0.5 * np.cos(2.0 * math.pi * (xx - 0.25)) * np.cos(
+            2.0 * math.pi * (yy - 0.25)
+        )
+        patch_b = 0.5 + 0.5 * np.cos(2.0 * math.pi * (xx - 0.75)) * np.cos(
+            2.0 * math.pi * (yy - 0.75)
+        )
+        scale_m = 0.65
     food = np.clip(0.55 * res.food_capacity * noise_f, 0.0, res.food_capacity)
-    mat_a = np.clip(0.65 * res.material_a_capacity * patch_a, 0.0, res.material_a_capacity)
-    mat_b = np.clip(0.65 * res.material_b_capacity * patch_b, 0.0, res.material_b_capacity)
+    mat_a = np.clip(scale_m * res.material_a_capacity * patch_a, 0.0, res.material_a_capacity)
+    mat_b = np.clip(scale_m * res.material_b_capacity * patch_b, 0.0, res.material_b_capacity)
     ledger = ResourceLedger(
         initial={
             "food": float(food.sum()),
@@ -110,15 +131,22 @@ def step_ecology(
     res = exp.dynamics.resources
     r = exp.world.resolution
     phase = regime_phase(tick, exp, phase_offset)
+    interdep = exp.dynamics.social.interdependent_resources
     if exp.world.environment_regime == "stationary":
         mult = 1.0
-        spatial_a = np.ones((r, r), dtype=np.float64)
-        spatial_b = np.ones((r, r), dtype=np.float64)
+        spatial_a, spatial_b = (
+            _biome_masks(r)
+            if interdep
+            else (np.ones((r, r), dtype=np.float64), np.ones((r, r), dtype=np.float64))
+        )
     elif exp.world.environment_regime == "seasonal":
         # Scarcity seasons make material-processing skills critical for survival.
         mult = 0.55 + 0.45 * math.sin(2.0 * math.pi * phase)
-        spatial_a = np.ones((r, r), dtype=np.float64)
-        spatial_b = np.ones((r, r), dtype=np.float64)
+        spatial_a, spatial_b = (
+            _biome_masks(r)
+            if interdep
+            else (np.ones((r, r), dtype=np.float64), np.ones((r, r), dtype=np.float64))
+        )
     else:
         # shifting_patches: food & material centers rotate over the torus.
         mult = 0.65 + 0.35 * math.cos(2.0 * math.pi * phase)
@@ -127,8 +155,15 @@ def step_ecology(
             np.linspace(0.0, 1.0, r, endpoint=False),
             indexing="ij",
         )
-        spatial_a = 0.3 + 0.7 * np.maximum(0.0, np.cos(2.0 * math.pi * (xx - phase)))
-        spatial_b = 0.3 + 0.7 * np.maximum(0.0, np.cos(2.0 * math.pi * (yy - (1.0 - phase))))
+        if interdep:
+            west, east = _biome_masks(r)
+            y_a = 0.65 + 0.35 * np.maximum(0.0, np.cos(2.0 * math.pi * (yy - phase)))
+            y_b = 0.65 + 0.35 * np.maximum(0.0, np.cos(2.0 * math.pi * (yy - (1.0 - phase))))
+            spatial_a = west * y_a
+            spatial_b = east * y_b
+        else:
+            spatial_a = 0.3 + 0.7 * np.maximum(0.0, np.cos(2.0 * math.pi * (xx - phase)))
+            spatial_b = 0.3 + 0.7 * np.maximum(0.0, np.cos(2.0 * math.pi * (yy - (1.0 - phase))))
 
     # Subtle spatial jitter draws from rng_env so env stream stays active & shared across arms.
     _ = float(rng_env.random())

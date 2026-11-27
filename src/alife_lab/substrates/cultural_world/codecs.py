@@ -12,9 +12,10 @@ from alife_lab.substrates.cultural_world.agents import CulturalAgents
 from alife_lab.substrates.cultural_world.ecology import ResourceField, ResourceLedger
 from alife_lab.substrates.cultural_world.memory import SkillRegistry, SkillSlot
 from alife_lab.substrates.cultural_world.model import RNG_NAMES, CulturalWorldState
+from alife_lab.substrates.cultural_world.social import TradeEvent
 from alife_lab.substrates.cultural_world.technology import PlacedArtifact
 
-SERIALIZE_VERSION = 2
+SERIALIZE_VERSION = 3
 RENDER_SCALE = 8
 
 
@@ -121,6 +122,16 @@ def serialize_state(state: CulturalWorldState) -> dict[str, Any]:
             "externalized_learns": int(state.externalized_learns),
             "externalized_uses": int(state.externalized_uses),
             "compositions_created": int(state.compositions_created),
+            "exchange_override": state.exchange_override,
+            "trade_events": [ev.to_json() for ev in state.trade_events],
+            "partner_pairs": {str(k): int(v) for k, v in state.partner_pairs.items()},
+            "trade_count": int(state.trade_count),
+            "trade_volume": float(state.trade_volume),
+            "repeat_trades": int(state.repeat_trades),
+            "agent_role_uses": {
+                str(k): [int(v[0]), int(v[1]), int(v[2])] for k, v in state.agent_role_uses.items()
+            },
+            "agent_trades": {str(k): int(v) for k, v in state.agent_trades.items()},
             "ledger": state.eco.ledger.to_json(),
             "registry": state.registry.to_json(),
             "skills": [[sl.to_json() for sl in s_list] for s_list in state.agents.skills],
@@ -131,7 +142,7 @@ def serialize_state(state: CulturalWorldState) -> dict[str, Any]:
 
 def deserialize_state(payload: dict[str, Any], exp: CulturalWorldExperiment) -> CulturalWorldState:
     meta = payload["meta"]
-    if meta["serialize_version"] not in (1, SERIALIZE_VERSION):
+    if meta["serialize_version"] not in (1, 2, SERIALIZE_VERSION):
         raise ValueError("incompatible cultural_world checkpoint serialize_version")
     arr = payload["arrays"]
     fields = {
@@ -159,6 +170,7 @@ def deserialize_state(payload: dict[str, Any], exp: CulturalWorldExperiment) -> 
         g.bit_generator.state = meta["rng_states"][k]
         rngs[k] = g
 
+    ex_ov = meta.get("exchange_override", None)
     return CulturalWorldState(
         eco=eco,
         agents=agents,
@@ -185,4 +197,15 @@ def deserialize_state(payload: dict[str, Any], exp: CulturalWorldExperiment) -> 
         externalized_learns=int(meta.get("externalized_learns", 0)),
         externalized_uses=int(meta.get("externalized_uses", 0)),
         compositions_created=int(meta.get("compositions_created", 0)),
+        exchange_override=(bool(ex_ov) if ex_ov is not None else None),
+        trade_events=[TradeEvent.from_json(d) for d in meta.get("trade_events", [])],
+        partner_pairs={str(k): int(v) for k, v in meta.get("partner_pairs", {}).items()},
+        trade_count=int(meta.get("trade_count", 0)),
+        trade_volume=float(meta.get("trade_volume", 0.0)),
+        repeat_trades=int(meta.get("repeat_trades", 0)),
+        agent_role_uses={
+            int(k): (int(v[0]), int(v[1]), int(v[2]))
+            for k, v in meta.get("agent_role_uses", {}).items()
+        },
+        agent_trades={int(k): int(v) for k, v in meta.get("agent_trades", {}).items()},
     )

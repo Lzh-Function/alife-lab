@@ -1,0 +1,70 @@
+preset:
+  id: cultural_world_no_exchange_control
+  scenario: cultural_world_default.yaml
+  title_key: preset.cultural_world_no_exchange_control.title
+  description_key: preset.cultural_world_no_exchange_control.description
+  overrides:
+    experiment:
+      name: Cultural World No-Exchange Control P6
+      world:
+        environment_regime: seasonal
+        regime_period: 200
+      dynamics:
+        transmission_regime: all
+        transmission:
+          vertical: true
+          horizontal: true
+          oblique: true
+          transmission_cost: 0.01
+        technology:
+          allow_invention: true
+          allow_improvement: true
+          allow_composition: true
+          allow_externalization: true
+          max_program_length: 8
+          max_skills_per_agent: 5
+          invention_prob: 0.025
+          artifact_material_cost: 0.25
+          artifact_decay_ticks: 250
+        social:
+          allow_exchange: false
+          interdependent_resources: true
+          exchange_range: 5.5
+          exchange_lot: 0.25
+          exchange_energy_cost: 0.005
+          specialization_bonus: 0.35
+          shuffle_roles_control: false
+        max_age: 220
+      observations:
+        metrics:
+          - population
+          - births
+          - deaths
+          - mean_energy
+          - resource_ledger_residual
+          - mean_skills_per_agent
+          - knowledge_diversity
+          - successful_transmission_rate
+          - skill_retention_after_death
+          - social_learning_fraction
+          - improvement_depth
+          - innovation_utility
+          - tech_novelty
+          - tech_validity
+          - tech_utility
+          - tech_transfer
+          - tech_improvement
+          - active_artifacts
+          - externalized_learning_fraction
+          - compositional_skill_fraction
+          - trade_count
+          - trade_volume
+          - specialization_index
+          - division_of_labor_index
+          - interdependence_index
+          - repeat_partner_rate
+  expected_observation: >-
+    Keeps segregated west/east material biomes, compositional skills, and externalized artifacts
+    identical while disabling atomic local exchange so division_of_labor_index and trade_count
+    remain zero despite unilateral specialization.
+  negative_control: cultural_world_exchange

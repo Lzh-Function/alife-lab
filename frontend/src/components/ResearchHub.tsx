@@ -241,9 +241,11 @@ function ChimeraView({ data }: { data: Record<string, unknown> }) {
   );
 }
 
+type PhaseMetric = "mean_net_utility" | "mean_depth" | "mean_retention" | "viable_fraction" | "mean_energy";
+
 function PhaseDiagramView({ data }: { data: Record<string, unknown> }) {
   const t = useT();
-  const [metric, setMetric] = useState<"mean_utility" | "mean_depth" | "mean_retention" | "survival_rate">("mean_utility");
+  const [metric, setMetric] = useState<PhaseMetric>("mean_net_utility");
   const cells = (data.cells as Array<Record<string, unknown>> | undefined) ?? [];
   const periods = useMemo(
     () => Array.from(new Set(cells.map((c) => Number(c.regime_period)))).sort((a, b) => a - b),
@@ -273,7 +275,7 @@ function PhaseDiagramView({ data }: { data: Record<string, unknown> }) {
     <div data-testid="result-phase-diagram">
       <div className="toolbar small" style={{ marginBottom: "0.5rem" }}>
         <span>{t("research.view.phase_metric")}:</span>
-        {(["mean_utility", "mean_depth", "mean_retention", "survival_rate"] as const).map((m) => (
+        {(["mean_net_utility", "mean_depth", "mean_retention", "viable_fraction", "mean_energy"] as const).map((m) => (
           <button
             key={m}
             type="button"
@@ -324,6 +326,421 @@ function PhaseDiagramView({ data }: { data: Record<string, unknown> }) {
   );
 }
 
+const SOCIAL_ARM_ORDER = [
+  "exchange_intact",
+  "no_exchange_control",
+  "role_shuffled_control",
+  "forbid_exchange_midpoint",
+];
+
+function CulturalSocialAssayView({ data }: { data: Record<string, unknown> }) {
+  const t = useT();
+  const checks = (data.checks as Record<string, unknown> | undefined) ?? {};
+  const allPassed = Boolean(data.all_checks_passed);
+  const arms = (data.arms as Record<string, Record<string, unknown>> | undefined) ?? {};
+  const armNames = [
+    ...SOCIAL_ARM_ORDER.filter((k) => k in arms),
+    ...Object.keys(arms).filter((k) => !SOCIAL_ARM_ORDER.includes(k)),
+  ];
+
+  const comparisonRows = useMemo(() => {
+    const raw = data.comparisons;
+    const out: Array<{
+      comparison: string;
+      metric: string;
+      cliffs_delta: number | null;
+      p_value: number | null;
+      mean_diff: number | null;
+      ci95: [number, number] | null;
+    }> = [];
+    const numOrNull = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+    const extractP = (obj: Record<string, unknown>) => {
+      const pp = obj.paired_permutation as Record<string, unknown> | undefined;
+      const perm = obj.permutation as Record<string, unknown> | undefined;
+      return numOrNull(pp?.p_value ?? perm?.p_value ?? obj.p_value ?? obj.p ?? obj.perm_p_value);
+    };
+    const extractCi = (obj: Record<string, unknown>): [number, number] | null => {
+      const ci = obj.mean_difference_ci95;
+      if (Array.isArray(ci) && ci.length === 2 && typeof ci[0] === "number" && typeof ci[1] === "number") {
+        return [ci[0], ci[1]];
+      }
+      return null;
+    };
+    if (Array.isArray(raw)) {
+      for (const item of raw) {
+        if (!item || typeof item !== "object") continue;
+        const r = item as Record<string, unknown>;
+        out.push({
+          comparison: String(r.comparison ?? r.name ?? r.label ?? "—"),
+          metric: String(r.metric ?? "—"),
+          cliffs_delta: numOrNull(r.cliffs_delta ?? r.delta),
+          p_value: extractP(r),
+          mean_diff: numOrNull(r.mean_diff ?? r.mean_difference),
+          ci95: extractCi(r),
+        });
+      }
+    } else if (raw && typeof raw === "object") {
+      for (const [compName, val] of Object.entries(raw as Record<string, unknown>)) {
+        if (!val || typeof val !== "object") continue;
+        const rec = val as Record<string, unknown>;
+        if (
+          "cliffs_delta" in rec ||
+          "p_value" in rec ||
+          "paired_permutation" in rec ||
+          "permutation" in rec ||
+          "delta" in rec ||
+          "p" in rec
+        ) {
+          out.push({
+            comparison: compName,
+            metric: String(rec.metric ?? "—"),
+            cliffs_delta: numOrNull(rec.cliffs_delta ?? rec.delta),
+            p_value: extractP(rec),
+            mean_diff: numOrNull(rec.mean_diff ?? rec.mean_difference),
+            ci95: extractCi(rec),
+          });
+        } else {
+          for (const [metricKey, sub] of Object.entries(rec)) {
+            if (!sub || typeof sub !== "object") continue;
+            const s = sub as Record<string, unknown>;
+            out.push({
+              comparison: compName,
+              metric: metricKey,
+              cliffs_delta: numOrNull(s.cliffs_delta ?? s.delta),
+              p_value: extractP(s),
+              mean_diff: numOrNull(s.mean_diff ?? s.mean_difference),
+              ci95: extractCi(s),
+            });
+          }
+        }
+      }
+    }
+    return out;
+  }, [data.comparisons]);
+
+  const fmtNum = (v: unknown, digits = 3) =>
+    typeof v === "number" && Number.isFinite(v) ? v.toFixed(digits) : "—";
+
+  return (
+    <div data-testid="result-cultural-social">
+      <div className="toolbar small" style={{ margin: "0.4rem 0", flexWrap: "wrap" }}>
+        <span
+          className="badge"
+          data-testid="cultural-social-overall"
+          style={{
+            background: allPassed ? "var(--accent)" : "var(--danger)",
+            color: "#fff",
+            marginLeft: 0,
+          }}
+        >
+          {allPassed ? "PASS" : "FAIL"} · all_checks_passed
+        </span>
+        {typeof data.preset_name === "string" && <span className="mono muted">{data.preset_name}</span>}
+        {data.steps !== undefined && <span className="mono muted">steps={String(data.steps)}</span>}
+        {typeof data.wall_seconds === "number" && (
+          <span className="mono muted">{data.wall_seconds.toFixed(2)}s</span>
+        )}
+      </div>
+
+      {Object.keys(checks).length > 0 && (
+        <>
+          <h4 style={{ margin: "0.5rem 0 0.25rem" }}>{t("research.view.social_checks")}</h4>
+          <div className="toolbar small" style={{ flexWrap: "wrap" }}>
+            {Object.entries(checks).map(([k, v]) => {
+              const ok = typeof v === "boolean" ? v : Boolean((v as { ok?: boolean } | null)?.ok);
+              return (
+                <span
+                  key={k}
+                  className="badge"
+                  style={{
+                    background: ok ? "var(--accent)" : "var(--danger)",
+                    color: "#fff",
+                    marginLeft: 0,
+                  }}
+                >
+                  {ok ? "PASS" : "FAIL"} · {k}
+                </span>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {armNames.length > 0 && (
+        <>
+          <h4 style={{ margin: "0.6rem 0 0.25rem" }}>{t("research.view.social_arms")}</h4>
+          <div className="table-wrap">
+            <table className="table small mono" data-testid="cultural-social-arms-table">
+              <thead>
+                <tr>
+                  <th>Arm</th>
+                  <th>Viable</th>
+                  <th>Energy</th>
+                  <th>Tech Util</th>
+                  <th>Trades</th>
+                  <th>Volume</th>
+                  <th>Spec.</th>
+                  <th>DoL</th>
+                  <th>Interdep.</th>
+                  <th>Repeat</th>
+                  <th>Residual</th>
+                </tr>
+              </thead>
+              <tbody>
+                {armNames.map((armName) => {
+                  const row = arms[armName] ?? {};
+                  const resVal = Number(row.max_ledger_residual ?? 0);
+                  return (
+                    <tr key={armName}>
+                      <td>{armName}</td>
+                      <td>{fmtNum(row.viable_fraction, 2)}</td>
+                      <td>{fmtNum(row.mean_energy, 2)}</td>
+                      <td>{fmtNum(row.mean_tech_utility, 3)}</td>
+                      <td>{fmtNum(row.mean_trade_count, 1)}</td>
+                      <td>{fmtNum(row.mean_trade_volume, 2)}</td>
+                      <td>{fmtNum(row.mean_specialization_index, 3)}</td>
+                      <td>{fmtNum(row.mean_division_of_labor_index, 3)}</td>
+                      <td>{fmtNum(row.mean_interdependence_index, 3)}</td>
+                      <td>{fmtNum(row.mean_repeat_partner_rate, 3)}</td>
+                      <td>{resVal === 0 ? "0" : resVal.toExponential(1)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {comparisonRows.length > 0 && (
+        <>
+          <h4 style={{ margin: "0.7rem 0 0.25rem" }}>{t("research.view.social_comparisons")}</h4>
+          <div className="table-wrap">
+            <table className="table small mono" data-testid="cultural-social-comparisons-table">
+              <thead>
+                <tr>
+                  <th>Comparison</th>
+                  <th>Cliff&apos;s δ</th>
+                  <th>p-value</th>
+                  <th>Δ mean</th>
+                  <th>95% CI</th>
+                </tr>
+              </thead>
+              <tbody>
+                {comparisonRows.map((c, idx) => (
+                  <tr key={`${c.comparison}-${c.metric}-${idx}`}>
+                    <td>{c.metric !== "—" ? `${c.comparison} (${c.metric})` : c.comparison}</td>
+                    <td>{c.cliffs_delta !== null ? c.cliffs_delta.toFixed(3) : "—"}</td>
+                    <td>{c.p_value !== null ? c.p_value.toPrecision(3) : "—"}</td>
+                    <td>{c.mean_diff !== null ? c.mean_diff.toFixed(4) : "—"}</td>
+                    <td>{c.ci95 ? `[${c.ci95[0].toFixed(3)}, ${c.ci95[1].toFixed(3)}]` : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+const HOTSPOT_COLORS = ["#127a63", "#2563eb", "#d97706", "#7c3aed", "#0891b2", "#dc2626"];
+
+function CulturalBenchmarkView({ data }: { data: Record<string, unknown> }) {
+  const t = useT();
+  const grid = (data.grid as Array<Record<string, unknown>> | undefined) ?? [];
+  const gpuProbe = (data.gpu_probe as Record<string, unknown> | undefined) ?? null;
+
+  const hotspotKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const row of grid) {
+      const hs = row.hotspots_ms as Record<string, unknown> | undefined;
+      if (hs && typeof hs === "object") {
+        for (const k of Object.keys(hs)) keys.add(k);
+      }
+    }
+    return Array.from(keys);
+  }, [grid]);
+
+  const topRow = grid.length ? grid[grid.length - 1] : null;
+  const topHotspots = (topRow?.hotspots_ms as Record<string, number> | undefined) ?? null;
+  const topTotal = topHotspots
+    ? Object.values(topHotspots).reduce((s, v) => s + Math.max(0, Number(v)), 0) || 1
+    : 1;
+
+  return (
+    <div data-testid="result-cultural-benchmark">
+      {typeof data.wall_seconds === "number" && (
+        <p className="small muted mono" style={{ margin: "0.2rem 0 0.5rem" }}>
+          wall={data.wall_seconds.toFixed(2)}s · configs={grid.length}
+        </p>
+      )}
+
+      <h4>{t("research.view.bench_grid")}</h4>
+      <div className="table-wrap">
+        <table className="table small mono" data-testid="cultural-benchmark-grid-table">
+          <thead>
+            <tr>
+              <th>Population</th>
+              <th>Max Skills</th>
+              <th>Steps</th>
+              <th>ms / tick</th>
+              <th>Agent-ticks / s</th>
+              <th>Peak RSS (MiB)</th>
+              <th>Max Residual</th>
+              <th>Wall (s)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {grid.map((row, idx) => {
+              const resVal = Number(row.max_ledger_residual ?? 0);
+              return (
+                <tr key={`${row.population}-${row.max_skills}-${idx}`}>
+                  <td>{Number(row.population ?? 0)}</td>
+                  <td>{Number(row.max_skills ?? 0)}</td>
+                  <td>{Number(row.steps ?? 0)}</td>
+                  <td>{Number(row.ms_per_tick ?? 0).toFixed(3)}</td>
+                  <td>{Number(row.agent_ticks_per_sec ?? 0).toLocaleString(undefined, { maximumFractionDigits: 1 })}</td>
+                  <td>{Number(row.peak_rss_mib ?? 0).toFixed(1)}</td>
+                  <td>{resVal === 0 ? "0" : resVal.toExponential(1)}</td>
+                  <td>{Number(row.wall_seconds ?? 0).toFixed(2)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {hotspotKeys.length > 0 && (
+        <div style={{ marginTop: "0.75rem" }}>
+          <h4>{t("research.view.bench_hotspots")}</h4>
+          {topHotspots && (
+            <div style={{ margin: "0.4rem 0 0.6rem" }}>
+              <div
+                style={{
+                  display: "flex",
+                  height: "14px",
+                  borderRadius: "6px",
+                  overflow: "hidden",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                {hotspotKeys.map((k, i) => {
+                  const v = Math.max(0, Number(topHotspots[k] ?? 0));
+                  return (
+                    <div
+                      key={k}
+                      title={`${k}: ${v.toFixed(2)} ms (${((v / topTotal) * 100).toFixed(1)}%)`}
+                      style={{
+                        width: `${(v / topTotal) * 100}%`,
+                        background: HOTSPOT_COLORS[i % HOTSPOT_COLORS.length],
+                      }}
+                    />
+                  );
+                })}
+              </div>
+              <div className="toolbar small mono" style={{ marginTop: "0.3rem", gap: "0.75rem" }}>
+                {hotspotKeys.map((k, i) => {
+                  const v = Math.max(0, Number(topHotspots[k] ?? 0));
+                  return (
+                    <span key={k}>
+                      <span
+                        style={{
+                          display: "inline-block",
+                          width: "8px",
+                          height: "8px",
+                          borderRadius: "2px",
+                          background: HOTSPOT_COLORS[i % HOTSPOT_COLORS.length],
+                          marginRight: "4px",
+                        }}
+                      />
+                      {k}: {((v / topTotal) * 100).toFixed(1)}%
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          <div className="table-wrap">
+            <table className="table small mono">
+              <thead>
+                <tr>
+                  <th>N × S</th>
+                  {hotspotKeys.map((k) => (
+                    <th key={k}>{k} (ms)</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {grid.map((row, idx) => {
+                  const hs = (row.hotspots_ms as Record<string, number> | undefined) ?? {};
+                  return (
+                    <tr key={`hs-${idx}`}>
+                      <td>
+                        {Number(row.population ?? 0)} × {Number(row.max_skills ?? 0)}
+                      </td>
+                      {hotspotKeys.map((k) => (
+                        <td key={k}>{Number(hs[k] ?? 0).toFixed(2)}</td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {gpuProbe && (
+        <div className="panel" data-testid="cultural-gpu-probe" style={{ marginTop: "0.75rem", marginBottom: 0 }}>
+          <div className="lab-head" style={{ marginBottom: "0.3rem" }}>
+            <h4 style={{ margin: 0 }}>{t("research.view.bench_gpu")}</h4>
+            <span
+              className="badge"
+              style={{
+                background: gpuProbe.available ? "var(--accent)" : "var(--border)",
+                color: gpuProbe.available ? "#fff" : "var(--text)",
+              }}
+            >
+              {gpuProbe.available ? t("research.view.gpu_available") : t("research.view.gpu_unavailable")}
+            </span>
+          </div>
+          <dl className="stats small mono">
+            <dt>backend</dt>
+            <dd>{String(gpuProbe.backend ?? "—")}</dd>
+            <dt>speedup_vs_cpu</dt>
+            <dd>
+              {typeof gpuProbe.speedup_vs_cpu === "number"
+                ? `${gpuProbe.speedup_vs_cpu.toFixed(2)}×`
+                : "—"}
+            </dd>
+            <dt>max_abs_diff</dt>
+            <dd>
+              {typeof gpuProbe.max_abs_diff === "number"
+                ? gpuProbe.max_abs_diff.toExponential(2)
+                : "—"}
+            </dd>
+          </dl>
+          {typeof gpuProbe.note === "string" && gpuProbe.note && (
+            <p className="muted small" style={{ margin: "0.35rem 0 0" }}>
+              {gpuProbe.note}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const CUSTOM_VIEW_TOOLS = new Set([
+  "connectome_compare_species",
+  "connectome_chimera",
+  "cultural_phase_diagram",
+  "cultural_social_assay",
+  "cultural_benchmark",
+]);
+
 function ResearchResultView({ job }: { job: ResearchJobDetail }) {
   const t = useT();
   const [showRaw, setShowRaw] = useState(false);
@@ -333,6 +750,8 @@ function ResearchResultView({ job }: { job: ResearchJobDetail }) {
     res && typeof res.checks === "object" && res.checks !== null && !Array.isArray(res.checks)
       ? (res.checks as Record<string, unknown>)
       : null;
+
+  const hasCustomView = CUSTOM_VIEW_TOOLS.has(job.tool_id);
 
   return (
     <div className="panel" data-testid="research-job-result" style={{ marginTop: "0.8rem" }}>
@@ -375,46 +794,43 @@ function ResearchResultView({ job }: { job: ResearchJobDetail }) {
           {job.tool_id === "connectome_compare_species" && <CompareSpeciesView data={res} />}
           {job.tool_id === "connectome_chimera" && <ChimeraView data={res} />}
           {job.tool_id === "cultural_phase_diagram" && <PhaseDiagramView data={res} />}
+          {job.tool_id === "cultural_social_assay" && <CulturalSocialAssayView data={res} />}
+          {job.tool_id === "cultural_benchmark" && <CulturalBenchmarkView data={res} />}
 
-          {job.tool_id !== "connectome_compare_species" &&
-            job.tool_id !== "connectome_chimera" &&
-            job.tool_id !== "cultural_phase_diagram" && (
-              <div>
-                {typeof res.framing_note === "string" && <p className="notice small">{res.framing_note}</p>}
-                {checksObj && (
-                  <div className="toolbar small" style={{ margin: "0.4rem 0", flexWrap: "wrap" }}>
-                    {Object.entries(checksObj).map(([k, v]) => {
-                      const ok = typeof v === "boolean" ? v : Boolean((v as { ok?: boolean } | null)?.ok);
-                      return (
-                        <span
-                          key={k}
-                          className="badge"
-                          style={{ background: ok ? "var(--accent)" : "var(--danger)", color: "#fff" }}
-                        >
-                          {ok ? "PASS" : "FAIL"} · {k}
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
-                <dl className="stats small mono">
-                  {Object.entries(res)
-                    .filter(([, v]) => typeof v !== "object" || v === null)
-                    .slice(0, 18)
-                    .map(([k, v]) => (
-                      <div key={k} className="contents">
-                        <dt>{k}</dt>
-                        <dd>{String(v)}</dd>
-                      </div>
-                    ))}
-                </dl>
-              </div>
-            )}
+          {!hasCustomView && (
+            <div>
+              {typeof res.framing_note === "string" && <p className="notice small">{res.framing_note}</p>}
+              {checksObj && (
+                <div className="toolbar small" style={{ margin: "0.4rem 0", flexWrap: "wrap" }}>
+                  {Object.entries(checksObj).map(([k, v]) => {
+                    const ok = typeof v === "boolean" ? v : Boolean((v as { ok?: boolean } | null)?.ok);
+                    return (
+                      <span
+                        key={k}
+                        className="badge"
+                        style={{ background: ok ? "var(--accent)" : "var(--danger)", color: "#fff" }}
+                      >
+                        {ok ? "PASS" : "FAIL"} · {k}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+              <dl className="stats small mono">
+                {Object.entries(res)
+                  .filter(([, v]) => typeof v !== "object" || v === null)
+                  .slice(0, 18)
+                  .map(([k, v]) => (
+                    <div key={k} className="contents">
+                      <dt>{k}</dt>
+                      <dd>{String(v)}</dd>
+                    </div>
+                  ))}
+              </dl>
+            </div>
+          )}
 
-          {(showRaw ||
-            (job.tool_id !== "connectome_compare_species" &&
-              job.tool_id !== "connectome_chimera" &&
-              job.tool_id !== "cultural_phase_diagram")) && (
+          {(showRaw || !hasCustomView) && (
             <details open={showRaw} style={{ marginTop: "0.6rem" }}>
               <summary className="small muted">{t("research.raw_json")}</summary>
               <pre className="small mono" style={{ maxHeight: "22rem", overflow: "auto" }}>

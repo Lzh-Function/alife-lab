@@ -9,6 +9,7 @@ import numpy as np
 
 from alife_lab.core.spec import CulturalWorldExperiment
 from alife_lab.substrates.cultural_world.model import CulturalWorldState
+from alife_lab.substrates.cultural_world.social import resolve_exchange_enabled
 
 
 def apply_intervention(
@@ -77,6 +78,13 @@ def apply_intervention(
                 state.tx_overrides[ch] = mute
                 updated[ch] = mute
         return state, {"tx_overrides": dict(state.tx_overrides)}
+
+    if kind == "forbid_exchange":
+        if "forbid" in payload:
+            state.exchange_override = not bool(payload["forbid"])
+        else:
+            state.exchange_override = not resolve_exchange_enabled(state, exp)
+        return state, {"exchange_enabled": bool(state.exchange_override)}
 
     if kind == "shock_environment":
         delta = float(payload.get("phase_shift", 0.5))

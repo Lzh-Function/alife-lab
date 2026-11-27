@@ -2,7 +2,7 @@
 
 > **Scientific mode:** `exploratory` only (`mode="reference"` is rejected at `ExperimentSpec` validation; no external biological or historical literature oracle is claimed).
 >
-> **Architecture:** [ADR 0050](../decisions/0050-cultural-world.md) · [ADR 0052](../decisions/0052-cultural-world-p4-p5.md) · **Unified Roadmap:** [cultural_world_plan.md](../plans/cultural_world_plan.md)
+> **Architecture:** [ADR 0050](../decisions/0050-cultural-world.md) · [ADR 0052](../decisions/0052-cultural-world-p4-p5.md) · [ADR 0055](../decisions/0055-cultural-world-p6-p7.md) · **Unified Roadmap:** [cultural_world_plan.md](../plans/cultural_world_plan.md)
 
 ## 1. Scope & Structural Invariants Verified
 
@@ -69,7 +69,7 @@ Paired checkpoints saved at `t=400` on Arm E (`seeds = 0..4`) were restored into
   1. **Single-shot `erase_culture` partially recovers when `N=400` and `invention_prob=0.015`:** at `t=450` (+50 ticks), `improvement_depth` drops sharply (`6.0 -> 3.6`), and at `t=800` `innovation_utility` (`1.14` vs `1.23`) and `skill_retention_after_death` (`0.27` vs `0.37`) stay lower, yet population (`400`) and raw skill count (`3.61`) recover via abundant de novo invention + horizontal spread. True irreversible hysteresis likely requires either rare foundational inventions (`invention_prob << 0.015`), bottlenecked population size, or multi-step prerequisite tech DAGs (planned for Phase P4).
   2. **`C_vertical_only` showed higher `knowledge_diversity` (`249.6`) than `D/E` (`92.2 / 93.2`):** without peer horizontal copying, isolated family lineages retain idiosyncratic variants rather than converging onto high-utility shared recipes.
   3. **`D_full_free` (`cost=0.0`) vs `E_baseline_costly` (`cost=0.01`)** showed higher `improvement_depth` (`10.2` vs `7.0`) in `D`, while `mean_energy` (`15.32` vs `13.65`) overlapped within 1 SD at `N=400` saturation (`max_population = 400` caps demographic separation in `D` vs `E`).
-  4. **Scope boundary (P0–P5 vs P6–P7):** Compositional DSL + conserved `PlacedArtifact` external memory (P4) and the pre-registered 5-criterion E2/E3 cumulative-culture assay & 2D phase diagram (P5) are now implemented and documented in §§5–8 below. Inter-agent atomic barter/division-of-labor (`P6`), GPU scaling benchmarks (`P7`), and Connectome × Culture neuro-symbolic hybrids remain planned in Stage 4–6 of [`docs/plans/cultural_world_plan.md`](../plans/cultural_world_plan.md).
+  4. **Scope boundary (P0–P7 vs future stages):** Compositional DSL + conserved `PlacedArtifact` external memory (P4) and the pre-registered 5-criterion E2/E3 cumulative-culture assay & 2D phase diagram (P5) are documented in §§5–8 below; atomic barter, division of labor, `forbid_exchange`, and CPU/GPU scaling benchmarks (P6–P7) are implemented and documented in §§9–12 below. Multi-species Connectome × Culture hybrids remain outside the current implemented scope.
 
 ---
 
@@ -130,3 +130,73 @@ Command: `uv run --no-sync alife cultural phase-diagram cultural_world_compositi
 
 - Higher `transmission_cost` monotonically reduces equilibrium `mean_energy` across every period (`15.31 -> 12.92 -> 9.16` at `period=200`; `13.63 -> 11.06 -> 5.61` at `period=500`) while `compositional_skill_fraction` remains `>= 0.9968`.
 - **H5 regime trade-off observed:** Slower turnover (`period=500`) accumulates deeper refinement chains (`16.3–17.7` vs `6.7–9.7`), yet shows lower `post-inventor retention` (`0.12–0.17` vs `0.45–0.51`) as fewer environmental phase resets prompt broad cross-lineage horizontal sharing compared with faster cycling (`period=80–200`).
+
+
+---
+
+## 9. Stage 5 / P6 Extensions — Atomic Barter, Biomes & Causal Isolation
+
+Phase P6–P7 ([ADR 0055](../decisions/0055-cultural-world-p6-p7.md)) extends `cultural_world` opt-in (`allow_exchange=False`, `interdependent_resources=False` by default; both enabled in `cultural_world_exchange`, with `allow_exchange=False` in `cultural_world_no_exchange_control`):
+
+- **Biome Segregation (`ecology.py`):** West `material_a` (`x ≈ 0.25`) and east `material_b` (`x ≈ 0.75`) cosine biomes under exact `ResourceLedger` accounting (`resource_ledger_residual <= 1e-9`).
+- **Atomic Local Barter (`social.py`):** Co-located agents within `exchange_range = 5.5` swap `qty = min(exchange_lot, 0.5 * inv_a[i], 0.5 * inv_b[j])` (`>= 0.03`) all-or-nothing using `rngs["transmit"]`, preserving `inv_a.sum()` and `inv_b.sum()` identically with zero negative inventory.
+- **Specialization vs Division of Labor (`metrics.py`):** `specialization_index` measures unilateral A/B focus, whereas `division_of_labor_index = sqrt(pop_comp * interdependence_index)` requires both balanced population A/B specialization and active bilateral exchange.
+- **Causal Intervention (`forbid_exchange`) & Checkpoint v3 (`SERIALIZE_VERSION = 3`):** Toggles `exchange_override` while keeping genomes, `dw2`, `energy`, inventories, `skills`, `artifacts`, and resource grids bit-identical; v3 snapshots replay deterministically bit-for-bit.
+
+---
+
+## 10. P6 H4 5-Seed Social & Causal Assay (`cultural_world_exchange`)
+
+Command run (`5` paired seeds from `SeedSequence([seed, 6])`, `500` ticks/arm; midpoint `forbid_exchange` forked at `t=250`):
+- `uv run --no-sync alife cultural social-assay cultural_world_exchange --seeds 5 --steps 500 --json` (`wall_seconds = 19.095 s`, **`all_checks_passed = true`**, 7/7 checks passed).
+
+| Arm (`n = 5` seeds, `t = 500`) | Viable | Mean Energy | `tech_utility` | Trade Count | Trade Volume | `specialization_index` | `division_of_labor_index` | `interdependence_index` | `repeat_partner_rate` | Max Residual |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **`exchange_intact`** | `1.00` | `5.0968` | **`4.0031`** | **`3380.8`** | **`717.44`** | `0.9861` | **`0.8269`** | **`0.7237`** | `0.4549` | `1.623e-11` |
+| **`no_exchange_control`** | `1.00` | `5.1621` | `3.2775` | `0.0` | `0.00` | `0.9770` | `0.0000` | `0.0000` | `0.0000` | `1.472e-11` |
+| **`role_shuffled_control`** | `1.00` | `5.3867` | `2.8153` | `1065.0` | `225.77` | `0.9884` | `0.5522` | `0.3975` | `0.2569` | `1.529e-11` |
+| **`forbid_exchange_midpoint`** | `1.00` | `5.0229` | `3.5741` | `1330.6` | `316.53` | `0.9774` | `0.2516` | `0.0712` | `0.5181` | `1.617e-11` |
+
+| Paired Comparison (`exchange_intact` vs Control) | Mean Diff | 95% Bootstrap CI | Cliff's $\delta$ | Exact Paired $p$ (`2^5 = 32`) | Exact Perm. $p$ (`252`) |
+|---|---:|---|---:|---:|---:|
+| `division_of_labor_index` vs `no_exchange_control` | `+0.8269` | `[0.7904, 0.8629]` | **`+1.00`** | `0.0625` | `0.00794` |
+| `division_of_labor_index` vs `role_shuffled_control` | `+0.2747` | `[0.2024, 0.3605]` | **`+1.00`** | `0.0625` | `0.00794` |
+| `interdependence_index` vs `no_exchange_control` | `+0.7237` | `[0.6581, 0.7893]` | **`+1.00`** | `0.0625` | `0.00794` |
+| `interdependence_index` vs `role_shuffled_control` | `+0.3262` | `[0.2486, 0.4011]` | **`+1.00`** | `0.0625` | `0.00794` |
+| `interdependence_index` vs `forbid_exchange_midpoint` | `+0.6525` | `[0.5869, 0.7181]` | **`+1.00`** | `0.0625` | `0.00794` |
+| `post_midpoint_trades` vs `forbid_exchange_midpoint` | `+2050.2` | `[1690.2, 2328.8]` | **`+1.00`** | `0.0625` | `0.00794` |
+| `tech_utility` vs `no_exchange_control` | `+0.7256` | `[0.1203, 1.3075]` | `+0.68` | `0.125` | `0.07937` |
+| `mean_energy` vs `no_exchange_control` *(null)* | `-0.0653` | `[-0.3412, 0.2168]` | `-0.28` | `0.75` | `0.73016` |
+
+All 7 pre-registered assay checks (`mass_conservation`, `positive_trades`, `no_exchange_zero_trades`, `division_of_labor_gt_no_exchange`, `division_of_labor_gt_role_shuffled`, `forbid_exchange_halts_subsequent_trades`, `forbid_exchange_reduces_interdependence`) passed (`post_midpoint_trades = 0.0` in `forbid_exchange_midpoint` vs `+2050.2` in `exchange_intact`).
+
+---
+
+## 11. P7 CPU Scaling Grid, Hotspot Breakdown & GPU Probe
+
+Command run (`seed = 1`, `steps = 120` per cell, `--include-gpu`):
+- `uv run --no-sync alife cultural benchmark --populations 80,200,400 --skills 2,4,8 --steps 120 --include-gpu --json` (`wall_seconds = 5.206 s`).
+
+| Pop | Max Skills | Wall (s) | ms / tick | Agent-ticks / s | Peak RSS (MiB) | Max Residual | `ecology` (ms) | `sensors_policy` (ms) | `skills_tech` (ms) | `transmission` (ms) | `exchange` (ms) | `mortality_repro` (ms) |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `80` | `2` | `0.1155` | `0.963` | `99,318.7` | `96.34` | `5.684e-13` | `7.207` | `12.983` | `15.615` | `39.380` | `30.393` | `8.416` |
+| `80` | `4` | `0.0973` | `0.811` | `113,763.9` | `96.34` | `4.832e-13` | `6.750` | `12.070` | `13.905` | `28.468` | `27.116` | `7.664` |
+| `80` | `8` | `0.0953` | `0.794` | `116,229.5` | `96.34` | `4.832e-13` | `6.652` | `11.572` | `13.965` | `27.708` | `26.624` | `7.373` |
+| `200` | `2` | `0.3587` | `2.989` | `80,665.2` | `100.38` | `1.307e-12` | `7.865` | `20.100` | `25.016` | `142.682` | `145.106` | `16.097` |
+| `200` | `4` | `0.3531` | `2.942` | `82,435.7` | `100.38` | `1.222e-12` | `7.839` | `20.098` | `26.100` | `144.957` | `136.686` | `15.640` |
+| `200` | `8` | `0.3580` | `2.984` | `81,471.8` | `100.38` | `1.052e-12` | `7.885` | `20.918` | `29.094` | `147.867` | `133.539` | `16.871` |
+| `400` | `2` | `0.7204` | `6.004` | `66,625.7` | `103.32` | `8.242e-13` | `8.453` | `27.793` | `31.998` | `273.074` | `358.385` | `18.768` |
+| `400` | `4` | `0.6963` | `5.803` | `68,931.5` | `103.32` | `9.095e-13` | `8.222` | `28.469` | `34.555` | `270.425` | `335.018` | `17.803` |
+| `400` | `8` | `0.7182` | `5.985` | `66,831.2` | `103.32` | `1.108e-12` | `8.237` | `27.783` | `37.948` | `278.534` | `332.299` | `31.558` |
+
+- **GPU Batched Sensor + MLP Probe (`NVIDIA GeForce RTX 5070`, `torch_cuda`):**
+  - `available = true`, `N = 400`, `iters = 120`: CPU `float64` = **`17.36 ms`**, GPU `float64` = **`102.64 ms`**, **`speedup_vs_cpu = 0.169×`** (`~5.9×` slower than CPU), `float64 max_abs_diff = 2.776e-16` (`float32 max_abs_diff = 6.32e-08`).
+
+---
+
+## 12. Stage 5 Honest Findings, Negative/Null Results & Caveats
+
+1. **Null effect on standing `mean_energy`:** `exchange_intact` (`5.0968`) did not outperform `no_exchange_control` (`5.1621`, `Cliff's δ = -0.28`, `exact_paired p = 0.75`) or `role_shuffled_control` (`5.3867`) on per-agent standing energy. Barter + specialization boosts net skill utility (`tech_utility = 4.0031` vs `3.2775` / `2.8153`, `Cliff's δ = +0.68`) and supports higher demographic throughput over the shared, non-traded `food` field, keeping equilibrium per-capita energy Malthusian-bounded.
+2. **Spatial specialization is not division of labor:** Segregated biomes alone drove `specialization_index = 0.9770` in `no_exchange_control` with `division_of_labor_index = 0.0000`, validating the `division_of_labor_index` formulation that requires active bilateral interdependence (`0.8269` intact vs `0.5522` role-shuffled vs `0.0000` no-exchange).
+3. **Small-`n` paired permutation floor (`n = 5`):** With `5` paired seeds, exact sign-flipping has `2^5 = 32` assignments, setting a minimum achievable two-sided exact paired `p`-value of `2/32 = 0.0625` even when `5/5` pairs agree monotonically (`Cliff's δ = +1.00`; unpaired 5-vs-5 exact permutation `p = 0.00794`).
+4. **Negative GPU speedup at `N = 400`:** `sensors_policy` is only `~3.9%` (`27.78 ms` / `~716 ms`) of CPU step time at `N=400`, whereas pairwise $O(N^2)$ `exchange` (`332.30 ms`, `~46%`) and `transmission` (`278.53 ms`, `~39%`) dominate. Moving the tiny 12→8→6 MLP to CUDA slows execution to `0.169×` CPU due to kernel launch overhead; P7 therefore keeps pure-NumPy CPU execution as the production path unless future populations scale by orders of magnitude with spatial hashing.

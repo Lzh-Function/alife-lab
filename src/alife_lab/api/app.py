@@ -603,6 +603,7 @@ def create_app(
         scene: Annotated[bool, Query()] = False,
         cell_index: Annotated[int | None, Query(ge=0)] = None,
         port: Annotated[str | None, Query(max_length=64)] = None,
+        view: Annotated[str | None, Query(max_length=32)] = None,
     ) -> dict[str, Any]:
         query: dict[str, Any] = {"x": x, "y": y, "radius": radius}
         if mode != "summary":
@@ -615,6 +616,8 @@ def create_app(
             query["cell_index"] = cell_index
         if port is not None:
             query["port"] = port
+        if view is not None:
+            query["view"] = view
         return envelope(await ctl().inspect(run_id, query, tick))
 
     # ------------------------------------------------------------- connectome
