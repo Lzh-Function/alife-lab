@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 from pathlib import Path
 
@@ -20,6 +21,11 @@ from alife_lab.connectome.fly_world import (
 from alife_lab.core.spec import ExperimentSpec, FlyEmbodiedExperiment, FlyWorldExperiment
 from alife_lab.substrates.connectome.embodied_adapter import FlyEmbodiedAdapter
 from alife_lab.substrates.connectome.fly_world_adapter import FlyWorldAdapter
+
+HAS_MUJOCO = importlib.util.find_spec("mujoco") is not None
+needs_mujoco = pytest.mark.skipif(
+    not HAS_MUJOCO, reason="MuJoCo not installed (uv sync --extra embodied)"
+)
 
 
 def test_fly_world_spec_validation() -> None:
@@ -179,7 +185,7 @@ def test_numpy_csr_fallback_and_f12d_full_brain_replay_api(tmp_path: Path) -> No
     )
     assert rep["full_spiking_rates_hz"]["antennal_poke_dng84"] > 20.0
 
-    # 3. FlyEmbodiedExperiment with evolved_genome + FlyEmbodiedAdapter render header
+    # 3. FlyEmbodiedExperiment spec validation with evolved_genome (CPU-only, no MuJoCo)
     spec = ExperimentSpec.model_validate(
         {
             "schema_version": 1,
@@ -199,15 +205,8 @@ def test_numpy_csr_fallback_and_f12d_full_brain_replay_api(tmp_path: Path) -> No
         }
     )
     assert isinstance(spec.experiment, FlyEmbodiedExperiment)
-    adapter = FlyEmbodiedAdapter()
-    adapter.set_backend("numpy")
-    w = adapter.initialize(spec)
-    adapter.step(w, spec)
-    hdr, _ = adapter.render(w)
-    assert hdr["evolved_descendant"] is not None
-    assert hdr["evolved_descendant"]["fly_id"] == 42
-    assert hdr["evolved_descendant"]["generation"] == 5
-    assert "F12d Full-Brain" in hdr["level_note"]
+    assert spec.experiment.dynamics.evolved_fly_id == 42
+    assert spec.experiment.dynamics.evolved_generation == 5
 
     # 4. Controller + REST API export_fly_world_replay_spec end-to-end
     from dataclasses import replace
@@ -269,3 +268,40 @@ def test_numpy_csr_fallback_and_f12d_full_brain_replay_api(tmp_path: Path) -> No
         assert body["spec"]["experiment"]["substrate"] == "fly_embodied"
         assert len(body["spec"]["experiment"]["dynamics"]["evolved_genome"]) == GENOME_DIM
         assert body["descendant"]["dataset_id"] == "synthetic_fly_embodied"
+
+
+@needs_mujoco
+def test_f12d_fly_embodied_adapter_replay_mujoco() -> None:
+    """Verify F12d evolved_genome loads into FlyEmbodiedAdapter and renders descendant metadata."""
+    genome = np.zeros(GENOME_DIM, dtype=np.float32)
+    genome[0] = 0.25
+    genome[2] = 0.15
+    genome[8] = 0.10
+    spec = ExperimentSpec.model_validate(
+        {
+            "schema_version": 1,
+            "experiment": {
+                "name": "f12d_embodied_test",
+                "mode": "exploratory",
+                "substrate": "fly_embodied",
+                "seed": 1,
+                "dataset_id": "synthetic_fly_embodied",
+                "dynamics": {
+                    "evolved_genome": [float(v) for v in genome.tolist()],
+                    "evolved_fly_id": 42,
+                    "evolved_generation": 5,
+                    "evolved_fly_distance": 0.123,
+                },
+            },
+        }
+    )
+    assert isinstance(spec.experiment, FlyEmbodiedExperiment)
+    adapter = FlyEmbodiedAdapter()
+    adapter.set_backend("numpy")
+    w = adapter.initialize(spec)
+    adapter.step(w, spec)
+    hdr, _ = adapter.render(w)
+    assert hdr["evolved_descendant"] is not None
+    assert hdr["evolved_descendant"]["fly_id"] == 42
+    assert hdr["evolved_descendant"]["generation"] == 5
+    assert "F12d Full-Brain" in hdr["level_note"]
