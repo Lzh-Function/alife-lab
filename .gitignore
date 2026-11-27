@@ -2,6 +2,7 @@
 # Anchored to the repository root so source packages (e.g. src/alife_lab/artifacts) are kept.
 /runs/
 /.alife/
+/.alife_backups/
 /artifacts/
 /scratch/
 /outputs/

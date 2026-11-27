@@ -194,6 +194,41 @@ export interface Inspection extends Omit<Partial<SearchInspection>, "region"> {
   reversals?: number;
   distance_mm?: number;
   chemotaxis_index?: number;
+  // connectome_sysid / connectome_task
+  epoch?: number;
+  subcircuit_id?: string;
+  num_cells?: number;
+  num_edges?: number;
+  observed_cells?: number;
+  unobserved_cells?: number;
+  device?: string;
+  metrics?: Record<string, number | null>;
+  framing_note?: string;
+  task?: string;
+  scope?: string;
+  num_readout_cells?: number;
+  num_learnable_params?: number;
+  confusion_matrix?: number[][];
+  // fly_embodied / fly_swarm / fly_world
+  pose?: { x: number; y: number; yaw?: number; yaw_rad?: number; speed?: number };
+  commands?: Record<string, number>;
+  sensors?: Record<string, number>;
+  social_mode?: string;
+  num_flies?: number;
+  total_neurons?: number;
+  fly_index?: number;
+  sex?: string;
+  touch_timer_ms?: number;
+  song_intensity?: number;
+  threat_intensity?: number;
+  fly_id?: number;
+  parents?: number[];
+  generation?: number;
+  age?: number;
+  energy?: number;
+  fly_distance?: number;
+  morphology?: { body_scale: number; leg_length: number; wing_span: number; antenna_length: number };
+  signal_dictionary?: Array<Record<string, unknown>>;
 }
 
 const f = (v: number, d = 3) => (Math.abs(v) >= 100 ? v.toFixed(1) : v.toPrecision(d));
@@ -895,6 +930,150 @@ export function InspectorPanel({
                   </dd>
                 </dl>
               )}
+            </div>
+          )}
+          {data.substrate === "connectome_sysid" && (
+            <div data-testid="inspector-connectome-sysid">
+              <dl className="stats small mono">
+                <dt>Dataset / Subcircuit</dt>
+                <dd>
+                  {data.dataset_id} ({data.subcircuit_id})
+                </dd>
+                <dt>Wiring / Device</dt>
+                <dd>
+                  {data.wiring} · {data.device} · ep={data.epoch}
+                </dd>
+                <dt>Cells (Obs / Unobs)</dt>
+                <dd>
+                  {data.num_cells} ({data.observed_cells} / {data.unobserved_cells})
+                </dd>
+                {data.metrics &&
+                  Object.entries(data.metrics).map(([k, v]) => (
+                    <div key={k} className="contents">
+                      <dt>{k}</dt>
+                      <dd>{v === null ? "—" : v}</dd>
+                    </div>
+                  ))}
+              </dl>
+            </div>
+          )}
+          {data.substrate === "connectome_task" && (
+            <div data-testid="inspector-connectome-task">
+              {data.framing_note && <p className="notice small">{data.framing_note}</p>}
+              <dl className="stats small mono">
+                <dt>Dataset / Task</dt>
+                <dd>
+                  {data.dataset_id} · {data.task} ({data.scope})
+                </dd>
+                <dt>Wiring / Params</dt>
+                <dd>
+                  {data.wiring} · readout={data.num_readout_cells} · params={data.num_learnable_params}
+                </dd>
+                {data.metrics &&
+                  Object.entries(data.metrics).map(([k, v]) => (
+                    <div key={k} className="contents">
+                      <dt>{k}</dt>
+                      <dd>{v === null ? "—" : v}</dd>
+                    </div>
+                  ))}
+              </dl>
+              {data.confusion_matrix && data.confusion_matrix.length > 0 && (
+                <table className="table small mono" style={{ marginTop: "0.4rem" }}>
+                  <tbody>
+                    {data.confusion_matrix.map((row, ri) => (
+                      <tr key={ri}>
+                        {row.map((val, ci) => (
+                          <td key={ci}>{val}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+          {data.substrate === "fly_embodied" && (
+            <div data-testid="inspector-fly-embodied">
+              <dl className="stats small mono">
+                <dt>Dataset / Wiring</dt>
+                <dd>
+                  {data.dataset_id} · {data.wiring}
+                </dd>
+                {data.pose && (
+                  <>
+                    <dt>{t("inspector.position")}</dt>
+                    <dd>
+                      ({data.pose.x.toFixed(2)}, {data.pose.y.toFixed(2)}) · yaw={((data.pose.yaw_rad ?? data.pose.yaw ?? 0) * 180 / Math.PI).toFixed(0)}°
+                    </dd>
+                  </>
+                )}
+                {data.sensors && (
+                  <>
+                    <dt>{t("inspector.sensors")}</dt>
+                    <dd>
+                      {Object.entries(data.sensors)
+                        .map(([k, v]) => `${k}=${v}`)
+                        .join(" · ")}
+                    </dd>
+                  </>
+                )}
+                {data.commands && (
+                  <>
+                    <dt>Commands</dt>
+                    <dd>
+                      {Object.entries(data.commands)
+                        .map(([k, v]) => `${k}=${typeof v === "number" ? v.toFixed(2) : v}`)
+                        .join(" · ")}
+                    </dd>
+                  </>
+                )}
+              </dl>
+            </div>
+          )}
+          {data.substrate === "fly_swarm" && (
+            <div data-testid="inspector-fly-swarm">
+              <dl className="stats small mono">
+                <dt>Mode / Flies</dt>
+                <dd>
+                  {data.social_mode} · N={data.num_flies} ({data.total_neurons?.toLocaleString()} neurons)
+                </dd>
+                <dt>Fly #{data.fly_index}</dt>
+                <dd>{data.sex}</dd>
+                {data.pose && (
+                  <>
+                    <dt>{t("inspector.position")}</dt>
+                    <dd>
+                      ({data.pose.x.toFixed(2)}, {data.pose.y.toFixed(2)}) · v={(data.pose.speed ?? 0).toFixed(2)}
+                    </dd>
+                  </>
+                )}
+                <dt>Song / Threat</dt>
+                <dd>
+                  {data.song_intensity ?? 0} / {data.threat_intensity ?? 0} (touch={data.touch_timer_ms ?? 0}ms)
+                </dd>
+              </dl>
+            </div>
+          )}
+          {data.substrate === "fly_world" && (
+            <div data-testid="inspector-fly-world">
+              <dl className="stats small mono">
+                <dt>Fly ID / Gen</dt>
+                <dd>
+                  #{data.fly_id} · gen {data.generation} ({data.sex}, age {data.age})
+                </dd>
+                <dt>Energy / Fly-Dist</dt>
+                <dd>
+                  {data.energy} · d={data.fly_distance}
+                </dd>
+                {data.morphology && (
+                  <>
+                    <dt>Morphology</dt>
+                    <dd>
+                      body {data.morphology.body_scale} · leg {data.morphology.leg_length} · wing {data.morphology.wing_span} · ant {data.morphology.antenna_length}
+                    </dd>
+                  </>
+                )}
+              </dl>
             </div>
           )}
           {data.substrate === "boids" && (

@@ -447,6 +447,8 @@ export const FORM_FIELDS: Record<SubstrateId, FormField[]> = {
         { value: "shuffled_control", labelKey: "form.connectome.wiring.shuffled_control" },
       ],
     },
+    { path: "dynamics.w_syn_mv", labelKey: "form.connectome.w_syn_mv", kind: "float", min: 0.05, max: 5.0, step: 0.05 },
+    { path: "dynamics.f_poi", labelKey: "form.connectome.f_poi", kind: "float", min: 10, max: 1000, step: 10 },
     ...RUNNER,
   ],
   agent_world: [

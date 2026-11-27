@@ -528,7 +528,108 @@ export const api = {
     const regionIdx = raw.slice(posBytes + n, posBytes + 2 * n);
     return { header: h, positions, roles, regionIdx };
   },
+  connectomeDatasets: () => request<ConnectomeDatasetInfo[]>("GET", "/connectome/datasets"),
+  verifyConnectomeDataset: (datasetId: string) =>
+    request<Record<string, unknown>>("POST", `/connectome/datasets/${encodeURIComponent(datasetId)}/verify`, {}),
+  connectomeDatasetSummary: (datasetId: string) =>
+    request<ConnectomeDatasetSummary>("GET", `/connectome/datasets/${encodeURIComponent(datasetId)}/summary`),
+  fetchConnectomeDataset: (datasetId: string) =>
+    request<ResearchJobDetail>("POST", `/connectome/datasets/${encodeURIComponent(datasetId)}/fetch`, {}),
+  researchCatalog: () => request<ResearchToolSpec[]>("GET", "/tools/research/catalog"),
+  researchJobs: () => request<ResearchJobSummary[]>("GET", "/tools/research/jobs"),
+  researchJob: (jobId: string) => request<ResearchJobDetail>("GET", `/tools/research/jobs/${encodeURIComponent(jobId)}`),
+  createResearchJob: (toolId: string, params: Record<string, unknown>) =>
+    request<ResearchJobDetail>("POST", "/tools/research/jobs", { tool_id: toolId, params }),
+  cancelResearchJob: (jobId: string) =>
+    request<ResearchJobDetail>("POST", `/tools/research/jobs/${encodeURIComponent(jobId)}/cancel`, {}),
+  backups: () => request<BackupList>("GET", "/backups"),
+  createBackup: () => request<Record<string, unknown>>("POST", "/backups", {}),
+  verifyBackup: (backupId: string) => request<Record<string, unknown>>("POST", `/backups/${encodeURIComponent(backupId)}/verify`, {}),
+  testRestoreBackup: (backupId: string) => request<Record<string, unknown>>("POST", `/backups/${encodeURIComponent(backupId)}/restore`, {}),
 };
+
+export interface ConnectomeDatasetInfo {
+  dataset_id: string;
+  kind: "empirical" | "synthetic";
+  species: string;
+  version: string;
+  citation: string;
+  licence_note: string;
+  num_files: number;
+  files_present: number;
+  installed: boolean;
+  manifest_present: boolean;
+  local_bytes: number;
+  expected_bytes: number;
+}
+
+export interface ConnectomeDatasetSummary {
+  dataset_id: string;
+  summary: Record<string, unknown>;
+  reference_checks: Array<{ name: string; expected: unknown; actual: unknown; ok: boolean; note?: string }>;
+  all_checks_ok: boolean | null;
+}
+
+export interface ResearchToolParam {
+  name: string;
+  kind: "str" | "int" | "float" | "bool" | "select";
+  default: unknown;
+  label_key: string;
+  cli_flag: string | null;
+  choices: string[];
+  min_value: number | null;
+  max_value: number | null;
+  step: number | null;
+  required: boolean;
+  is_repeatable_csv: boolean;
+}
+
+export interface ResearchToolSpec {
+  id: string;
+  category: "species_chimera" | "circuits_plasticity" | "learning_fit" | "embodied_social" | "cultural";
+  title_key: string;
+  description_key: string;
+  cli_command: string[];
+  supports_json: boolean;
+  params: ResearchToolParam[];
+  gpu_optional: boolean;
+  timeout_seconds: number;
+}
+
+export interface ResearchJobSummary {
+  id: string;
+  tool_id: string;
+  title_key: string;
+  category: string;
+  params: Record<string, unknown>;
+  status: "running" | "completed" | "failed" | "cancelled";
+  created_at: number;
+  finished_at: number | null;
+  elapsed_seconds: number;
+  exit_code: number | null;
+  stdout_tail: string;
+  stderr_tail: string;
+  error: string | null;
+  has_result?: boolean;
+}
+
+export interface ResearchJobDetail extends ResearchJobSummary {
+  result: Record<string, unknown> | null;
+}
+
+export interface BackupItem {
+  backup_id: string;
+  created_at: string | null;
+  file_count: number;
+  total_bytes: number;
+  run_count: number;
+  path: string;
+}
+
+export interface BackupList {
+  backups_dir: string;
+  items: BackupItem[];
+}
 
 export interface Frame {
   header: {

@@ -25,6 +25,7 @@ Read `docs/ALIFE_LAB_SPEC.md` before architecture changes and `docs/GIT_AND_ARTI
 8. Provide CPU oracle/reference/property tests for each physics/VM substrate and negative controls for proposed emergent phenomena.
 9. Evidence levels E0–E4 distinguish visual curiosity from measured, reproduced, intervention-supported and externally checked findings.
 10. CPU-only setup/CI must remain viable even when GPU backends are unavailable.
+11. **GUI-first parity (mandatory user rule):** Never implement CLI/CUI-only features. Every dataset tool, comparative assay, chimera experiment, phase diagram, and operational workflow must be runnable and inspectable end-to-end from the React Web GUI (GUI-only features do not need to be mirrored to CLI).
 
 ## Source vs artifacts
 

@@ -34,8 +34,20 @@ from alife_lab.core.sweep import SweepSpec
 from alife_lab.execution.executors import Executor
 from alife_lab.execution.probe import probe_system
 from alife_lab.service.controller import Controller, ControllerError, NotFound, Subscriber
+from alife_lab.service.research_tools import (
+    ResearchJobManager,
+    list_backups,
+    list_connectome_datasets,
+    list_research_tools,
+    run_create_backup,
+    run_test_restore_backup,
+    run_verify_backup,
+    summarize_connectome_dataset,
+    verify_connectome_dataset,
+)
 from alife_lab.service.settings import Settings
 from alife_lab.service.sweeps import deep_merge
+from alife_lab.storage.backup import BackupError
 from alife_lab.substrates import get_manifest, has_substrate, list_substrates
 from alife_lab.substrates.bff.adapter import parse_program
 from alife_lab.substrates.bff.trace import trace_scalar, trace_summary
@@ -248,6 +260,11 @@ def _format_validation(exc: ValidationError) -> str:
 # --------------------------------------------------------------------------- #
 
 
+class ResearchJobRequest(_Req):
+    tool_id: Annotated[str, Field(min_length=1, max_length=64)]
+    params: dict[str, Any] = Field(default_factory=dict)
+
+
 def create_app(
     settings: Settings,
     executor: Executor,
@@ -256,6 +273,7 @@ def create_app(
     extra_hosts: tuple[str, ...] = (),
 ) -> FastAPI:
     holder: dict[str, Controller] = {}
+    research_jobs = ResearchJobManager(settings)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -265,6 +283,7 @@ def create_app(
         try:
             yield
         finally:
+            research_jobs.shutdown()
             await controller.shutdown()
 
     app = FastAPI(
@@ -600,6 +619,41 @@ def create_app(
 
     # ------------------------------------------------------------- connectome
 
+    @app.get(f"{API}/connectome/datasets")
+    async def connectome_datasets() -> dict[str, Any]:
+        data = await run_in_threadpool(list_connectome_datasets, settings.resolved_datasets_dir)
+        return envelope(data)
+
+    @app.post(f"{API}/connectome/datasets/{{dataset_id}}/verify")
+    async def connectome_dataset_verify(dataset_id: str) -> dict[str, Any]:
+        try:
+            data = await run_in_threadpool(
+                verify_connectome_dataset, dataset_id, settings.resolved_datasets_dir
+            )
+        except DatasetError as exc:
+            raise ControllerError(str(exc), "dataset_error") from exc
+        return envelope(data)
+
+    @app.get(f"{API}/connectome/datasets/{{dataset_id}}/summary")
+    async def connectome_dataset_summary(dataset_id: str) -> dict[str, Any]:
+        try:
+            data = await run_in_threadpool(
+                summarize_connectome_dataset, dataset_id, settings.resolved_datasets_dir
+            )
+        except DatasetError as exc:
+            raise NotFound(str(exc)) from exc
+        return envelope(data)
+
+    @app.post(f"{API}/connectome/datasets/{{dataset_id}}/fetch", status_code=202)
+    async def connectome_dataset_fetch(dataset_id: str) -> dict[str, Any]:
+        try:
+            job = research_jobs.submit_dataset_fetch(dataset_id)
+        except DatasetError as exc:
+            raise NotFound(str(exc)) from exc
+        except RuntimeError as exc:
+            raise ControllerError(str(exc), "busy") from exc
+        return envelope(job)
+
     @app.get(f"{API}/connectome/{{dataset_id}}/meta")
     async def connectome_meta(dataset_id: str) -> dict[str, Any]:
         try:
@@ -718,6 +772,67 @@ def create_app(
         trace["pairing"] = "manual"
         trace["summary"] = trace_summary(trace, a, b)
         return envelope(trace)
+
+    # --------------------------------------------------------- research tools
+
+    @app.get(f"{API}/tools/research/catalog")
+    async def research_catalog() -> dict[str, Any]:
+        return envelope(list_research_tools())
+
+    @app.post(f"{API}/tools/research/jobs", status_code=201)
+    async def create_research_job(body: ResearchJobRequest) -> dict[str, Any]:
+        try:
+            job = research_jobs.submit_tool(body.tool_id, body.params)
+        except ValueError as exc:
+            raise ControllerError(str(exc), "invalid_params") from exc
+        except RuntimeError as exc:
+            raise ControllerError(str(exc), "busy") from exc
+        return envelope(job)
+
+    @app.get(f"{API}/tools/research/jobs")
+    async def get_research_jobs() -> dict[str, Any]:
+        return envelope(research_jobs.list_jobs())
+
+    @app.get(f"{API}/tools/research/jobs/{{job_id}}")
+    async def get_research_job(job_id: str) -> dict[str, Any]:
+        try:
+            return envelope(research_jobs.get_job(job_id))
+        except KeyError as exc:
+            raise NotFound(str(exc)) from exc
+
+    @app.post(f"{API}/tools/research/jobs/{{job_id}}/cancel")
+    async def cancel_research_job(job_id: str) -> dict[str, Any]:
+        try:
+            return envelope(research_jobs.cancel_job(job_id))
+        except KeyError as exc:
+            raise NotFound(str(exc)) from exc
+
+    # ---------------------------------------------------------------- backups
+
+    @app.get(f"{API}/backups")
+    async def get_backups() -> dict[str, Any]:
+        return envelope(await run_in_threadpool(list_backups, settings))
+
+    @app.post(f"{API}/backups", status_code=201)
+    async def create_backup_route() -> dict[str, Any]:
+        try:
+            return envelope(await run_in_threadpool(run_create_backup, settings))
+        except BackupError as exc:
+            raise ControllerError(str(exc), "backup_error") from exc
+
+    @app.post(f"{API}/backups/{{backup_id}}/verify")
+    async def verify_backup_route(backup_id: str) -> dict[str, Any]:
+        try:
+            return envelope(await run_in_threadpool(run_verify_backup, backup_id, settings))
+        except BackupError as exc:
+            raise ControllerError(str(exc), "backup_error") from exc
+
+    @app.post(f"{API}/backups/{{backup_id}}/restore")
+    async def restore_backup_route(backup_id: str) -> dict[str, Any]:
+        try:
+            return envelope(await run_in_threadpool(run_test_restore_backup, backup_id, settings))
+        except BackupError as exc:
+            raise ControllerError(str(exc), "backup_error") from exc
 
     @app.get(f"{API}/experiments/{{run_id}}/timeline")
     async def timeline(run_id: str) -> dict[str, Any]:

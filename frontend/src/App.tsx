@@ -12,9 +12,10 @@ import { ComputeToggle } from "./components/ComputeToggle";
 import { DiscoveryDetailView, DiscoveryList } from "./components/Discoveries";
 import { GalleryPage } from "./components/Gallery";
 import { LineagePage } from "./components/LineagePage";
+import { ResearchHub } from "./components/ResearchHub";
 
-type View = "guide" | "catalog" | "library" | "lab" | "compare" | "sweeps" | "discoveries" | "gallery" | "debugger" | "diagnostics" | "lineage";
-const VIEWS = ["guide", "catalog", "library", "lab", "compare", "sweeps", "discoveries", "gallery", "debugger", "diagnostics", "lineage"] as const;
+type View = "guide" | "catalog" | "library" | "lab" | "compare" | "sweeps" | "research" | "discoveries" | "gallery" | "debugger" | "diagnostics" | "lineage";
+const VIEWS = ["guide", "catalog", "library", "lab", "compare", "sweeps", "research", "discoveries", "gallery", "debugger", "diagnostics", "lineage"] as const;
 const NAV_HIDDEN = new Set<View>(["lineage"]); // reached from a run, not from the top bar
 
 function parseHash(): { view: View; runId: string | null; comparisonId: string | null; sweepId: string | null; discoveryId: string | null; anchor: string | null } {
@@ -88,6 +89,7 @@ export function App() {
           ))}
         {route.view === "sweeps" &&
           (route.sweepId ? <SweepDetail key={route.sweepId} sweepId={route.sweepId} /> : <SweepList onOpen={openSweep} />)}
+        {route.view === "research" && <ResearchHub />}
         {route.view === "discoveries" &&
           (route.discoveryId ? (
             <DiscoveryDetailView key={route.discoveryId} id={route.discoveryId} />

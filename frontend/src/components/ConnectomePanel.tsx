@@ -65,6 +65,9 @@ export function ConnectomePanel({
   const regions = meta.data?.regions ?? [];
 
   const hasMbon = rows.some((r) => r.values.mbon11_rate_hz !== undefined || r.values.mbon01_rate_hz !== undefined);
+  const hasMn9Port = ports.some((p) => p.port_id === "mn9_proboscis_extension");
+  const hasMeanV = rows.some((r) => r.values.mean_v_mv !== undefined);
+  const hasActive = rows.some((r) => r.values.active_neurons_tick !== undefined);
   const rateSeries: Series[] = hasMbon
     ? [
         {
@@ -78,18 +81,43 @@ export function ConnectomePanel({
           points: rows.map((r) => [r.tick, r.values.mbon01_rate_hz ?? null]),
         },
       ]
-    : [
-        {
-          label: t("metric.mn9_rate_hz"),
-          className: "arm-b",
-          points: rows.map((r) => [r.tick, r.values.mn9_rate_hz ?? null]),
-        },
-        {
-          label: t("metric.mean_firing_rate_hz"),
-          className: "arm-a",
-          points: rows.map((r) => [r.tick, r.values.mean_firing_rate_hz ?? null]),
-        },
-      ];
+    : hasMn9Port && rows.some((r) => r.values.mn9_rate_hz !== undefined)
+      ? [
+          {
+            label: t("metric.mn9_rate_hz"),
+            className: "arm-b",
+            points: rows.map((r) => [r.tick, r.values.mn9_rate_hz ?? null]),
+          },
+          {
+            label: t("metric.mean_firing_rate_hz"),
+            className: "arm-a",
+            points: rows.map((r) => [r.tick, r.values.mean_firing_rate_hz ?? null]),
+          },
+        ]
+      : [
+          {
+            label: t("metric.mean_firing_rate_hz"),
+            className: "arm-a",
+            points: rows.map((r) => [r.tick, r.values.mean_firing_rate_hz ?? null]),
+          },
+          ...(hasMeanV
+            ? [
+                {
+                  label: t("metric.mean_v_mv"),
+                  className: "arm-b",
+                  points: rows.map((r) => [r.tick, r.values.mean_v_mv ?? null] as [number, number | null]),
+                },
+              ]
+            : hasActive
+              ? [
+                  {
+                    label: t("metric.active_neurons_tick"),
+                    className: "arm-b",
+                    points: rows.map((r) => [r.tick, r.values.active_neurons_tick ?? null] as [number, number | null]),
+                  },
+                ]
+              : []),
+        ];
 
   return (
     <div className="connectome-controls">

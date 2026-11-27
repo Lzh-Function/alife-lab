@@ -20,6 +20,7 @@ class Settings:
     default_ticks_per_second: float
     datasets_dir: Path | None = None
     max_datasets_mb: int = 4096
+    backups_dir: Path | None = None
 
     @property
     def db_path(self) -> Path:
@@ -36,6 +37,14 @@ class Settings:
     @property
     def resolved_datasets_dir(self) -> Path:
         return self.datasets_dir if self.datasets_dir is not None else self.home / "datasets"
+
+    @property
+    def resolved_backups_dir(self) -> Path:
+        return (
+            self.backups_dir
+            if self.backups_dir is not None
+            else self.home.parent / ".alife_backups"
+        )
 
 
 def _path_env(name: str, default: Path) -> Path:
@@ -58,4 +67,5 @@ def load_settings() -> Settings:
         default_ticks_per_second=float(os.environ.get("ALIFE_DEFAULT_TPS", "10")),
         datasets_dir=_path_env("ALIFE_DATASETS_DIR", home / "datasets"),
         max_datasets_mb=int(os.environ.get("ALIFE_MAX_DATASETS_MB", "4096")),
+        backups_dir=_path_env("ALIFE_BACKUPS_DIR", home.parent / ".alife_backups"),
     )
