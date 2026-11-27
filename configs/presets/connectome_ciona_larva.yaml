@@ -1,0 +1,13 @@
+preset:
+  id: connectome_ciona_larva
+  scenario: connectome_ciona_larva.yaml
+  title_key: preset.connectome_ciona_larva.title
+  description_key: preset.connectome_ciona_larva.description
+  overrides:
+    experiment:
+      name: Connectome Ciona Tadpole Larva
+      wiring: reference
+  expected_observation: >-
+    Ocellus photoreceptor drive activates MGIN/ACIN relay interneurons and left/right tail motor
+    neurons (MN1-MN5 L/R) in the 205-cell Ryan et al. (2016) chordate sibling connectome.
+  negative_control: connectome_ciona_larva_shuffled

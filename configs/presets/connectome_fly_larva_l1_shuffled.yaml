@@ -1,0 +1,12 @@
+preset:
+  id: connectome_fly_larva_l1_shuffled
+  scenario: connectome_fly_larva_l1.yaml
+  title_key: preset.connectome_fly_larva_l1_shuffled.title
+  description_key: preset.connectome_fly_larva_l1_shuffled.description
+  overrides:
+    experiment:
+      name: Connectome Fly Larva L1 Shuffled
+      wiring: shuffled_control
+  expected_observation: >-
+    Degree- and sign-preserving shuffled negative control for the 2,956-neuron fly larva brain.
+  negative_control: connectome_fly_larva_l1

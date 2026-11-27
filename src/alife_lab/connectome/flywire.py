@@ -722,6 +722,42 @@ def load_connectome_pack(
         from alife_lab.connectome.celegans import load_celegans_302
 
         return load_celegans_302(datasets_dir, verify_hashes=verify_hashes)
+    if dataset_id == "fly_larva_l1":
+        from alife_lab.connectome.species_packs import load_fly_larva_l1
+
+        return load_fly_larva_l1(datasets_dir, verify_hashes=verify_hashes)
+    if dataset_id == "synthetic_fly_larva":
+        from alife_lab.connectome.species_packs import make_synthetic_fly_larva_pack
+
+        return make_synthetic_fly_larva_pack()
+    if dataset_id == "platynereis_3d":
+        from alife_lab.connectome.species_packs import load_platynereis_3d
+
+        return load_platynereis_3d(datasets_dir, verify_hashes=verify_hashes)
+    if dataset_id == "synthetic_platynereis":
+        from alife_lab.connectome.species_packs import make_synthetic_platynereis_pack
+
+        return make_synthetic_platynereis_pack()
+    if dataset_id == "ciona_larva":
+        from alife_lab.connectome.species_packs import load_ciona_larva
+
+        return load_ciona_larva(datasets_dir, verify_hashes=verify_hashes)
+    if dataset_id == "synthetic_ciona":
+        from alife_lab.connectome.species_packs import make_synthetic_ciona_pack
+
+        return make_synthetic_ciona_pack()
+    if dataset_id == "synthetic_chimera_worm_fly_mb":
+        from alife_lab.connectome.chimera import make_chimera_worm_fly_mb_pack
+
+        return make_chimera_worm_fly_mb_pack()
+    if dataset_id == "chimera_worm_fly_mb":
+        from alife_lab.connectome.celegans import load_celegans_302
+        from alife_lab.connectome.chimera import make_chimera_worm_fly_mb_pack
+        from alife_lab.connectome.species_packs import load_fly_larva_l1
+
+        host = load_celegans_302(datasets_dir, verify_hashes=verify_hashes)
+        donor = load_fly_larva_l1(datasets_dir, verify_hashes=verify_hashes)
+        return make_chimera_worm_fly_mb_pack(host, donor)
     raise DatasetError(f"no loader implemented for dataset {dataset_id!r}")
 
 
@@ -732,6 +768,18 @@ def summarize_connectome_pack(pack: ConnectomePack) -> dict[str, Any]:
         from alife_lab.connectome.celegans import celegans_302_reference_checks
 
         checks = celegans_302_reference_checks(pack)
+    elif pack.dataset_id in ("fly_larva_l1", "synthetic_fly_larva"):
+        from alife_lab.connectome.species_packs import fly_larva_l1_reference_checks
+
+        checks = fly_larva_l1_reference_checks(pack)
+    elif pack.dataset_id in ("platynereis_3d", "synthetic_platynereis"):
+        from alife_lab.connectome.species_packs import platynereis_3d_reference_checks
+
+        checks = platynereis_3d_reference_checks(pack)
+    elif pack.dataset_id in ("ciona_larva", "synthetic_ciona"):
+        from alife_lab.connectome.species_packs import ciona_larva_reference_checks
+
+        checks = ciona_larva_reference_checks(pack)
     else:
         checks = []
     return summarize_pack(pack, reference_checks=checks)

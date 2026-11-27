@@ -1,0 +1,13 @@
+preset:
+  id: connectome_fly_larva_l1
+  scenario: connectome_fly_larva_l1.yaml
+  title_key: preset.connectome_fly_larva_l1.title
+  description_key: preset.connectome_fly_larva_l1.description
+  overrides:
+    experiment:
+      name: Connectome Fly Larva L1
+      wiring: reference
+  expected_observation: >-
+    Olfactory stimulation enters 42 larval ORNs and propagates through PNs, 144 mushroom-body
+    Kenyon cells, 48 MBONs, and 182 VNC descending neurons in the 2,956-neuron Winding 2023 brain.
+  negative_control: connectome_fly_larva_l1_shuffled

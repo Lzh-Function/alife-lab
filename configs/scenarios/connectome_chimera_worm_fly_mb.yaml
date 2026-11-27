@@ -1,0 +1,23 @@
+schema_version: 1
+experiment:
+  name: Chimera F13c Worm plus Fly MB
+  mode: exploratory
+  substrate: connectome
+  seed: 42
+  dataset_id: chimera_worm_fly_mb
+  wiring: reference
+  stimuli:
+    - port: chimera_odor_a
+      rate_hz: 180.0
+  silenced_ports: []
+  runner:
+    max_steps: 500
+    checkpoint_interval: 100
+  observations:
+    metrics:
+      - spikes_tick
+      - active_neurons_tick
+      - total_spikes
+      - mean_firing_rate_hz
+      - mean_v_mv
+      - time_ms

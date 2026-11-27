@@ -16,6 +16,8 @@ import numpy as np
 from alife_lab import API_CONTRACT_VERSION
 from alife_lab.connectome import (
     CELL_ROLE_NAMES,
+    MODEL_GRADED,
+    MODEL_SPIKING_LIF,
     ConnectomePack,
     CSRGraph,
     load_connectome_pack,
@@ -26,7 +28,9 @@ from alife_lab.connectome.graded import (
     GradedParams,
     has_graded_or_gap,
     make_initial_graded_state,
+    make_initial_hybrid_state,
     step_graded_tick_cpu,
+    step_hybrid_tick_cpu,
 )
 from alife_lab.connectome.lif import (
     LIFParams,
@@ -141,6 +145,8 @@ def _get_pack_and_csr(exp: ConnectomeExperiment) -> tuple[ConnectomePack, CSRGra
             pack = make_synthetic_mb_pack()
         elif exp.dataset_id == "synthetic_celegans_302":
             pack = make_synthetic_celegans_302_pack()
+        elif exp.dataset_id.startswith("synthetic_"):
+            pack = load_connectome_pack(exp.dataset_id, ds_dir, verify_hashes=False)
         else:
             pack = load_connectome_pack(exp.dataset_id, ds_dir, verify_hashes=True)
         csr = pack.edges.to_csr(pack.cells.num_cells)
@@ -324,13 +330,15 @@ class ConnectomeAdapter:
         if is_graded:
             graded_params = GradedParams()
             graded_circuit = GradedCircuit.from_csr(csr)
-            params = LIFParams(
-                v_0=graded_params.e_leak_mv,
-                v_rst=graded_params.e_leak_mv,
-                v_th=graded_params.v_active_mv,
-                dt_ms=graded_params.dt_ms,
-                substeps_per_tick=graded_params.substeps_per_tick,
-            )
+            has_lif = bool(np.any(pack.cells.cell_model == MODEL_SPIKING_LIF))
+            if not has_lif:
+                params = LIFParams(
+                    v_0=graded_params.e_leak_mv,
+                    v_rst=graded_params.e_leak_mv,
+                    v_th=graded_params.v_active_mv,
+                    dt_ms=graded_params.dt_ms,
+                    substeps_per_tick=graded_params.substeps_per_tick,
+                )
 
         if p_params.enabled and not is_graded:
             pkey = (
@@ -386,10 +394,15 @@ class ConnectomeAdapter:
     def initialize(self, spec: ExperimentSpec) -> ConnectomeWorld:
         exp = _ce(spec)
         pack, base_csr = _get_pack_and_csr(exp)
+        params = _params_from_exp(exp)
         if has_graded_or_gap(pack, base_csr):
-            lif = make_initial_graded_state(pack.cells.num_cells, GradedParams())
+            has_lif = bool(np.any(pack.cells.cell_model == MODEL_SPIKING_LIF))
+            has_grad = bool(np.any(pack.cells.cell_model == MODEL_GRADED))
+            if has_lif and has_grad:
+                lif = make_initial_hybrid_state(pack, params, GradedParams())
+            else:
+                lif = make_initial_graded_state(pack.cells.num_cells, GradedParams())
         else:
-            params = _params_from_exp(exp)
             lif = make_initial_state(pack.cells.num_cells, params)
         for stim in exp.stimuli:
             if stim.port not in pack.io_ports:
@@ -418,7 +431,20 @@ class ConnectomeAdapter:
     def step(self, state: ConnectomeWorld, spec: ExperimentSpec) -> ConnectomeWorld:
         exp = _ce(spec)
         if state.graded_circuit is not None and state.graded_params is not None:
-            step_graded_tick_cpu(state.lif, state.graded_circuit, state.graded_params)
+            has_lif = bool(np.any(state.pack.cells.cell_model == MODEL_SPIKING_LIF))
+            has_grad = bool(np.any(state.pack.cells.cell_model == MODEL_GRADED))
+            if has_lif and has_grad:
+                step_hybrid_tick_cpu(
+                    state.lif,
+                    state.pack,
+                    state.csr,
+                    state.graded_circuit,
+                    state.params,
+                    state.graded_params,
+                    int(exp.seed),
+                )
+            else:
+                step_graded_tick_cpu(state.lif, state.graded_circuit, state.graded_params)
             return state
         if state.gpu_runner is not None:
             state.gpu_runner.step_tick(use_graph=True)
@@ -678,12 +704,18 @@ class ConnectomeAdapter:
         if cell_idx < 0 or cell_idx >= n:
             raise ValueError(f"cell_index {cell_idx} out of range [0, {n})")
         pos = cells.position_nm[cell_idx]
+        sp_prov = {
+            sp: round(float((cells.species_idx == i).mean()), 4)
+            for i, sp in enumerate(cells.species_names)
+        }
         return {
             "substrate": "connectome",
             "dataset_id": state.pack.dataset_id,
             "tick": lif.tick,
             "cell_index": cell_idx,
             "source_id": int(cells.source_id[cell_idx]),
+            "species_name": cells.species_names[int(cells.species_idx[cell_idx])],
+            "species_provenance": sp_prov,
             "cell_type": cells.cell_type[cell_idx],
             "super_class": cells.super_class[cell_idx],
             "cell_class": cells.cell_class[cell_idx],

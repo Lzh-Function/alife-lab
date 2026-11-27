@@ -1,0 +1,25 @@
+schema_version: 1
+experiment:
+  name: Connectome Ciona Tadpole Larva
+  mode: exploratory
+  substrate: connectome
+  seed: 42
+  dataset_id: ciona_larva
+  wiring: reference
+  stimuli:
+    - port: ciona_photoreceptors
+      rate_hz: 150.0
+  silenced_ports: []
+  dynamics:
+    w_syn_mv: 1.45
+  runner:
+    max_steps: 500
+    checkpoint_interval: 100
+  observations:
+    metrics:
+      - spikes_tick
+      - active_neurons_tick
+      - total_spikes
+      - mean_firing_rate_hz
+      - mean_v_mv
+      - time_ms

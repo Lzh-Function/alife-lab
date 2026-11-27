@@ -1,0 +1,12 @@
+preset:
+  id: connectome_platynereis_3d_shuffled
+  scenario: connectome_platynereis_3d.yaml
+  title_key: preset.connectome_platynereis_3d_shuffled.title
+  description_key: preset.connectome_platynereis_3d_shuffled.description
+  overrides:
+    experiment:
+      name: Connectome Platynereis 3D Shuffled
+      wiring: shuffled_control
+  expected_observation: >-
+    Degree-preserving shuffled negative control for the Platynereis 3-day larva whole-body graph.
+  negative_control: connectome_platynereis_3d

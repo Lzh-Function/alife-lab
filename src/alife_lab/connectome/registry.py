@@ -28,8 +28,10 @@ ALLOWED_SUFFIXES: tuple[str, ...] = (
     ".feather",
     ".csv",
     ".tsv",
+    ".txt",
     ".csv.gz",
     ".tsv.gz",
+    ".csv.zip",
     ".json",
 )
 FORBIDDEN_SUFFIXES: tuple[str, ...] = (".pkl", ".pickle", ".joblib", ".pt", ".pth", ".ckpt")
@@ -283,11 +285,145 @@ CELEGANS_302_SPEC = DatasetSpec(
     ),
 )
 
+_PLATYNEREIS_COMMIT = "ab75029040b8dba768d4c2cbdb26423aec59ae4a"
+_PLATY_BASE = (
+    f"https://raw.githubusercontent.com/JekelyLab/Platynereis_3D_connectome_2024/"
+    f"{_PLATYNEREIS_COMMIT}/data"
+)
+
+FLY_LARVA_L1_SPEC = DatasetSpec(
+    dataset_id="fly_larva_l1",
+    species="drosophila_melanogaster_larva_l1",
+    version="winding_2023_v1",
+    citation=(
+        "Winding, Pedigo, Barnes, Patsolic, Park, Kazimiers, Fushiki, Andrade, Khandelwal, "
+        "Valdes-Aleman, Li, Randel, Barsotti, Correia, Fetter, Hartenstein, Priebe, "
+        "Vogelstein, Cardona & Zlatic (2023) Science 379(6636):eadd9330 "
+        "'The connectome of an insect brain' (via Netzschleuder fly_larva CSV archive)."
+    ),
+    licence_note=(
+        "Personal/academic research use (data not redistributed in Git; "
+        "stored under .alife/datasets/fly_larva_l1/). Winding et al. (2023) Science."
+    ),
+    files=(
+        DatasetFileSpec(
+            filename="fly_larva.csv.zip",
+            url="https://networks.skewed.de/net/fly_larva/files/fly_larva.csv.zip",
+            sha256="49f87128185feb1fa41131050668eecc57064dbca36fc1908419fa5f6b341463",
+            size_bytes=508_166,
+            source_label="Netzschleuder fly_larva (Winding et al. 2023)",
+            licence_note="Open connectome CSV archive (Science 2023)",
+        ),
+    ),
+)
+
+PLATYNEREIS_3D_SPEC = DatasetSpec(
+    dataset_id="platynereis_3d",
+    species="platynereis_dumerilii_3day_larva",
+    version="veraszto_2024_ab75029",
+    citation=(
+        "Verasztó, Jasek, Gühmann, Shahidi, Ueda, Beard, Mendes, Heinz, Bezares-Calderón, "
+        "Williams & Jékely (2024/2025) eLife 97964 "
+        "'Whole-animal connectome and cell-type complement of the three-segmented "
+        "Platynereis dumerilii larva'."
+    ),
+    licence_note=(
+        "Personal/academic research use (data not redistributed in Git; "
+        "stored under .alife/datasets/platynereis_3d/). JekelyLab GitHub / eLife CC-BY 4.0."
+    ),
+    files=(
+        DatasetFileSpec(
+            filename="full_connectome_adjacency_matrix.csv",
+            url=f"{_PLATY_BASE}/full_connectome_adjacency_matrix.csv",
+            sha256="889422d55c009ccc515c2828adb69ea4b377123950d830e98e7fd5fa146ddc6c",
+            size_bytes=5_978_359,
+            source_label="JekelyLab/Platynereis_3D_connectome_2024",
+            licence_note="GPL-3.0 / eLife CC-BY 4.0",
+        ),
+        DatasetFileSpec(
+            filename="with_soma_all_annot.txt",
+            url=f"{_PLATY_BASE}/with_soma_all_annot.txt",
+            sha256="9c157e2e16ea89f9387bb0958ff79d171f25225c9efe26f03bb8d5cc9636e130",
+            size_bytes=7_072_816,
+            source_label="JekelyLab/Platynereis_3D_connectome_2024",
+            licence_note="GPL-3.0 / eLife CC-BY 4.0",
+        ),
+        DatasetFileSpec(
+            filename="neuronal_celltypes_table.csv",
+            url=f"{_PLATY_BASE}/neuronal_celltypes_table.csv",
+            sha256="25a46a8b1887675df8c955e90ee44b088fab76d4b3cf977beaf6b4da647f7870",
+            size_bytes=66_033,
+            source_label="JekelyLab/Platynereis_3D_connectome_2024",
+            licence_note="GPL-3.0 / eLife CC-BY 4.0",
+        ),
+        DatasetFileSpec(
+            filename="connectome_SN_skids.csv",
+            url=f"{_PLATY_BASE}/connectome_SN_skids.csv",
+            sha256="7a3baebb5e250664976d3948fef1219734f7d9cd8d07db84a56e409d8458637e",
+            size_bytes=3_642,
+            source_label="JekelyLab/Platynereis_3D_connectome_2024",
+            licence_note="GPL-3.0 / eLife CC-BY 4.0",
+        ),
+        DatasetFileSpec(
+            filename="connectome_IN_skids.csv",
+            url=f"{_PLATY_BASE}/connectome_IN_skids.csv",
+            sha256="9a2fc83a4c5a67e8a6ada971321d02fb1b5b1a70415be60a934bfcebf2a9e658",
+            size_bytes=7_267,
+            source_label="JekelyLab/Platynereis_3D_connectome_2024",
+            licence_note="GPL-3.0 / eLife CC-BY 4.0",
+        ),
+        DatasetFileSpec(
+            filename="connectome_MN_skids.csv",
+            url=f"{_PLATY_BASE}/connectome_MN_skids.csv",
+            sha256="f5daa7c25cea66a916756c7b09e130000d2d8f64987a94d513155b7df07b4f0f",
+            size_bytes=1_871,
+            source_label="JekelyLab/Platynereis_3D_connectome_2024",
+            licence_note="GPL-3.0 / eLife CC-BY 4.0",
+        ),
+        DatasetFileSpec(
+            filename="connectome_neuron_skids.csv",
+            url=f"{_PLATY_BASE}/connectome_neuron_skids.csv",
+            sha256="c6b423e13ceff2b18e29d8a9d9b381d5b1d931a144ee2930a601f7bb4645e5d5",
+            size_bytes=12_838,
+            source_label="JekelyLab/Platynereis_3D_connectome_2024",
+            licence_note="GPL-3.0 / eLife CC-BY 4.0",
+        ),
+    ),
+)
+
+CIONA_LARVA_SPEC = DatasetSpec(
+    dataset_id="ciona_larva",
+    species="ciona_intestinalis_tadpole_larva",
+    version="ryan_2016_v1",
+    citation=(
+        "Ryan, Lu & Meinertzhagen (2016) eLife 5:e16962 "
+        "'The CNS connectome of a tadpole larva of Ciona intestinalis (L.) highlights "
+        "sidedness in the brain of a chordate sibling' (Netzschleuder cintestinalis archive)."
+    ),
+    licence_note=(
+        "Personal/academic research use (data not redistributed in Git; "
+        "stored under .alife/datasets/ciona_larva/). eLife CC-BY 4.0 / Netzschleuder."
+    ),
+    files=(
+        DatasetFileSpec(
+            filename="cintestinalis.csv.zip",
+            url="https://networks.skewed.de/net/cintestinalis/files/cintestinalis.csv.zip",
+            sha256="d036aeba31e94dee6b01ac9f883872177f4ec82bd720da405f3e0ac272416210",
+            size_bytes=14_664,
+            source_label="Netzschleuder cintestinalis (Ryan et al. 2016)",
+            licence_note="eLife CC-BY 4.0",
+        ),
+    ),
+)
+
 DATASETS: dict[str, DatasetSpec] = {
     FLYWIRE_783_SPEC.dataset_id: FLYWIRE_783_SPEC,
     BANC_888_SPEC.dataset_id: BANC_888_SPEC,
     MALE_CNS_V1_SPEC.dataset_id: MALE_CNS_V1_SPEC,
     CELEGANS_302_SPEC.dataset_id: CELEGANS_302_SPEC,
+    FLY_LARVA_L1_SPEC.dataset_id: FLY_LARVA_L1_SPEC,
+    PLATYNEREIS_3D_SPEC.dataset_id: PLATYNEREIS_3D_SPEC,
+    CIONA_LARVA_SPEC.dataset_id: CIONA_LARVA_SPEC,
 }
 
 

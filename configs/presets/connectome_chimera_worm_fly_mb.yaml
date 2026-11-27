@@ -1,0 +1,13 @@
+preset:
+  id: connectome_chimera_worm_fly_mb
+  scenario: connectome_chimera_worm_fly_mb.yaml
+  title_key: preset.connectome_chimera_worm_fly_mb.title
+  description_key: preset.connectome_chimera_worm_fly_mb.description
+  overrides:
+    experiment:
+      name: Chimera F13c Worm plus Fly MB
+      wiring: reference
+  expected_observation: >-
+    Exploratory F13c artificial-life chimera grafting a real Drosophila L1 mushroom body (KC/MBON/
+    MBIN) onto a 302-cell C. elegans host via explicit bridge synapses (81.6% worm / 18.4% fly).
+  negative_control: connectome_chimera_worm_fly_mb_shuffled

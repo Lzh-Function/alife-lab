@@ -1,0 +1,13 @@
+preset:
+  id: connectome_platynereis_3d
+  scenario: connectome_platynereis_3d.yaml
+  title_key: preset.connectome_platynereis_3d.title
+  description_key: preset.connectome_platynereis_3d.description
+  overrides:
+    experiment:
+      name: Connectome Platynereis 3D Larva
+      wiring: reference
+  expected_observation: >-
+    Photoreceptor (PRC) drive propagates through visual interneurons into ciliomotor (prototroch /
+    paratroch) and trunk muscle effectors in the 1,720-cell Veraszto et al. whole-body connectome.
+  negative_control: connectome_platynereis_3d_shuffled

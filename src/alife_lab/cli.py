@@ -1852,6 +1852,110 @@ def cmd_connectome(args: argparse.Namespace) -> int:
                         f"(p={rw['permutation']['p_value']:.4f})"
                     )
             return 0
+
+        if args.connectome_cmd == "compare-species":
+            from alife_lab.connectome.cross_species import compare_species_connectomes
+
+            dids = [d.strip() for d in args.datasets.split(",") if d.strip()]
+            packs = {
+                d: load_connectome_pack(
+                    d,
+                    ds_dir,
+                    verify_hashes=(not args.no_verify and not d.startswith("synthetic_")),
+                )
+                for d in dids
+            }
+            rep = compare_species_connectomes(
+                packs,
+                seed=args.seed,
+                ticks=args.ticks,
+                run_physiology=not args.no_physiology,
+            )
+            if args.json:
+                _print_json(rep)
+            else:
+                print(
+                    f"compare-species ({len(dids)} species, seed={args.seed}, "
+                    f"ticks={args.ticks}, wall={rep['wall_seconds']:.2f}s)"
+                )
+                phys_map = {p["dataset_id"]: p for p in rep["sensorimotor_probe"]}
+                for t in rep["topology"]:
+                    did = t["dataset_id"]
+                    p = phys_map.get(did)
+                    p_txt = (
+                        f" | {p['dynamics_mode']} ref={p['reference_motor_response']} "
+                        f"vs shuf={p['shuffled_motor_response']} {p['unit']}"
+                        if p
+                        else ""
+                    )
+                    print(
+                        f"  {did:24s}: N={t['num_cells']:6d} E={t['num_edges']:8d} "
+                        f"dens={t['density']:.5f} recip={t['reciprocity']:.3f} "
+                        f"top1={t['top1pct_hub_synapse_share']:.3f}{p_txt}"
+                    )
+            return 0
+
+        if args.connectome_cmd == "chimera":
+            from alife_lab.connectome.chimera import (
+                run_f13a_intraspecies_hybrid_assay,
+                run_f13b_brain_transplant_experiment,
+                run_f13c_mb_graft_assay,
+            )
+
+            def _load(did: str) -> Any:
+                return load_connectome_pack(
+                    did,
+                    ds_dir,
+                    verify_hashes=(not args.no_verify and not did.startswith("synthetic_")),
+                )
+
+            if args.kind == "f13a":
+                pa = _load(args.host)
+                pb = _load(args.donor)
+                rep = run_f13a_intraspecies_hybrid_assay(
+                    pa, pb, blend_ratio=args.blend, seed=args.seed, ticks=args.ticks
+                )
+            elif args.kind == "f13b":
+                donor = _load(args.donor)
+                rep = run_f13b_brain_transplant_experiment(
+                    donor, seed=args.seed, bridge_trials=args.trials, eval_steps=args.ticks
+                )
+            else:
+                host = _load(args.host)
+                donor = _load(args.donor)
+                rep = run_f13c_mb_graft_assay(host, donor, seed=args.seed, train_trials=args.trials)
+
+            if args.json:
+                _print_json(rep)
+            else:
+                print(
+                    f"chimera {rep['chimera_kind']} provenance={rep['provenance_breakdown']} "
+                    f"wall={rep['wall_seconds']:.2f}s"
+                )
+                if args.kind == "f13a":
+                    hp = rep["hybrid_probe"]
+                    print(
+                        f"  shared_types={rep['shared_cell_types']} "
+                        f"crossed={rep['crossed_cell_types']} "
+                        f"ref={hp['reference_motor_response']} "
+                        f"shuf={hp['shuffled_motor_response']} {hp['unit']}"
+                    )
+                elif args.kind == "f13b":
+                    for arm, a in rep["arms"].items():
+                        print(
+                            f"  {arm:16s}: dist={a['distance_mm']:.3f}mm "
+                            f"approach={a['target_approach_mm']:+.3f}mm "
+                            f"drive={a['mean_motor_drive']:.3f}"
+                        )
+                else:
+                    print(f"  all_checks_passed={rep['all_checks_passed']} checks={rep['checks']}")
+                    for arm, a in rep["arms"].items():
+                        print(
+                            f"  {arm:18s}: dA={a['delta_avoid_odor_a_mv']:+.3f}mV "
+                            f"dB={a['delta_avoid_odor_b_mv']:+.3f}mV "
+                            f"spec={a['odor_specificity_mv']:+.3f}mV"
+                        )
+            return 0
     except (DatasetError, ValueError, FileNotFoundError) as exc:
         print(f"connectome error: {exc}", file=sys.stderr)
         return 1
@@ -2325,6 +2429,34 @@ def build_parser() -> argparse.ArgumentParser:
     cworm.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
     cworm.add_argument("--no-verify", action="store_true")
     cworm.add_argument("--json", action="store_true")
+
+    csp = csub.add_parser(
+        "compare-species",
+        help="run Stage 4 S1-S4 cross-species topology and sensorimotor selectivity comparison",
+    )
+    csp.add_argument(
+        "--datasets",
+        default="ciona_larva,celegans_302,platynereis_3d,fly_larva_l1",
+    )
+    csp.add_argument("--seed", type=int, default=1)
+    csp.add_argument("--ticks", type=int, default=120)
+    csp.add_argument("--no-physiology", action="store_true")
+    csp.add_argument("--no-verify", action="store_true")
+    csp.add_argument("--json", action="store_true")
+
+    cchi = csub.add_parser(
+        "chimera",
+        help="run Stage 4 Phase F13a-c cross-species chimera experiments with controls",
+    )
+    cchi.add_argument("--kind", choices=["f13a", "f13b", "f13c"], default="f13c")
+    cchi.add_argument("--host", default="celegans_302")
+    cchi.add_argument("--donor", default="fly_larva_l1")
+    cchi.add_argument("--blend", type=float, default=0.5)
+    cchi.add_argument("--seed", type=int, default=1)
+    cchi.add_argument("--trials", type=int, default=4)
+    cchi.add_argument("--ticks", type=int, default=80)
+    cchi.add_argument("--no-verify", action="store_true")
+    cchi.add_argument("--json", action="store_true")
 
     p.set_defaults(func=cmd_connectome)
 

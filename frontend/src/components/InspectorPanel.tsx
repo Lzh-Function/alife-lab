@@ -170,6 +170,8 @@ export interface Inspection extends Omit<Partial<SearchInspection>, "region"> {
   mean_v_mv?: number;
   cell_index?: number;
   source_id?: number;
+  species_name?: string;
+  species_provenance?: Record<string, number>;
   cell_type?: string;
   super_class?: string;
   cell_class?: string;
@@ -853,6 +855,22 @@ export function InspectorPanel({
                   <dd className="mono">
                     {data.cell_type || "—"} (#{data.cell_index})
                   </dd>
+                  {data.species_name && (
+                    <>
+                      <dt>{t("connectome.col.species_origin")}</dt>
+                      <dd className="mono">{data.species_name}</dd>
+                    </>
+                  )}
+                  {data.species_provenance && Object.keys(data.species_provenance).length > 1 && (
+                    <>
+                      <dt>{t("connectome.col.chimera_mix")}</dt>
+                      <dd className="mono">
+                        {Object.entries(data.species_provenance)
+                          .map(([sp, frac]) => `${sp} ${(frac * 100).toFixed(1)}%`)
+                          .join(" · ")}
+                      </dd>
+                    </>
+                  )}
                   <dt>{t("connectome.col.source_id")}</dt>
                   <dd className="mono">{data.source_id}</dd>
                   <dt>{t("connectome.col.region")}</dt>

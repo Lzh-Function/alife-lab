@@ -1733,6 +1733,14 @@ ConnectomeDatasetId = Literal[
     "synthetic_mb",
     "synthetic_celegans_302",
     "celegans_302",
+    "fly_larva_l1",
+    "synthetic_fly_larva",
+    "platynereis_3d",
+    "synthetic_platynereis",
+    "ciona_larva",
+    "synthetic_ciona",
+    "chimera_worm_fly_mb",
+    "synthetic_chimera_worm_fly_mb",
 ]
 ConnectomeWiring = Literal["reference", "shuffled_control"]
 
@@ -1836,6 +1844,11 @@ class ConnectomeExperiment(_Frozen):
     @model_validator(mode="after")
     def _check_reference_mode(self) -> ConnectomeExperiment:
         if self.mode == "reference":
+            if self.dataset_id in ("chimera_worm_fly_mb", "synthetic_chimera_worm_fly_mb"):
+                raise ValueError(
+                    "F13 cross-species chimeras are exploratory artificial-life hybrids "
+                    "(use mode='exploratory')"
+                )
             if self.wiring != "reference":
                 raise ValueError("reference mode for connectome requires wiring='reference'")
             if self.dynamics != ConnectomeDynamicsSpec():

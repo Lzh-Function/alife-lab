@@ -127,6 +127,33 @@ def make_initial_graded_state(num_cells: int, params: GradedParams) -> LIFState:
     )
 
 
+def make_initial_hybrid_state(
+    pack: ConnectomePack,
+    lif_params: LIFParams,
+    graded_params: GradedParams,
+) -> LIFState:
+    """Create ``LIFState`` supporting mixed ``MODEL_SPIKING_LIF`` + ``MODEL_GRADED`` packs."""
+    n = pack.cells.num_cells
+    v = np.where(
+        pack.cells.cell_model == MODEL_GRADED,
+        np.float32(graded_params.e_leak_mv),
+        np.float32(lif_params.v_0),
+    ).astype(np.float32)
+    ring_len = lif_params.delay_steps + 1
+    return LIFState(
+        v=v,
+        g=np.zeros(n, dtype=np.float32),
+        refrac=np.zeros(n, dtype=np.int16),
+        delay_ring=np.zeros((ring_len, n), dtype=np.int32),
+        substep=0,
+        tick=0,
+        stim_rate_hz=np.zeros(n, dtype=np.float32),
+        silenced=np.zeros(n, dtype=np.uint8),
+        last_tick_spikes=np.zeros(n, dtype=np.int32),
+        total_spikes=np.zeros(n, dtype=np.int32),
+    )
+
+
 def _accumulate_conductances(
     v: F32,
     s_chem: F32,
@@ -313,10 +340,42 @@ def step_hybrid_tick_cpu(
     _ = math.isfinite(graded_params.dt_ms)
     state.last_tick_spikes.fill(np.int32(0))
     for _ in range(substeps):
+        # 1. Compute graded -> LIF synaptic drive only when graded cell is strongly depolarized
+        #    above reversal equilibrium (prevents tonic leakage from unstimulated equilibria).
+        active = (state.silenced == np.uint8(0)).astype(np.float32)
+        v_thr = max(float(graded_params.e_exc_mv), 0.0)
+        s_graded = (
+            np.clip((state.v - np.float32(v_thr)) / np.float32(15.0), 0.0, 1.0)
+            * active
+            * graded_mask
+        ).astype(np.float32, copy=False)
+        if circuit.chem_exc_pre.size:
+            ge_src = s_graded[circuit.chem_exc_pre]
+            if np.any(ge_src > 0):
+                drive_lif = np.bincount(
+                    circuit.chem_exc_post,
+                    weights=circuit.chem_exc_w * ge_src,
+                    minlength=n,
+                ).astype(np.float32)
+                state.g[lif_mask] += np.float32(lif_params.w_syn_mv * 0.45) * drive_lif[lif_mask]
+        if circuit.chem_inh_pre.size:
+            gi_src = s_graded[circuit.chem_inh_pre]
+            if np.any(gi_src > 0):
+                inh_lif = np.bincount(
+                    circuit.chem_inh_post,
+                    weights=circuit.chem_inh_w * gi_src,
+                    minlength=n,
+                ).astype(np.float32)
+                state.g[lif_mask] -= np.float32(lif_params.w_syn_mv * 0.45) * inh_lif[lif_mask]
+
         v_before_lif = state.v[graded_mask].copy()
         g_before_lif = state.g[graded_mask].copy()
+        # Hold graded cells at LIF resting baseline during step_substep_cpu so graded potentials
+        # above v_th (-45 mV) never trigger spurious LIF spikes or delay_ring scatter.
+        state.v[graded_mask] = np.float32(g_lif_params.v_0)
+        state.g[graded_mask] = np.float32(0.0)
         fired_lif = step_substep_cpu(state, csr, g_lif_params, seed)
-        # Collect excitatory drive from spiking LIF neurons onto graded neurons cleanly.
+        # 2. Collect LIF -> graded synaptic pulses (both excitatory and inhibitory).
         spike_vec = np.zeros(n, dtype=np.float32)
         if fired_lif.size:
             valid_f = fired_lif[lif_mask[fired_lif]]
@@ -330,26 +389,39 @@ def step_hybrid_tick_cpu(
         v_lif_after = state.v[lif_mask].copy()
         g_lif_after = state.g[lif_mask].copy()
         sub_before = state.substep
-        if circuit.chem_exc_pre.size and np.any(spike_vec > 0):
-            s_pulse = spike_vec[circuit.chem_exc_pre]
-            pulse_cur = np.float32(graded_params.g_chem * 12.0) * np.bincount(
-                circuit.chem_exc_post,
-                weights=circuit.chem_exc_w * s_pulse,
-                minlength=n,
-            ).astype(np.float32)
-        else:
-            pulse_cur = None
+        pulse_cur = np.zeros(n, dtype=np.float32)
+        has_pulse = False
+        if np.any(spike_vec > 0):
+            if circuit.chem_exc_pre.size:
+                s_p = spike_vec[circuit.chem_exc_pre]
+                if np.any(s_p > 0):
+                    pulse_cur += np.float32(graded_params.g_chem * 12.0) * np.bincount(
+                        circuit.chem_exc_post,
+                        weights=circuit.chem_exc_w * s_p,
+                        minlength=n,
+                    ).astype(np.float32)
+                    has_pulse = True
+            if circuit.chem_inh_pre.size:
+                s_n = spike_vec[circuit.chem_inh_pre]
+                if np.any(s_n > 0):
+                    pulse_cur -= np.float32(graded_params.g_chem * 12.0) * np.bincount(
+                        circuit.chem_inh_post,
+                        weights=circuit.chem_inh_w * s_n,
+                        minlength=n,
+                    ).astype(np.float32)
+                    has_pulse = True
         step_graded_substep_cpu(
             state,
             circuit,
             graded_params,
             gap_junctions_enabled=gap_junctions_enabled,
-            external_current=pulse_cur,
+            external_current=pulse_cur if has_pulse else None,
         )
         state.substep = sub_before  # keep substep matching LIF clock increment
         state.v[lif_mask] = v_lif_after
         state.g[lif_mask] = g_lif_after
 
+    state.last_tick_spikes[lif_mask] = lif_fired_any[lif_mask]
     graded_active = (state.v > np.float32(graded_params.v_active_mv)) & graded_mask
     state.last_tick_spikes[graded_mask] = graded_active[graded_mask].astype(np.int32)
     state.total_spikes[graded_mask] += state.last_tick_spikes[graded_mask]

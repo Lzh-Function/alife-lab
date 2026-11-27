@@ -1,6 +1,6 @@
 # 実生物の配線図（コネクトーム）実験 計画書
 
-- 状態: **F0〜F12d（ハエ全脳・学習・実データ適合・身体接続 Level 1 & Level 2・Warp 並列・flyvis 視覚・雌雄比較・258万ニューロン生態箱・`fly_world` 自律進化＋フル脳 MuJoCo 再生）完了（2026-11-23）**。S1 以降は [`docs/plans/cultural_world_plan.md`](cultural_world_plan.md) §0 の統合ステージ計画に沿って順次実装予定（Stage 2: S1 線虫、Stage 4: S2〜S4 & F13、Stage 6: S5〜S7）。
+- 状態: **F0〜F12d（ハエ全脳・学習・実データ適合・身体接続 Level 1 & Level 2・Warp 並列・flyvis 視覚・雌雄比較・258万ニューロン生態箱・`fly_world` 自律進化＋フル脳 MuJoCo 再生）、S1（線虫 302＋GCaMP 実データ照合）、および Stage 4（S2 ハエ幼虫・S3 ゴカイ幼生・S4 ホヤ幼生・5 種異種比較・F13a–c キメラ）完了（2026-11-27）**。次は [`docs/plans/cultural_world_plan.md`](cultural_world_plan.md) §0 の統合ステージ計画に沿って Stage 5（`cultural_world` P6〜P7）、続いて Stage 6（S5〜S7 大型皮質）へ進む予定。
 - 対象: ALife Lab に「実生物の配線図から作った脳」の実験を追加する一連の作業
   - 中心はハエ（F0〜F12）
   - 同じ仕組みで線虫・ハエの幼虫・ゴカイの幼生・ホヤの幼生・マウス視覚野・ヒト皮質・ゼブラフィッシュも扱う（S1〜S7）

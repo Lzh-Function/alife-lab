@@ -1,0 +1,12 @@
+preset:
+  id: connectome_chimera_worm_fly_mb_shuffled
+  scenario: connectome_chimera_worm_fly_mb.yaml
+  title_key: preset.connectome_chimera_worm_fly_mb_shuffled.title
+  description_key: preset.connectome_chimera_worm_fly_mb_shuffled.description
+  overrides:
+    experiment:
+      name: Chimera F13c Worm plus Fly MB Shuffled
+      wiring: shuffled_control
+  expected_observation: >-
+    Degree-preserving shuffled negative control for the F13c C. elegans + Drosophila MB chimera.
+  negative_control: connectome_chimera_worm_fly_mb

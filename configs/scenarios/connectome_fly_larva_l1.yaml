@@ -1,0 +1,25 @@
+schema_version: 1
+experiment:
+  name: Connectome Fly Larva L1
+  mode: exploratory
+  substrate: connectome
+  seed: 42
+  dataset_id: fly_larva_l1
+  wiring: reference
+  stimuli:
+    - port: larva_olfactory_sn
+      rate_hz: 150.0
+  silenced_ports: []
+  dynamics:
+    w_syn_mv: 0.85
+  runner:
+    max_steps: 500
+    checkpoint_interval: 100
+  observations:
+    metrics:
+      - spikes_tick
+      - active_neurons_tick
+      - total_spikes
+      - mean_firing_rate_hz
+      - mean_v_mv
+      - time_ms

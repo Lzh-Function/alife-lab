@@ -1,0 +1,12 @@
+preset:
+  id: connectome_ciona_larva_shuffled
+  scenario: connectome_ciona_larva.yaml
+  title_key: preset.connectome_ciona_larva_shuffled.title
+  description_key: preset.connectome_ciona_larva_shuffled.description
+  overrides:
+    experiment:
+      name: Connectome Ciona Tadpole Shuffled
+      wiring: shuffled_control
+  expected_observation: >-
+    Degree-preserving shuffled negative control for the 205-cell Ciona tadpole CNS connectome.
+  negative_control: connectome_ciona_larva
