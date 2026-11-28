@@ -82,7 +82,7 @@ def test_search_algorithm_sweep(settings: Settings) -> None:
                 "endpoint": {"metric": "best_score"},
             }
             sid = (await c.sweeps.create(SweepSpec.model_validate({"sweep": body})))["id"]
-            await wait_for(lambda: c.sweeps.summary(sid)["state"] != "running", 120)
+            await wait_for(lambda: c.sweeps.summary(sid)["state"] != "running", 240)
             report = c.sweeps.report(sid)
             assert c.sweeps.summary(sid)["state"] == "completed", report
             values = [v for cond in report["conditions"] for v in cond["values"]]

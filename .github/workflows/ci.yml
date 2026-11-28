@@ -5,25 +5,77 @@ on:
 permissions:
   contents: read
 jobs:
-  python:
+  python-lint-unit:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
       - run: uv sync --frozen
       - run: uv run ruff check src tests scripts
       - run: uv run ruff format --check src tests scripts
       - run: uv run mypy
-      - run: uv run pytest -q
+      - run: uv run pytest -q tests/unit tests/property tests/api
       - run: uv run alife doctor
+
+  python-integration-core:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: >
+          uv run pytest -q tests/integration
+          --ignore=tests/integration/test_search_platform.py
+          --ignore=tests/integration/test_sweeps.py
+
+  python-integration-search:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run pytest -q tests/integration/test_search_platform.py tests/integration/test_sweeps.py
+
+  python-reference-bio-culture:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run pytest -q tests/reference/test_connectome_*.py tests/reference/test_cultural_world*.py
+
+  python-reference-alife:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: >
+          uv run pytest -q tests/reference
+          --ignore-glob='tests/reference/test_connectome_*.py'
+          --ignore-glob='tests/reference/test_cultural_world*.py'
+
   python-fast-backend:
     # Optional JIT backend: must stay bit-identical to the NumPy backend and CuBFF fixtures.
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
       - run: uv sync --frozen --extra fast
       - run: uv run pytest -q tests/reference/test_bff_numba.py tests/integration/test_bff_platform.py
+
   frontend:
     runs-on: ubuntu-24.04
     defaults:
