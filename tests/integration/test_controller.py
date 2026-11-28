@@ -282,3 +282,23 @@ def test_max_active_gpu_jobs_is_enforced(
             await c.shutdown()
 
     arun(main)
+
+
+def test_unlimited_speed_resumes_after_pause_without_livelock(settings: Settings) -> None:
+    """Resuming a ticks_per_second=0 run after pausing longer than 1/max_fps must advance."""
+
+    async def main() -> None:
+        c = Controller(settings, FakeExecutor())
+        await c.start()
+        try:
+            rid = c.create_run(spec(max_steps=10, interval=10), "cpu_dev", ticks_per_second=0)["id"]
+            await c.start_run(rid, start_paused=True)
+            await wait_for(lambda: state_of(c, rid) == "paused", 10.0)
+            await asyncio.sleep(0.08)
+            await c.control(rid, "play")
+            await wait_for(lambda: state_of(c, rid) == "completed", 5.0)
+            assert c.run_summary(rid)["clock"]["value"] == 10
+        finally:
+            await c.shutdown()
+
+    arun(main)

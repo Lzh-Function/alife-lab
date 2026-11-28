@@ -379,9 +379,23 @@ class _Worker:
             if self.running:
                 preview_due = last_preview + self.preview_interval
                 if self.ticks_per_second == 0:
-                    budget_end = min(now + UNLIMITED_TICK_BUDGET_SECONDS, preview_due)
-                    while time.monotonic() < budget_end and self.running:
+                    # Only cap the burst by preview_due when a dirty frame is waiting to flush
+                    # or preview_due is still in the future; otherwise a stale preview_due
+                    # (e.g. after pause->play, slow flush/render, or OS preemption) would make
+                    # budget_end <= now while dirty_preview is False and livelock forever.
+                    cap = (
+                        preview_due
+                        if (self.dirty_preview or preview_due > now)
+                        else now + min(UNLIMITED_TICK_BUDGET_SECONDS, self.preview_interval)
+                    )
+                    budget_end = min(now + UNLIMITED_TICK_BUDGET_SECONDS, cap)
+                    ticks_done = 0
+                    while self.running and (
+                        (ticks_done == 0 and not self.dirty_preview)
+                        or time.monotonic() < budget_end
+                    ):
                         self.advance()
+                        ticks_done += 1
                         if self.conn.poll(0):
                             self.handle(self.conn.recv())
                     timeout = 0.0
@@ -394,7 +408,7 @@ class _Worker:
                     while (
                         self.running
                         and time.monotonic() >= next_tick_due
-                        and time.monotonic() < burst_end
+                        and (ticks_done == 0 or time.monotonic() < burst_end)
                         and ticks_done < 1000
                     ):
                         self.advance()
@@ -412,8 +426,12 @@ class _Worker:
                     now_after = time.monotonic()
                     if now_after - next_tick_due > max_debt:
                         next_tick_due = now_after
-                    wait_next = min(next_tick_due, preview_due) - now_after
-                    timeout = max(0.0, min(wait_next, 0.012))
+                    # Only wake early for preview_due when a fresh frame is actually waiting;
+                    # otherwise slow-paced runs (tps < max_fps) spin at timeout=0 between ticks.
+                    wait_target = (
+                        min(next_tick_due, preview_due) if self.dirty_preview else next_tick_due
+                    )
+                    timeout = max(0.0, min(wait_target - now_after, 0.012))
             else:
                 timeout = 0.05
                 next_tick_due = time.monotonic()
@@ -431,13 +449,14 @@ class _Worker:
                 self.rate_window_start = now
             if now - last_flush >= METRIC_FLUSH_SECONDS:
                 self.flush_metrics()
-                last_flush = now
-            if self.dirty_preview and now - last_preview >= self.preview_interval:
+                last_flush = time.monotonic()
+            if self.dirty_preview and time.monotonic() - last_preview >= self.preview_interval:
                 self.send_preview()
+                after_preview = time.monotonic()
                 last_preview += self.preview_interval
-                if now - last_preview > self.preview_interval:
-                    last_preview = now
-            if now - last_heartbeat >= HEARTBEAT_SECONDS:
+                if after_preview - last_preview > self.preview_interval:
+                    last_preview = after_preview
+            if time.monotonic() - last_heartbeat >= HEARTBEAT_SECONDS:
                 self.send(
                     {
                         "type": "heartbeat",
@@ -447,7 +466,7 @@ class _Worker:
                         "gpu_memory": self.gpu.snapshot(),
                     }
                 )
-                last_heartbeat = now
+                last_heartbeat = time.monotonic()
 
     def close(self) -> None:
         try:
